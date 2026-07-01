@@ -219,6 +219,15 @@ export default function RegisterPage() {
     }
   }
 
+  const emailOk = (v) => /^\S+@\S+\.\S+$/.test((v || "").trim());
+  const filled = (v) => !!(v && v.trim());
+  const step1Valid = !!type && emailOk(f.email) && f.pass.length >= 8 && f.pass === f.pass2;
+  const step2Valid = filled(f.company) && filled(f.vat) && filled(f.country) && filled(f.city) && filled(f.address) && filled(f.phone) && filled(f.contact);
+  const step3Valid = type === "supplier"
+    ? emailOk(f.emailMgmt) && emailOk(f.emailAdmin) && filled(f.ibanHolder) && filled(f.iban) && canConsent
+    : emailOk(f.emailMgmt) && emailOk(f.emailAdmin) && canConsent;
+  const canProceed = step === 1 ? step1Valid : step === 2 ? step2Valid : step3Valid;
+
   return (
     <div style={{ background:C.bg, color:C.text, fontFamily:"'Inter',system-ui,sans-serif", minHeight:"100vh" }}>
       <style>{`
@@ -476,9 +485,10 @@ export default function RegisterPage() {
                 ? <button className="bs-btn-out" onClick={()=>setStep(step-1)}><ArrowLeft size={16}/> Indietro</button>
                 : <span/>}
               {step<3
-                ? <button className="bs-btn" disabled={step===1 && !type} onClick={()=>setStep(step+1)}>Continua <ArrowRight size={16}/></button>
-                : <button className="bs-btn" disabled={!canConsent || submitting} onClick={submitRegistration}>{submitting ? "Invio in corso…" : <>Completa registrazione <Check size={16}/></>}</button>}
+                ? <button className="bs-btn" disabled={!canProceed} onClick={()=>setStep(step+1)}>Continua <ArrowRight size={16}/></button>
+                : <button className="bs-btn" disabled={!canProceed || submitting} onClick={submitRegistration}>{submitting ? "Invio in corso…" : <>Completa registrazione <Check size={16}/></>}</button>}
             </div>
+            {!canProceed && <p style={{ fontSize:12, color:C.muted, textAlign:"right", marginTop:8 }}>Compila i campi obbligatori <span style={{ color:C.blue }}>*</span> per continuare.</p>}
           </div>
 
           <p style={{ fontSize:12, color:C.muted, textAlign:"center", marginTop:16 }}>
