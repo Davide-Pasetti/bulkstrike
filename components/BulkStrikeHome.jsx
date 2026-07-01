@@ -205,8 +205,8 @@ export default function BulkStrikeLight() {
                 <span key={l} style={{ fontSize:14, color:C.muted, cursor:"pointer", fontWeight:500, whiteSpace:"nowrap" }}>{l}</span>
               ))}
             </div>
-            <span style={{ fontSize:14, color:C.muted, cursor:"pointer", fontWeight:500, whiteSpace:"nowrap" }}>Accedi</span>
-            <button className="bs-btn" style={{ padding:"9px 18px", fontSize:14 }}>Registrati</button>
+            <span onClick={() => { window.location.href = "/auth/login"; }} style={{ fontSize:14, color:C.muted, cursor:"pointer", fontWeight:500, whiteSpace:"nowrap" }}>Accedi</span>
+            <button className="bs-btn" onClick={() => { window.location.href = "/registrati"; }} style={{ padding:"9px 18px", fontSize:14 }}>Registrati</button>
           </div>
         </div>
       </nav>

@@ -120,7 +120,7 @@ function relTime(iso) {
 function toUiNotif(r) {
   return {
     id: r.id,
-    type: r.type === "new_supplier" ? "supplier" : r.type === "pool_closing" ? "closing" : r.type,
+    type: ({ pool_open:"pool", pool_closing:"closing", new_supplier:"supplier", price_drop:"price" })[r.type] || r.type,
     mat: r.title || "",
     text: r.body,
     time: relTime(r.created_at),
@@ -130,7 +130,7 @@ function toUiNotif(r) {
 }
 
 function NotifRow({ n, onRead, compact }) {
-  const st = NOTIF_STYLE[n.type]; const Ico = st.icon;
+  const st = NOTIF_STYLE[n.type] || NOTIF_STYLE.pool; const Ico = st.icon;
   return (
     <div style={{ display:"flex", gap:12, padding:compact?"12px 0":"14px 16px", borderRadius:compact?0:12, background:n.unread&&!compact?"#FBFCFE":"transparent", border:compact?"none":`1px solid ${n.unread?"#DBEAFE":C.border}`, alignItems:"flex-start" }}>
       <div style={{ width:36, height:36, borderRadius:10, background:st.bg, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}><Ico size={17} color={st.color}/></div>
