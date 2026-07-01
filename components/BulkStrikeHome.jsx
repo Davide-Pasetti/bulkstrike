@@ -201,8 +201,8 @@ export default function BulkStrikeLight() {
           {/* Nav right */}
           <div style={{ display:"flex", alignItems:"center", gap:20, flexShrink:0 }}>
             <div className="bs-nav-links" style={{ display:"flex", gap:20 }}>
-              {["Pool Attivi","Prezzi","Fornitori","Come funziona"].map(l => (
-                <span key={l} style={{ fontSize:14, color:C.muted, cursor:"pointer", fontWeight:500, whiteSpace:"nowrap" }}>{l}</span>
+              {[["Pool Attivi","/pool"],["Prezzi","/pool"],["Fornitori","/registrati"],["Come funziona","#"]].map(([l,href]) => (
+                <span key={l} onClick={() => { window.location.href = href; }} style={{ fontSize:14, color:C.muted, cursor:"pointer", fontWeight:500, whiteSpace:"nowrap" }}>{l}</span>
               ))}
             </div>
             <span onClick={() => { window.location.href = "/auth/login"; }} style={{ fontSize:14, color:C.muted, cursor:"pointer", fontWeight:500, whiteSpace:"nowrap" }}>Accedi</span>
@@ -264,8 +264,8 @@ export default function BulkStrikeLight() {
               Acquista sfuso insieme ad altri. Vendi a chi vuole davvero comprare. Pool di acquisto collettivo, aste a ribasso, prezzi in tempo reale. Da 1 kg a 50 tonnellate.
             </p>
             <div className="bs-cta-btns" style={{ display:"flex", gap:12, flexWrap:"wrap" }}>
-              <button className="bs-btn">Inizia ad acquistare <ArrowRight size={18} /></button>
-              <button className="bs-btn-out">Diventa fornitore</button>
+              <button className="bs-btn" onClick={() => { window.location.href = "/registrati"; }}>Inizia ad acquistare <ArrowRight size={18} /></button>
+              <button className="bs-btn-out" onClick={() => { window.location.href = "/registrati"; }}>Diventa fornitore</button>
             </div>
             <div style={{ display:"flex", gap:20, marginTop:20, flexWrap:"wrap" }}>
               {["✓ Registrazione gratuita","✓ Nessun abbonamento","✓ Pool senza impegno"].map(t => (
@@ -305,7 +305,7 @@ export default function BulkStrikeLight() {
                 <span style={{ fontSize:12, color:C.muted }}>Mancano 900 kg</span>
               </div>
             </div>
-            <button className="bs-btn" style={{ width:"100%", justifyContent:"center" }}>Unisciti al Pool <ArrowRight size={16} /></button>
+            <button className="bs-btn" onClick={() => { window.location.href = "/pool?id=7191a826-ac9c-404b-8001-8e8fc8f08100"; }} style={{ width:"100%", justifyContent:"center" }}>Unisciti al Pool <ArrowRight size={16} /></button>
           </div>
         </div>
       </div>
@@ -337,7 +337,7 @@ export default function BulkStrikeLight() {
             <h2 className="bs-h2">Pool attivi ora</h2>
             <p style={{ fontSize:15, color:C.muted, marginTop:8 }}>Risparmia fino al 20% rispetto ai prezzi singoli</p>
           </div>
-          <button style={{ display:"flex", alignItems:"center", gap:6, color:C.blue, background:"none", border:"none", fontSize:14, fontWeight:600, cursor:"pointer" }}>
+          <button onClick={() => { window.location.href = "/pool"; }} style={{ display:"flex", alignItems:"center", gap:6, color:C.blue, background:"none", border:"none", fontSize:14, fontWeight:600, cursor:"pointer" }}>
             Vedi tutti <ChevronRight size={16} />
           </button>
         </div>
@@ -383,7 +383,7 @@ export default function BulkStrikeLight() {
                   </div>
                   <div style={{ fontSize:12, color:pct>=80?C.amber:C.muted, marginTop:4, textAlign:"right" }}>{pct}%</div>
                 </div>
-                <button className="bs-pool-btn">Unisciti al Pool <ArrowRight size={14} /></button>
+                <button className="bs-pool-btn" onClick={() => { window.location.href = "/pool?id=7191a826-ac9c-404b-8001-8e8fc8f08100"; }}>Unisciti al Pool <ArrowRight size={14} /></button>
               </div>
             );
           })}
@@ -525,7 +525,7 @@ export default function BulkStrikeLight() {
             Registrazione gratuita. Nessun abbonamento. Unisciti a 2.400+ aziende che già comprano e vendono su BulkStrike.
           </p>
           <div className="bs-cta-btns" style={{ display:"flex", gap:12, justifyContent:"center", flexWrap:"wrap" }}>
-            <button className="bs-btn" style={{ fontSize:17, padding:"15px 32px" }}>Crea account gratis <ArrowRight size={20} /></button>
+            <button className="bs-btn" onClick={() => { window.location.href = "/registrati"; }} style={{ fontSize:17, padding:"15px 32px" }}>Crea account gratis <ArrowRight size={20} /></button>
             <button style={{ background:"transparent", color:"#F0F6FF", border:"1px solid #1A3454", borderRadius:10, padding:"15px 24px", fontSize:16, fontWeight:600, cursor:"pointer", fontFamily:"Inter,system-ui" }}>Guarda come funziona</button>
           </div>
         </div>
