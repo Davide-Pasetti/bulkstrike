@@ -1,10 +1,11 @@
 import { useState, useEffect } from "react";
+import { getPoolDetail, getPoolBids, joinPool, poolErrorMessage } from "@/lib/api";
 import { Search, Bot, ArrowRight, Check, Clock, ChevronRight, Shield, Users, TrendingDown, X, Plus, Minus, Info, Gavel, Award } from "lucide-react";
 
 const C = { blue:"#0EA5E9", dark:"#0284C7", text:"#0F172A", muted:"#64748B", border:"#E2E8F0", bg:"#F8FAFE", green:"#059669", red:"#DC2626", amber:"#D97706", purple:"#7C3AED" };
 
-// ─── POOL DATA (product-level reverse auction) ────────────────────────────────
-const POOL = {
+// ─── pool DATA (product-level reverse auction) ────────────────────────────────
+const SEED_POOL = {
   product: "Acido Tartarico L(+)",
   enum: "E334",
   standard: "Reg. (UE) 231/2012 · Codex OIV · FCC",
@@ -22,14 +23,14 @@ const TIERS = [
   { max:Infinity, price:2.10, label:"50 t+" },
 ];
 
-const BIDDERS = [
+const SEED_BIDDERS = [
   { tag:"Fornitore #3", origin:"Cina",      flag:"🇨🇳", bid:2.27, when:"12 min fa", leader:true },
   { tag:"Fornitore #1", origin:"Polonia",   flag:"🇵🇱", bid:2.33, when:"40 min fa", leader:false },
   { tag:"Fornitore #4", origin:"Argentina", flag:"🇦🇷", bid:2.41, when:"2 ore fa",  leader:false },
   { tag:"Fornitore #2", origin:"Italia",    flag:"🇮🇹", bid:2.48, when:"5 ore fa",  leader:false },
 ];
 
-const PARTICIPANTS = [
+const SEED_PARTICIPANTS = [
   { who:"Azienda vinicola in Abruzzo", qty:3000, when:"2 ore fa" },
   { who:"Cantina in Chianti",          qty:2400, when:"5 ore fa" },
   { who:"Cooperativa in Puglia",       qty:2800, when:"8 ore fa" },
@@ -67,25 +68,87 @@ const kg = (n) => n.toLocaleString("it-IT");
 function tierCeiling(qty){ for(const t of TIERS) if(qty<=t.max) return t.price; return 2.10; }
 function tierFor(vol){ for(let i=0;i<TIERS.length;i++) if(vol<=TIERS[i].max) return TIERS[i]; return TIERS[TIERS.length-1]; }
 
+function relTime(iso) {
+  if (!iso) return "";
+  const s = Math.floor((Date.now() - new Date(iso)) / 1000);
+  if (s < 60) return "ora";
+  if (s < 3600) return `${Math.floor(s / 60)} min fa`;
+  if (s < 86400) return `${Math.floor(s / 3600)} ore fa`;
+  return `${Math.floor(s / 86400)} giorni fa`;
+}
+
 export default function PoolAuctionPage() {
+  const [pool, setPool] = useState(SEED_POOL);
+  const [bidders, setBidders] = useState(SEED_BIDDERS);
+  const [participants, setParticipants] = useState(SEED_PARTICIPANTS);
+  const [poolId, setPoolId] = useState(null);
+  const [joining, setJoining] = useState(false);
+  const [joinMsg, setJoinMsg] = useState(null);
   const [userQty, setUserQty] = useState(2000);
   const [chatOpen, setChatOpen] = useState(false);
   const [acceptTerms, setAcceptTerms] = useState(false);
-  const [secs, setSecs] = useState(POOL.secondsLeft);
+  const [secs, setSecs] = useState(pool.secondsLeft);
 
   useEffect(() => {
     const t = setInterval(() => setSecs(s => s>0 ? s-1 : 0), 1000);
     return () => clearInterval(t);
   }, []);
+
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get("id");
+    if (!id) return;            // nessun id → resta il pool dimostrativo
+    setPoolId(id);
+    loadPool(id);
+  }, []);
+
+  async function loadPool(id) {
+    try {
+      const [detail, bids] = await Promise.all([getPoolDetail(id), getPoolBids(id)]);
+      const bd = (bids || []).map((b, i) => ({ tag: b.anon_label, origin: "", flag: "", bid: b.price_per_kg, when: relTime(b.created_at), leader: i === 0 }));
+      const count = detail.participants?.[0]?.count || 0;
+      const total = detail.total_volume_kg || 0;
+      const share = count ? Math.round(total / count) : 0;
+      setBidders(bd);
+      setParticipants(Array.from({ length: count }, () => ({ who: "Azienda partecipante", qty: share, when: "" })));
+      setPool({
+        product: detail.product?.canonical_name || "",
+        enum: detail.product?.e_number || "",
+        standard: SEED_POOL.standard,
+        current: total,
+        secondsLeft: 0,
+        bestBid: detail.best_price_per_kg ?? (bd[0]?.bid ?? tierFor(total).price),
+        bestSupplier: bd[0]?.tag || "—",
+        bids: bd.length,
+      });
+      setSecs(Math.max(0, Math.floor((new Date(detail.closes_at) - Date.now()) / 1000)));
+    } catch (e) {
+      setJoinMsg(poolErrorMessage(e));
+    }
+  }
+
+  async function joinTheAuction() {
+    if (!poolId) { setJoinMsg("Questo è il pool dimostrativo. Apri /pool?id=… con un pool reale per partecipare."); return; }
+    setJoining(true); setJoinMsg(null);
+    try {
+      await joinPool(poolId, userQty, true);
+      setJoinMsg("✓ Adesione registrata: sei nell'asta.");
+      loadPool(poolId);
+    } catch (e) {
+      setJoinMsg(poolErrorMessage(e));
+    } finally {
+      setJoining(false);
+    }
+  }
+
   const d = Math.floor(secs/86400), h = Math.floor((secs%86400)/3600), m = Math.floor((secs%3600)/60), s = secs%60;
 
-  const projected = POOL.current + userQty;
-  const currentTier = tierFor(POOL.current);
+  const projected = pool.current + userQty;
+  const currentTier = tierFor(pool.current);
   const projectedTier = tierFor(projected);
   const ceilingNow = currentTier.price;
-  const effectiveNow = Math.min(POOL.bestBid, ceilingNow);
+  const effectiveNow = Math.min(pool.bestBid, ceilingNow);
   const nextThreshold = currentTier.max === Infinity ? null : currentTier.max;
-  const toNext = nextThreshold ? Math.max(0, nextThreshold - POOL.current) : 0;
+  const toNext = nextThreshold ? Math.max(0, nextThreshold - pool.current) : 0;
   const crossesTier = projectedTier.max !== currentTier.max;
   const aloneCeiling = tierCeiling(userQty);
   const savings = Math.max(0, (aloneCeiling - effectiveNow) * userQty);
@@ -168,7 +231,7 @@ export default function PoolAuctionPage() {
         {/* BREADCRUMB */}
         <div style={{ display:"flex", alignItems:"center", gap:8, fontSize:13, color:C.muted, marginBottom:18, flexWrap:"wrap" }}>
           <span>Home</span><ChevronRight size={13}/><span>Pool · Aste attive</span><ChevronRight size={13}/>
-          <span style={{ color:C.text, fontWeight:600 }}>{POOL.product}</span>
+          <span style={{ color:C.text, fontWeight:600 }}>{pool.product}</span>
         </div>
 
         {/* HEADER */}
@@ -177,11 +240,11 @@ export default function PoolAuctionPage() {
             <div style={{ display:"flex", gap:8, marginBottom:8, flexWrap:"wrap", alignItems:"center" }}>
               <span className="bs-chip" style={{ background:"#FBF7FF", color:C.purple }}><Gavel size={12}/> Asta a ribasso · Pool prodotto</span>
               <span className="bs-chip" style={{ background:"#FEF2F2", color:C.red }}><span className="bs-live-dot"/> Live</span>
-              <span className="bs-chip" style={{ background:"#EFF6FF", color:"#1D4ED8" }}>{POOL.enum}</span>
+              <span className="bs-chip" style={{ background:"#EFF6FF", color:"#1D4ED8" }}>{pool.enum}</span>
             </div>
-            <h1 style={{ fontSize:30, fontWeight:800, letterSpacing:"-0.02em", marginBottom:6 }}>{POOL.product}</h1>
+            <h1 style={{ fontSize:30, fontWeight:800, letterSpacing:"-0.02em", marginBottom:6 }}>{pool.product}</h1>
             <div style={{ fontSize:14, color:C.muted, display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}>
-              <Award size={14} color={C.green}/> Standard garantito: <b style={{ color:C.text }}>{POOL.standard}</b>
+              <Award size={14} color={C.green}/> Standard garantito: <b style={{ color:C.text }}>{pool.standard}</b>
             </div>
           </div>
           <div style={{ textAlign:"center", background:C.bg, border:`1px solid ${C.border}`, borderRadius:12, padding:"12px 18px" }}>
@@ -228,12 +291,12 @@ export default function PoolAuctionPage() {
                   <span style={{ fontSize:14, color:C.muted }}>/kg</span>
                   <span style={{ fontSize:12, color:C.green, display:"flex", alignItems:"center", gap:2 }}><TrendingDown size={12}/> in calo</span>
                 </div>
-                <div style={{ fontSize:12, color:C.muted, marginTop:2 }}>offerto da <b style={{ color:C.text }}>{POOL.bestSupplier}</b> · {POOL.bids} fornitori in gara</div>
+                <div style={{ fontSize:12, color:C.muted, marginTop:2 }}>offerto da <b style={{ color:C.text }}>{pool.bestSupplier}</b> · {pool.bids} fornitori in gara</div>
               </div>
               <div style={{ borderLeft:`1px solid ${C.border}`, paddingLeft:24 }}>
                 <div style={{ fontSize:12, color:C.muted, marginBottom:2 }}>Volume aggregato</div>
-                <div className="bs-num" style={{ fontSize:38, fontWeight:800, color:C.text }}>{kg(POOL.current)}<span style={{ fontSize:14, fontWeight:400, color:C.muted }}> kg</span></div>
-                <div style={{ fontSize:12, color:C.muted, marginTop:2 }}>{PARTICIPANTS.length} aziende · scaglione {currentTier.label}</div>
+                <div className="bs-num" style={{ fontSize:38, fontWeight:800, color:C.text }}>{kg(pool.current)}<span style={{ fontSize:14, fontWeight:400, color:C.muted }}> kg</span></div>
+                <div style={{ fontSize:12, color:C.muted, marginTop:2 }}>{participants.length} aziende · scaglione {currentTier.label}</div>
               </div>
             </div>
 
@@ -241,12 +304,12 @@ export default function PoolAuctionPage() {
               <div style={{ marginBottom:20 }}>
                 <div style={{ display:"flex", justifyContent:"space-between", fontSize:12, marginBottom:6 }}>
                   <span style={{ color:C.muted }}>Prossimo scaglione: <b style={{ color:C.text }}>{kg(nextThreshold)} kg → tetto {eurKg(tierFor(nextThreshold+1).price)}/kg</b></span>
-                  <span className="bs-num" style={{ color:C.purple, fontWeight:700 }}>{kg(POOL.current)} / {kg(nextThreshold)}</span>
+                  <span className="bs-num" style={{ color:C.purple, fontWeight:700 }}>{kg(pool.current)} / {kg(nextThreshold)}</span>
                 </div>
                 <div style={{ height:16, background:"#EDE4F7", borderRadius:100, overflow:"hidden", display:"flex" }}>
-                  <div style={{ width:`${POOL.current/nextThreshold*100}%`, height:"100%", background:`linear-gradient(90deg,${C.purple},#A855F7)`, animation:"fill 1s ease" }}/>
+                  <div style={{ width:`${pool.current/nextThreshold*100}%`, height:"100%", background:`linear-gradient(90deg,${C.purple},#A855F7)`, animation:"fill 1s ease" }}/>
                   {crossesTier && userQty>0 && (
-                    <div style={{ width:`${Math.min((projected-POOL.current)/nextThreshold*100, 100-POOL.current/nextThreshold*100)}%`, height:"100%", background:`repeating-linear-gradient(45deg,${C.blue},${C.blue} 6px,#38BDF8 6px,#38BDF8 12px)` }}/>
+                    <div style={{ width:`${Math.min((projected-pool.current)/nextThreshold*100, 100-pool.current/nextThreshold*100)}%`, height:"100%", background:`repeating-linear-gradient(45deg,${C.blue},${C.blue} 6px,#38BDF8 6px,#38BDF8 12px)` }}/>
                   )}
                 </div>
                 <div style={{ fontSize:12, color:C.muted, marginTop:6 }}>
@@ -261,8 +324,8 @@ export default function PoolAuctionPage() {
                 <span style={{ fontSize:13, fontWeight:700, display:"flex", alignItems:"center", gap:6 }}><Gavel size={14} color={C.purple}/> Offerte dei fornitori (live)</span>
                 <span style={{ fontSize:11, color:C.muted }}>identità svelata alla chiusura</span>
               </div>
-              {BIDDERS.map((b,i) => (
-                <div key={i} style={{ display:"flex", alignItems:"center", gap:10, padding:"9px 0", borderBottom:i<BIDDERS.length-1?`1px solid #F1F5F9`:"none" }}>
+              {bidders.map((b,i) => (
+                <div key={i} style={{ display:"flex", alignItems:"center", gap:10, padding:"9px 0", borderBottom:i<bidders.length-1?`1px solid #F1F5F9`:"none" }}>
                   <span style={{ fontSize:13, fontWeight:600, minWidth:96 }}>{b.tag}</span>
                   <span style={{ fontSize:13 }}>{b.flag}</span>
                   <span style={{ fontSize:12, color:C.muted, flex:1 }}>{b.when}</span>
@@ -319,7 +382,8 @@ export default function PoolAuctionPage() {
               </span>
             </label>
 
-            <button className="bs-btn" style={{ width:"100%" }} disabled={!acceptTerms}>Aderisci all'asta <ArrowRight size={18}/></button>
+            <button onClick={joinTheAuction} className="bs-btn" style={{ width:"100%" }} disabled={!acceptTerms || joining}>{joining ? "Adesione in corso…" : <>Aderisci all'asta <ArrowRight size={18}/></>}</button>
+            {joinMsg && <div style={{ marginTop:10, fontSize:13, textAlign:"center", color: joinMsg.startsWith("✓") ? C.green : C.red }}>{joinMsg}</div>}
             <div style={{ display:"flex", alignItems:"center", gap:6, marginTop:12, fontSize:12, color:C.muted }}>
               <Shield size={20} color={C.green} style={{ flexShrink:0 }}/>
               <span>Pagamento in escrow al prezzo di chiusura. Mai più dell'Acquisto Rapido.</span>
@@ -346,7 +410,7 @@ export default function PoolAuctionPage() {
               <div style={{ fontSize:13, color:C.muted, marginBottom:14 }}>È il prezzo massimo per fascia di volume. I fornitori possono ribassare sotto questi valori in asta.</div>
               <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
                 {TIERS.map((t,i) => {
-                  const reached = POOL.current >= (i===0?0:TIERS[i-1].max);
+                  const reached = pool.current >= (i===0?0:TIERS[i-1].max);
                   const isCurrent = t.max===currentTier.max;
                   return (
                     <div key={i} style={{ display:"flex", alignItems:"center", gap:12, padding:"12px 14px", borderRadius:10, border:`1px solid ${isCurrent?C.purple:C.border}`, background:isCurrent?"#FBF7FF":"#fff" }}>
@@ -367,11 +431,11 @@ export default function PoolAuctionPage() {
             <div className="bs-card" style={{ marginBottom:20 }}>
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
                 <div style={{ fontSize:16, fontWeight:700 }}>Chi ha aderito</div>
-                <span style={{ fontSize:12, color:C.muted }}>{PARTICIPANTS.length} aziende · {kg(POOL.current)} kg</span>
+                <span style={{ fontSize:12, color:C.muted }}>{participants.length} aziende · {kg(pool.current)} kg</span>
               </div>
               <div style={{ display:"flex", flexDirection:"column" }}>
-                {PARTICIPANTS.map((p,i) => (
-                  <div key={i} style={{ display:"flex", alignItems:"center", gap:12, padding:"10px 0", borderBottom:i<PARTICIPANTS.length-1?`1px solid #F1F5F9`:"none" }}>
+                {participants.map((p,i) => (
+                  <div key={i} style={{ display:"flex", alignItems:"center", gap:12, padding:"10px 0", borderBottom:i<participants.length-1?`1px solid #F1F5F9`:"none" }}>
                     <div style={{ width:32, height:32, borderRadius:"50%", background:"#EFF6FF", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}><Users size={15} color={C.blue}/></div>
                     <div style={{ flex:1 }}>
                       <div style={{ fontSize:14, fontWeight:600 }}>{p.who}</div>
@@ -407,8 +471,8 @@ export default function PoolAuctionPage() {
             <div className="bs-card">
               <div style={{ fontSize:14, fontWeight:700, marginBottom:4 }}>Fornitori in gara</div>
               <div style={{ fontSize:12, color:C.muted, marginBottom:12 }}>Tutti certificati allo standard richiesto. Identità svelata alla chiusura.</div>
-              {BIDDERS.map((b,i) => (
-                <div key={i} style={{ display:"flex", alignItems:"center", gap:8, padding:"8px 0", borderBottom:i<BIDDERS.length-1?`1px solid #F1F5F9`:"none" }}>
+              {bidders.map((b,i) => (
+                <div key={i} style={{ display:"flex", alignItems:"center", gap:8, padding:"8px 0", borderBottom:i<bidders.length-1?`1px solid #F1F5F9`:"none" }}>
                   <span style={{ fontSize:14 }}>{b.flag}</span>
                   <span style={{ fontSize:13, fontWeight:600, flex:1 }}>{b.tag}</span>
                   <span style={{ fontSize:12, color:C.muted }}>{b.origin}</span>
@@ -423,7 +487,7 @@ export default function PoolAuctionPage() {
               </div>
               <div style={{ display:"flex", flexDirection:"column", gap:11 }}>
                 <Activity icon={<Gavel size={12} color={C.blue}/>} text={<><b>Fornitore #3</b> ha ribassato a <b className="bs-num" style={{color:C.green}}>€2,27/kg</b></>} when="12 min fa"/>
-                {PARTICIPANTS.slice(0,4).map((p,i) => (
+                {participants.slice(0,4).map((p,i) => (
                   <Activity key={i} icon={<Users size={12} color={C.purple}/>} text={<><b>{p.who}</b> ha aggiunto <b className="bs-num" style={{color:C.purple}}>{kg(p.qty)} kg</b></>} when={p.when}/>
                 ))}
               </div>
