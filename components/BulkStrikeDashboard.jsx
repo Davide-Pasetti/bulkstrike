@@ -1,4 +1,9 @@
 import { useState, useEffect } from "react";
+import {
+  getMyCompany, updateCompany,
+  getWatchedMaterials, addWatchedMaterial, removeWatchedMaterial, updateMaterialAlert,
+  getNotifications, markNotificationRead, markAllNotificationsRead, subscribeNotifications,
+} from "@/lib/api";
 import { Bell, Search, Plus, TrendingDown, Zap, Factory, Check, X, Gavel, LayoutGrid, Inbox, Clock, Boxes, ChevronRight, Users, Settings, Trophy, Send } from "lucide-react";
 
 const C = { blue:"#0EA5E9", dark:"#0284C7", text:"#0F172A", muted:"#64748B", border:"#E2E8F0", bg:"#F8FAFE", green:"#059669", amber:"#D97706", red:"#DC2626", purple:"#7C3AED" };
@@ -105,6 +110,25 @@ function AField({ label, v, on, full }) {
   );
 }
 
+function relTime(iso) {
+  const s = Math.floor((Date.now() - new Date(iso)) / 1000);
+  if (s < 60) return "ora";
+  if (s < 3600) return `${Math.floor(s / 60)} min fa`;
+  if (s < 86400) return `${Math.floor(s / 3600)} ore fa`;
+  return `${Math.floor(s / 86400)} giorni fa`;
+}
+function toUiNotif(r) {
+  return {
+    id: r.id,
+    type: r.type === "new_supplier" ? "supplier" : r.type === "pool_closing" ? "closing" : r.type,
+    mat: r.title || "",
+    text: r.body,
+    time: relTime(r.created_at),
+    unread: !r.is_read,
+    action: r.action_label,
+  };
+}
+
 function NotifRow({ n, onRead, compact }) {
   const st = NOTIF_STYLE[n.type]; const Ico = st.icon;
   return (
@@ -132,6 +156,8 @@ export default function Dashboard() {
   const [mats, setMats] = useState(SEED_MATS);
   const [notifs, setNotifs] = useState(SEED_NOTIFS);
   const [q, setQ] = useState("");
+  const [company, setCompany] = useState(null);
+  const [acctSaved, setAcctSaved] = useState(false);
 
   // account form (demo, example values — non dati reali)
   const [acct, setAcct] = useState({
@@ -158,12 +184,87 @@ export default function Dashboard() {
   const activeAlerts = Object.values(cur).reduce((sum,a)=>sum+Object.values(a).filter(Boolean).length,0);
 
   const setMatsRole = (obj) => setMats(m => ({ ...m, [role]:obj }));
-  const addMat = (mt) => { if(!cur[mt]) setMatsRole({ ...cur, [mt]:{...DEFAULT_ALERTS[role]} }); };
-  const removeMat = (mt) => { const c={...cur}; delete c[mt]; setMatsRole(c); };
+  const ALERT_COL = { pool:"alert_pool", price:"alert_price", supplier:"alert_new_supplier", closing:"alert_closing", request:"alert_request", outbid:"alert_outbid" };
+  const addMat = (mt) => {
+    if (cur[mt]) return;
+    setMatsRole({ ...cur, [mt]:{ ...DEFAULT_ALERTS[role] } });
+    addWatchedMaterial({ name: mt }, DEFAULT_ALERTS[role])
+      .then(row => setMats(m => ({ ...m, [role]: { ...m[role], [mt]: { ...m[role][mt], _id: row.id, _pid: row.product_id } } })))
+      .catch(()=>{});
+  };
+  const removeMat = (mt) => {
+    const id = cur[mt]?._id;
+    const c={...cur}; delete c[mt]; setMatsRole(c);
+    if (id) removeWatchedMaterial(id).catch(()=>{});
+  };
   const toggleMat = (mt) => cur[mt] ? removeMat(mt) : addMat(mt);
-  const toggleAlert = (mt,k) => setMatsRole({ ...cur, [mt]:{ ...cur[mt], [k]:!cur[mt][k] } });
-  const markRead = (id) => setNotifs(n => ({ ...n, [role]: n[role].map(x=>x.id===id?{...x,unread:false}:x) }));
-  const markAll = () => setNotifs(n => ({ ...n, [role]: n[role].map(x=>({...x,unread:false})) }));
+  const toggleAlert = (mt,k) => {
+    const next = !cur[mt][k];
+    setMatsRole({ ...cur, [mt]:{ ...cur[mt], [k]:next } });
+    if (cur[mt]._id) updateMaterialAlert(cur[mt]._id, ALERT_COL[k], next).catch(()=>{});
+  };
+  const markRead = (id) => {
+    setNotifs(n => ({ ...n, [role]: n[role].map(x=>x.id===id?{...x,unread:false}:x) }));
+    markNotificationRead(id).catch(()=>{});
+  };
+  const markAll = () => {
+    setNotifs(n => ({ ...n, [role]: n[role].map(x=>({...x,unread:false})) }));
+    markAllNotificationsRead().catch(()=>{});
+  };
+
+  // ── load the real company (drives role + account prefill) ──
+  useEffect(() => {
+    getMyCompany().then(c => {
+      if (!c) return;
+      setCompany(c);
+      setRole(c.is_supplier ? "supplier" : "buyer");
+      setAcct(a => ({
+        ...a,
+        company:c.legal_name||"", vat:c.vat||"", country:c.country||"", city:c.city||"",
+        address:c.address||"", phone:c.phone||"", website:c.website||"", contact:c.contact_name||"",
+        emailMgmt:c.email_mgmt||"", emailAdmin:c.email_admin||"", pec:c.pec||"", sdi:c.sdi||"",
+        ibanHolder:c.iban_holder||"", iban:c.iban||"", bic:c.bic||"",
+      }));
+    }).catch(()=>{});
+  }, []);
+
+  // ── load watched materials + notifications for the current role ──
+  useEffect(() => {
+    if (!company) return;
+    getWatchedMaterials().then(rows => {
+      const obj = {};
+      for (const r of rows) {
+        obj[r.name] = role === "buyer"
+          ? { pool:r.alert_pool, price:r.alert_price, supplier:r.alert_new_supplier, _id:r.id, _pid:r.product_id }
+          : { pool:r.alert_pool, closing:r.alert_closing, request:r.alert_request, outbid:r.alert_outbid, _id:r.id, _pid:r.product_id };
+      }
+      setMats(m => ({ ...m, [role]: obj }));
+    }).catch(()=>{});
+    getNotifications().then(rows => {
+      setNotifs(n => ({ ...n, [role]: rows.map(toUiNotif) }));
+    }).catch(()=>{});
+  }, [company, role]);
+
+  // ── realtime: new notifications arrive without reload ──
+  useEffect(() => {
+    if (!company) return;
+    const unsub = subscribeNotifications(company.id, (row) => {
+      setNotifs(n => ({ ...n, [role]: [toUiNotif(row), ...n[role]] }));
+    });
+    return unsub;
+  }, [company, role]);
+
+  // ── persist account changes to the company ──
+  async function saveAccount() {
+    await updateCompany({
+      legal_name: acct.company, vat: acct.vat, country: acct.country, city: acct.city,
+      address: acct.address, phone: acct.phone, website: acct.website, contact_name: acct.contact,
+      email_mgmt: acct.emailMgmt, email_admin: acct.emailAdmin, pec: acct.pec, sdi: acct.sdi,
+      iban_holder: acct.ibanHolder, iban: acct.iban, bic: acct.bic,
+    });
+    setAcctSaved(true);
+    setTimeout(() => setAcctSaved(false), 2500);
+  }
 
   const query = q.trim().toLowerCase();
   const searchHits = query ? ALL_MATERIALS.filter(m=>m.toLowerCase().includes(query)) : [];
@@ -199,12 +300,14 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* role toggle (demo) */}
-          <div style={{ marginLeft:"auto", display:"flex", background:C.bg, border:`1px solid ${C.border}`, borderRadius:9, padding:3 }}>
-            {[["buyer","Acquirente"],["supplier","Fornitore"]].map(([id,lab])=>(
-              <button key={id} onClick={()=>setRole(id)} style={{ padding:"6px 14px", borderRadius:7, border:"none", cursor:"pointer", fontSize:13, fontWeight:700, fontFamily:"Inter,system-ui", background:role===id?"#fff":"transparent", color:role===id?C.blue:C.muted, boxShadow:role===id?"0 1px 3px rgba(0,0,0,0.08)":"none" }}>{lab}</button>
-            ))}
-          </div>
+          {/* role toggle (demo only — hidden once the real company loads) */}
+          {!company ? (
+            <div style={{ marginLeft:"auto", display:"flex", background:C.bg, border:`1px solid ${C.border}`, borderRadius:9, padding:3 }}>
+              {[["buyer","Acquirente"],["supplier","Fornitore"]].map(([id,lab])=>(
+                <button key={id} onClick={()=>setRole(id)} style={{ padding:"6px 14px", borderRadius:7, border:"none", cursor:"pointer", fontSize:13, fontWeight:700, fontFamily:"Inter,system-ui", background:role===id?"#fff":"transparent", color:role===id?C.blue:C.muted, boxShadow:role===id?"0 1px 3px rgba(0,0,0,0.08)":"none" }}>{lab}</button>
+              ))}
+            </div>
+          ) : <div style={{ marginLeft:"auto" }}/>}
 
           {/* bell */}
           <button onClick={()=>setSection("notifs")} style={{ position:"relative", width:40, height:40, borderRadius:10, border:`1px solid ${C.border}`, background:"#fff", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>
@@ -535,9 +638,10 @@ export default function Dashboard() {
                 ))}
               </div>
 
-              <div style={{ display:"flex", gap:12 }}>
-                <button style={{ background:C.blue, color:"#fff", border:"none", borderRadius:10, padding:"12px 22px", fontSize:15, fontWeight:700, cursor:"pointer", fontFamily:"Inter,system-ui" }}>Salva modifiche</button>
+              <div style={{ display:"flex", gap:12, alignItems:"center" }}>
+                <button onClick={saveAccount} style={{ background:C.blue, color:"#fff", border:"none", borderRadius:10, padding:"12px 22px", fontSize:15, fontWeight:700, cursor:"pointer", fontFamily:"Inter,system-ui" }}>Salva modifiche</button>
                 <button style={{ background:"#fff", color:C.muted, border:`1px solid ${C.border}`, borderRadius:10, padding:"12px 20px", fontSize:15, fontWeight:600, cursor:"pointer", fontFamily:"Inter,system-ui" }}>Annulla</button>
+                {acctSaved && <span style={{ color:C.green, fontSize:14, fontWeight:600, display:"flex", alignItems:"center", gap:5 }}><Check size={16}/> Salvato</span>}
               </div>
             </>
           )}
