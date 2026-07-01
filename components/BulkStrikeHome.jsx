@@ -1,9 +1,31 @@
 import { useState, useEffect } from "react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { Search, Bot, ArrowRight, Check, Clock, ChevronRight, TrendingDown, X, ChevronDown } from "lucide-react";
+import { getSectorsWithProducts, searchProducts } from "@/lib/api";
 
 // ─── DATA ─────────────────────────────────────────────────────────────────────
 const SEARCH_CATS = ["Tutte le categorie","Chimica","Metallurgia","Agricoltura","Tessuti","Plastiche","Minerali","Alimentari","Farmaceutici","Carta","Energia","Gomma"];
+
+// icona + colori per i settori reali (chiave = slug dal DB)
+const SECTOR_ICONS = {
+  "additivi-alimentari":        { icon:"🧂", bg:"#FEFCE8", border:"#FEF08A" },
+  "adesivi-sigillanti":         { icon:"🩹", bg:"#FFF7ED", border:"#FED7AA" },
+  "alimentare":                 { icon:"🍞", bg:"#FEFCE8", border:"#FDE68A" },
+  "carta-cellulosa":            { icon:"📄", bg:"#F8FAFC", border:"#E2E8F0" },
+  "chimica-base":               { icon:"🧪", bg:"#EFF6FF", border:"#BFDBFE" },
+  "coloranti-pigmenti-vernici": { icon:"🎨", bg:"#FDF4FF", border:"#F5D0FE" },
+  "cosmetica-cura-personale":   { icon:"💄", bg:"#FFF1F2", border:"#FECDD3" },
+  "detergenti-tensioattivi":    { icon:"🧼", bg:"#ECFEFF", border:"#A5F3FC" },
+  "enologia":                   { icon:"🍷", bg:"#FDF2F8", border:"#FBCFE8" },
+  "fertilizzanti-agrochimica":  { icon:"🌾", bg:"#F0FDF4", border:"#BBF7D0" },
+  "gas-tecnici":                { icon:"⚗️", bg:"#EFF6FF", border:"#BAE6FD" },
+  "metalli-leghe":              { icon:"⚙️", bg:"#F1F5F9", border:"#CBD5E1" },
+  "plastiche-polimeri":         { icon:"🧴", bg:"#FEF2F2", border:"#FECACA" },
+  "sanificazione":              { icon:"🦠", bg:"#F0FDFA", border:"#99F6E4" },
+  "solventi-intermedi":         { icon:"🧫", bg:"#F5F3FF", border:"#DDD6FE" },
+  "trattamento-acque":          { icon:"💧", bg:"#EFF6FF", border:"#BFDBFE" },
+};
+const SECTOR_FALLBACK = { icon:"📦", bg:"#F1F5F9", border:"#E2E8F0" };
 
 const CATEGORIES = [
   { icon:"🧪", label:"Chimica",       bg:"#EFF6FF", border:"#BFDBFE" },
@@ -96,6 +118,10 @@ export default function BulkStrikeLight() {
   const [chatOpen, setChatOpen]     = useState(false);
   const [count, setCount]           = useState({ pools:0, materials:0, countries:0, volume:0 });
   const [activeCat, setActiveCat]   = useState(null);
+  const [sectors, setSectors]             = useState([]);
+  const [activeSector, setActiveSector]   = useState(null);
+  const [searchResults, setSearchResults] = useState([]);
+  const [searchOpen, setSearchOpen]       = useState(false);
 
   useEffect(() => {
     const targets = { pools:142, materials:2400, countries:38, volume:12 };
@@ -107,6 +133,23 @@ export default function BulkStrikeLight() {
     }, 1800/60);
     return () => clearInterval(t);
   }, []);
+
+  useEffect(() => { getSectorsWithProducts().then(setSectors).catch(() => {}); }, []);
+
+  useEffect(() => {
+    const q = searchQ.trim();
+    if (q.length < 2) { setSearchResults([]); setSearchOpen(false); return; }
+    const t = setTimeout(() => {
+      searchProducts(q).then(rows => { setSearchResults(rows); setSearchOpen(true); }).catch(() => {});
+    }, 250);
+    return () => clearTimeout(t);
+  }, [searchQ]);
+
+  function runSearch() {
+    const q = searchQ.trim();
+    if (q.length < 2) { setSearchResults([]); setSearchOpen(false); return; }
+    searchProducts(q).then(rows => { setSearchResults(rows); setSearchOpen(true); }).catch(() => {});
+  }
 
   const C = { blue:"#0EA5E9", dark:"#0284C7", text:"#0F172A", muted:"#64748B", border:"#E2E8F0", bg:"#F8FAFE", green:"#059669", red:"#DC2626", amber:"#D97706" };
 
@@ -193,8 +236,21 @@ export default function BulkStrikeLight() {
                   ))}
                 </div>
               )}
-              <input className="bs-search-input" placeholder="Cerca materie prime, fornitori, specifiche..." value={searchQ} onChange={e => setSearchQ(e.target.value)} />
-              <button className="bs-search-btn"><Search size={20} color="white" /></button>
+              <input className="bs-search-input" placeholder="Cerca materie prime, fornitori, specifiche..." value={searchQ} onChange={e => setSearchQ(e.target.value)} onKeyDown={e => { if (e.key === "Enter") runSearch(); }} />
+              <button className="bs-search-btn" onClick={runSearch}><Search size={20} color="white" /></button>
+              {searchOpen && searchResults.length > 0 && (
+                <div style={{ position:"absolute", top:46, left:0, right:0, background:"#fff", border:`1px solid ${C.border}`, borderRadius:10, boxShadow:"0 12px 30px rgba(0,0,0,0.12)", zIndex:60, maxHeight:340, overflowY:"auto" }}>
+                  {searchResults.map(p => (
+                    <div key={p.id} onClick={() => { window.location.href = `/prodotto?id=${p.id}`; }} style={{ padding:"10px 14px", cursor:"pointer", borderBottom:`1px solid ${C.border}`, display:"flex", justifyContent:"space-between", gap:10 }}>
+                      <span style={{ fontSize:14, color:C.text }}>{p.canonical_name}</span>
+                      <span style={{ fontSize:12, color:C.muted, whiteSpace:"nowrap" }}>{p.e_number || p.cas_number || ""}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {searchOpen && searchResults.length === 0 && searchQ.trim().length >= 2 && (
+                <div style={{ position:"absolute", top:46, left:0, right:0, background:"#fff", border:`1px solid ${C.border}`, borderRadius:10, padding:"12px 14px", zIndex:60, fontSize:13, color:C.muted }}>Nessun prodotto trovato per “{searchQ}”.</div>
+              )}
             </div>
           </div>
 
@@ -229,21 +285,38 @@ export default function BulkStrikeLight() {
         </div>
       </div>
 
-      {/* ── CATEGORIES ── */}
+      {/* ── SETTORI (reali) ── */}
       <div style={{ borderBottom:`1px solid ${C.border}`, background:"#fff" }}>
         <div style={{ maxWidth:1280, margin:"0 auto" }}>
           <div className="bs-cats">
-            {CATEGORIES.map(cat => (
-              <div key={cat.label} className={`bs-cat${activeCat===cat.label?" active":""}`} onClick={() => setActiveCat(activeCat===cat.label?null:cat.label)}>
-                <div className="bs-cat-icon" style={{ background:cat.bg, borderColor:activeCat===cat.label?"#0EA5E9":cat.border }}>
-                  {cat.icon}
+            {sectors.map(s => {
+              const ic = SECTOR_ICONS[s.slug] || SECTOR_FALLBACK;
+              const on = activeSector?.id === s.id;
+              return (
+                <div key={s.id} className={`bs-cat${on?" active":""}`} onClick={() => setActiveSector(on ? null : s)}>
+                  <div className="bs-cat-icon" style={{ background:ic.bg, borderColor:on?"#0EA5E9":ic.border }}>
+                    {ic.icon}
+                  </div>
+                  <span style={{ fontSize:11, color:on?"#0EA5E9":C.muted, textAlign:"center", lineHeight:1.2, fontWeight:on?700:400 }}>
+                    {s.name}
+                  </span>
                 </div>
-                <span style={{ fontSize:11, color:activeCat===cat.label?"#0EA5E9":C.muted, textAlign:"center", lineHeight:1.2, fontWeight:activeCat===cat.label?700:400 }}>
-                  {cat.label}
-                </span>
-              </div>
-            ))}
+              );
+            })}
           </div>
+          {activeSector && (
+            <div style={{ padding:"2px 16px 20px" }}>
+              <div style={{ fontSize:13, color:C.muted, margin:"0 0 10px" }}>{activeSector.products.length} prodotti in <b style={{ color:C.text }}>{activeSector.name}</b></div>
+              <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))", gap:8 }}>
+                {activeSector.products.map(p => (
+                  <div key={p.id} onClick={() => { window.location.href = `/prodotto?id=${p.id}`; }} style={{ padding:"10px 12px", border:`1px solid ${C.border}`, borderRadius:9, cursor:"pointer", fontSize:13, color:C.text, background:"#fff", display:"flex", alignItems:"center", justifyContent:"space-between", gap:8 }}>
+                    <span>{p.canonical_name}</span>
+                    <ChevronRight size={14} color={C.muted} />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
