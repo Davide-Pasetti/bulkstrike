@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { registerCompany } from "@/lib/api";
 import { ShoppingCart, Factory, Check, ArrowRight, ArrowLeft, Mail, Lock, Building2, Globe, Phone, User, MapPin, Award, Boxes, Shield, X, Bell, Search, Plus, TrendingDown, Zap } from "lucide-react";
 
 const C = { blue:"#0EA5E9", dark:"#0284C7", text:"#0F172A", muted:"#64748B", border:"#E2E8F0", bg:"#F8FAFE", green:"#059669", amber:"#D97706", purple:"#7C3AED" };
@@ -199,6 +200,24 @@ export default function RegisterPage() {
 
   const steps = ["Account","Azienda", type==="supplier"?"Catalogo":"Esigenze"];
   const canConsent = f.terms && f.privacy && f.ai;
+
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState(null);
+
+  async function submitRegistration() {
+    setSubmitting(true);
+    setError(null);
+    try {
+      await registerCompany({ ...f, type });
+      setDone(true);
+    } catch (e) {
+      setError(e.message === "ALREADY_REGISTERED"
+        ? "Questa email risulta già registrata."
+        : "Registrazione non riuscita. Riprova.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
   return (
     <div style={{ background:C.bg, color:C.text, fontFamily:"'Inter',system-ui,sans-serif", minHeight:"100vh" }}>
@@ -450,6 +469,7 @@ export default function RegisterPage() {
               </>
             )}
 
+            {error && <div style={{ color:"#DC2626", fontSize:13, marginBottom:10, textAlign:"center" }}>{error}</div>}
             {/* NAV BUTTONS */}
             <div style={{ display:"flex", justifyContent:"space-between", marginTop:24, gap:12 }}>
               {step>1
@@ -457,7 +477,7 @@ export default function RegisterPage() {
                 : <span/>}
               {step<3
                 ? <button className="bs-btn" disabled={step===1 && !type} onClick={()=>setStep(step+1)}>Continua <ArrowRight size={16}/></button>
-                : <button className="bs-btn" disabled={!canConsent} onClick={()=>setDone(true)}>Completa registrazione <Check size={16}/></button>}
+                : <button className="bs-btn" disabled={!canConsent || submitting} onClick={submitRegistration}>{submitting ? "Invio in corso…" : <>Completa registrazione <Check size={16}/></>}</button>}
             </div>
           </div>
 
