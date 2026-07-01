@@ -171,13 +171,16 @@ export default function ProductPage() {
   const [chatOpen, setChatOpen] = useState(false);
 
   // ── stato data-driven (default = demo SEED; /prodotto senza id resta la demo)
+  // id già presente nell'URL: lo calcoliamo sincronicamente per partire "in
+  // caricamento" ed evitare il flash del prodotto demo (Acido tartarico).
+  const initId = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("id") : null;
   const [product, setProduct] = useState(SEED_PRODUCT);
   const [suppliers, setSuppliers] = useState(SEED_SUPPLIERS);
   const [pool, setPool] = useState(SEED_POOL);
   const [qa, setQa] = useState(SEED_QA);
   const [productId, setProductId] = useState(null);
   const [priceRef, setPriceRef] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(!!initId);
   const [busy, setBusy] = useState(false);
   const [actionMsg, setActionMsg] = useState("");
   const [searchQ, setSearchQ] = useState("");
@@ -288,6 +291,22 @@ export default function ProductPage() {
     } finally { setBusy(false); }
   }
   const goToPool = () => { if (pool.id) window.location.href = `/pool?id=${pool.id}`; };
+
+  // Mentre carichiamo il prodotto reale non mostriamo il demo: loader brandizzato.
+  if (loading) {
+    return (
+      <div style={{ minHeight:"100vh", background:C.bg, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:16, fontFamily:"'Inter',system-ui,sans-serif" }}>
+        <div onClick={() => { window.location.href = "/"; }} style={{ display:"flex", alignItems:"center", gap:10, cursor:"pointer" }}>
+          <BSIcon size={40} uid="load" />
+          <div style={{ display:"flex", alignItems:"baseline" }}>
+            <span style={{ fontSize:24, fontWeight:900, letterSpacing:"-0.03em", color:C.text }}>Bulk</span>
+            <span style={{ fontSize:24, fontWeight:900, letterSpacing:"-0.03em", background:"linear-gradient(90deg,#0EA5E9,#22D3EE)", WebkitBackgroundClip:"text", backgroundClip:"text", color:"transparent" }}>Strike</span>
+          </div>
+        </div>
+        <div style={{ fontSize:14, color:C.muted }}>Caricamento prodotto…</div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ background:"#fff", color:C.text, fontFamily:"'Inter',system-ui,sans-serif", minHeight:"100vh", overflowX:"hidden" }}>
