@@ -27,21 +27,6 @@ const SECTOR_ICONS = {
 };
 const SECTOR_FALLBACK = { icon:"📦", bg:"#F1F5F9", border:"#E2E8F0" };
 
-const CATEGORIES = [
-  { icon:"🧪", label:"Chimica",       bg:"#EFF6FF", border:"#BFDBFE" },
-  { icon:"⚙️", label:"Metallurgia",   bg:"#F0FDF4", border:"#BBF7D0" },
-  { icon:"🌾", label:"Agricoltura",   bg:"#FEFCE8", border:"#FEF08A" },
-  { icon:"🧵", label:"Tessuti",       bg:"#FFF7ED", border:"#FED7AA" },
-  { icon:"🧴", label:"Plastiche",     bg:"#F0F9FF", border:"#BAE6FD" },
-  { icon:"💎", label:"Minerali",      bg:"#FDF4FF", border:"#E9D5FF" },
-  { icon:"🥗", label:"Alimentari",    bg:"#ECFDF5", border:"#A7F3D0" },
-  { icon:"💊", label:"Farmaceutici",  bg:"#FFF1F2", border:"#FECDD3" },
-  { icon:"📄", label:"Carta",         bg:"#F8FAFC", border:"#CBD5E1" },
-  { icon:"⚡", label:"Energia",       bg:"#FEFCE8", border:"#FDE047" },
-  { icon:"🔩", label:"Gomma",         bg:"#F1F5F9", border:"#CBD5E1" },
-  { icon:"🌊", label:"Petrolchimica", bg:"#EFF6FF", border:"#93C5FD" },
-];
-
 const TICKER = [
   { name:"Acido Citrico E330", price:"€0,81", change:-2.3 },
   { name:"Polipropilene GP",   price:"€1,12", change:+1.4 },
@@ -117,7 +102,6 @@ export default function BulkStrikeLight() {
   const [activeTab, setActiveTab]   = useState("acquirente");
   const [chatOpen, setChatOpen]     = useState(false);
   const [count, setCount]           = useState({ pools:0, materials:0, countries:0, volume:0 });
-  const [activeCat, setActiveCat]   = useState(null);
   const [sectors, setSectors]             = useState([]);
   const [activeSector, setActiveSector]   = useState(null);
   const [searchResults, setSearchResults] = useState([]);
