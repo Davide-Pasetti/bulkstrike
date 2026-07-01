@@ -1,86 +1,59 @@
-import { useState, useEffect } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
-import { Search, Bot, ArrowRight, Check, Clock, ChevronRight, TrendingDown, X, ChevronDown } from "lucide-react";
-import { getSectorsWithProducts, searchProducts } from "@/lib/api";
+import { Search, Bot, ArrowRight, Check, Clock, ChevronDown, ChevronRight, ChevronUp, Star, Shield, Truck, FileText, Download, Plus, Minus, X, Beaker, TrendingDown, Users, Gavel, Info } from "lucide-react";
+import { getProduct, getOpenPoolForProduct, getPriceReference, getSession, openPool, createInstantOrder, poolErrorMessage, searchProducts } from "@/lib/api";
 
-// ─── DATA ─────────────────────────────────────────────────────────────────────
-const SEARCH_CATS = ["Tutte le categorie","Chimica","Metallurgia","Agricoltura","Tessuti","Plastiche","Minerali","Alimentari","Farmaceutici","Carta","Energia","Gomma"];
+// ─── PALETTE (matches homepage) ───────────────────────────────────────────────
+const C = { blue:"#0EA5E9", dark:"#0284C7", text:"#0F172A", muted:"#64748B", border:"#E2E8F0", bg:"#F8FAFE", green:"#059669", red:"#DC2626", amber:"#D97706", purple:"#7C3AED" };
 
-// icona + colori per i settori reali (chiave = slug dal DB)
-const SECTOR_ICONS = {
-  "additivi-alimentari":        { icon:"🧂", bg:"#FEFCE8", border:"#FEF08A" },
-  "adesivi-sigillanti":         { icon:"🩹", bg:"#FFF7ED", border:"#FED7AA" },
-  "alimentare":                 { icon:"🍞", bg:"#FEFCE8", border:"#FDE68A" },
-  "carta-cellulosa":            { icon:"📄", bg:"#F8FAFC", border:"#E2E8F0" },
-  "chimica-base":               { icon:"🧪", bg:"#EFF6FF", border:"#BFDBFE" },
-  "coloranti-pigmenti-vernici": { icon:"🎨", bg:"#FDF4FF", border:"#F5D0FE" },
-  "cosmetica-cura-personale":   { icon:"💄", bg:"#FFF1F2", border:"#FECDD3" },
-  "detergenti-tensioattivi":    { icon:"🧼", bg:"#ECFEFF", border:"#A5F3FC" },
-  "enologia":                   { icon:"🍷", bg:"#FDF2F8", border:"#FBCFE8" },
-  "fertilizzanti-agrochimica":  { icon:"🌾", bg:"#F0FDF4", border:"#BBF7D0" },
-  "gas-tecnici":                { icon:"⚗️", bg:"#EFF6FF", border:"#BAE6FD" },
-  "metalli-leghe":              { icon:"⚙️", bg:"#F1F5F9", border:"#CBD5E1" },
-  "plastiche-polimeri":         { icon:"🧴", bg:"#FEF2F2", border:"#FECACA" },
-  "sanificazione":              { icon:"🦠", bg:"#F0FDFA", border:"#99F6E4" },
-  "solventi-intermedi":         { icon:"🧫", bg:"#F5F3FF", border:"#DDD6FE" },
-  "trattamento-acque":          { icon:"💧", bg:"#EFF6FF", border:"#BFDBFE" },
-};
-const SECTOR_FALLBACK = { icon:"📦", bg:"#F1F5F9", border:"#E2E8F0" };
-
-const TICKER = [
-  { name:"Acido Citrico E330", price:"€0,81", change:-2.3 },
-  { name:"Polipropilene GP",   price:"€1,12", change:+1.4 },
-  { name:"Carbonato di Calcio",price:"€0,29", change:+3.1 },
-  { name:"Acido Solforico 98%",price:"€0,22", change:-0.8 },
-  { name:"Bicarbonato di Sodio",price:"€0,41",change:-1.5 },
-  { name:"Ossido di Zinco",    price:"€2,45", change:+2.8 },
-  { name:"Acido Acetico 99%",  price:"€0,67", change:-0.4 },
-  { name:"Etanolo 96%",        price:"€0,58", change:+1.9 },
-  { name:"Glicerina USP",      price:"€0,72", change:-0.2 },
-  { name:"Cloruro di Sodio",   price:"€0,18", change:+0.5 },
-];
-
-const POOLS = [
-  { id:1, name:"Acido Citrico E330", grade:"Food Grade · Anidro", target:20000, current:12400, price:"€0,81", savings:"13%", orig:"€0,93", expires:"4g 12h", flags:"🇨🇳 🇮🇹 🇩🇪", tag:"Chimica", hot:false },
-  { id:2, name:"Polipropilene GP",   grade:"Vergine H030S",       target:10000, current:9100,  price:"€0,98", savings:"12%", orig:"€1,12", expires:"8h 30m",flags:"🇰🇷 🇩🇪 🇮🇹", tag:"Plastiche",hot:true  },
-  { id:3, name:"Carbonato di Calcio",grade:"Industrial 98%",      target:50000, current:38200, price:"€0,29", savings:"15%", orig:"€0,34", expires:"1g 8h", flags:"🇨🇳 🇹🇷",    tag:"Minerali", hot:false },
-];
-
-const CHART_DATA = {
-  "Acido Citrico":  [{t:"Gen",v:0.95},{t:"Feb",v:0.92},{t:"Mar",v:0.89},{t:"Apr",v:0.91},{t:"Mag",v:0.87},{t:"Giu",v:0.85},{t:"Lug",v:0.83},{t:"Ago",v:0.81}],
-  "Polipropilene":  [{t:"Gen",v:1.18},{t:"Feb",v:1.15},{t:"Mar",v:1.14},{t:"Apr",v:1.16},{t:"Mag",v:1.13},{t:"Giu",v:1.11},{t:"Lug",v:1.09},{t:"Ago",v:1.12}],
-  "Carbonato Ca.":  [{t:"Gen",v:0.36},{t:"Feb",v:0.35},{t:"Mar",v:0.34},{t:"Apr",v:0.35},{t:"Mag",v:0.33},{t:"Giu",v:0.32},{t:"Lug",v:0.31},{t:"Ago",v:0.29}],
+// ─── PRODUCT DATA ─────────────────────────────────────────────────────────────
+const SEED_PRODUCT = {
+  name: "Acido Tartarico L(+)",
+  enum: "E334",
+  cas: "87-69-4",
+  formula: "C₄H₆O₆",
+  mw: "150,09 g/mol",
+  category: "Acidificanti · Enologia",
+  form: "Polvere cristallina bianca",
+  purityRange: "99,5% – 99,9%",
 };
 
-const BUYER_STEPS  = [
-  { n:"01", title:"Cerca la materia prima",  desc:"Digita il prodotto o descrivi cosa cerchi. L'AI trova il prodotto esatto nella tassonomia BulkStrike." },
-  { n:"02", title:"Scegli: Rapido o Pool",   desc:"Acquista subito al prezzo più basso, oppure unisciti a un Pool per sbloccare lo scaglione successivo." },
-  { n:"03", title:"Ricevi la merce",         desc:"Pagamento protetto in escrow. Track & trace integrato. Confermi la consegna e il gioco è fatto." },
-];
-const SELLER_STEPS = [
-  { n:"01", title:"Pubblica il listino",     desc:"Inserisci i prodotti con listino a scaglioni. L'AI ti guida nella creazione della scheda prodotto." },
-  { n:"02", title:"Ricevi richieste",        desc:"Notifiche in tempo reale su Pool attivi, aste convocate e WantedBoard compatibili con il tuo catalogo." },
-  { n:"03", title:"Vinci e spedisci",        desc:"Aggiudicati la fornitura, emetti i documenti in piattaforma e ricevi il pagamento in 5 giorni." },
-];
-
-const AI_MSGS = [
-  { u:true,  t:"Ho bisogno di 4 tonnellate di acido citrico food grade entro fine mese" },
-  { u:false, t:"Per 4 tonnellate di Acido Citrico E330 ho due opzioni:\n\n🟢 Acquisto Rapido — Supplier B — €1,14/kg all-in — 3 giorni\n\n⭐ Pool attivo — €0,99/kg all-in — 62% completato — ~4-6 giorni\n\nIl Pool ti fa risparmiare ~€60. Vuoi che ti iscriva?" },
-  { u:true,  t:"Sì, uniscimi al pool" },
-  { u:false, t:"✅ Iscritto. 4t · Acido Citrico E330 · €0,99/kg all-in.\nTi avviso quando il pool si completa. 🚀" },
+// price tiers €/kg by volume band [maxKg, price]; shipping = base + perKg*qty
+const SEED_SUPPLIERS = [
+  { id:"mazzari", name:"Distillerie Mazzari", origin:"Italia", flag:"🇮🇹", rating:4.9, reviews:218, delivery:"2–3 gg", type:"Naturale (da fecce di vino)",
+    purity:"99,8%", certs:["Food Grade","OIV","ISO 9001","Kosher"],
+    tiers:[[5000,2.80],[20000,2.55],[50000,2.30],[Infinity,2.10]], shipBase:80, shipKg:0.05 },
+  { id:"changmao", name:"Changmao Biochemical", origin:"Cina", flag:"🇨🇳", rating:4.6, reviews:1043, delivery:"25–30 gg", type:"Sintetico",
+    purity:"99,5%", certs:["Food Grade","ISO 9001","Kosher","Halal"],
+    tiers:[[5000,2.10],[20000,1.90],[50000,1.70],[Infinity,1.55]], shipBase:180, shipKg:0.12 },
+  { id:"dervinsa", name:"DERVINSA", origin:"Argentina", flag:"🇦🇷", rating:4.7, reviews:386, delivery:"18–22 gg", type:"Naturale (da uva)",
+    purity:"99,7%", certs:["Food Grade","OIV","ISO 9001"],
+    tiers:[[5000,2.45],[20000,2.20],[50000,2.00],[Infinity,1.85]], shipBase:140, shipKg:0.09 },
+  { id:"fdcm", name:"FDCM Europe", origin:"Polonia (UE)", flag:"🇵🇱", rating:4.5, reviews:152, delivery:"4–6 gg", type:"Distributore",
+    purity:"99,6%", certs:["Food Grade","ISO 9001","REACH"],
+    tiers:[[5000,2.35],[20000,2.15],[50000,1.95],[Infinity,1.80]], shipBase:90, shipKg:0.06 },
 ];
 
-// ─── LOGO ICON ────────────────────────────────────────────────────────────────
+const CHART = [
+  {t:"Gen",v:2.95},{t:"Feb",v:2.88},{t:"Mar",v:2.79},{t:"Apr",v:2.72},
+  {t:"Mag",v:2.61},{t:"Giu",v:2.55},{t:"Lug",v:2.49},{t:"Ago",v:2.42},
+];
+
+const SEED_POOL = { exists:true, id:null, bestPrice:1.68, current:13800, companies:8, suppliers:4, closesIn:"4g 9h" };  // pool/asta attiva su questo prodotto
+
+const SEED_QA = [
+  { q:"È adatto alla stabilizzazione tartarica a freddo?", a:"Sì, l'acido tartarico L(+) è impiegato per la correzione dell'acidità del mosto e del vino. Per la stabilizzazione a freddo si abbina spesso a bitartrato di potassio." },
+  { q:"Qual è la differenza tra naturale e sintetico per l'uso enologico?", a:"L'acido tartarico naturale (da fecce o uva) è la forma L(+) destrogira identica a quella dell'uva. Il sintetico è chimicamente equivalente come E334 ma alcune denominazioni e produzioni biologiche richiedono il naturale." },
+  { q:"Che packaging è disponibile per grandi volumi?", a:"Sacchi da 25 kg su pallet, big bag da 500 e 1000 kg. Oltre le 20 tonnellate la maggior parte dei fornitori quota in big bag." },
+];
+
+// ─── LOGO ─────────────────────────────────────────────────────────────────────
 function BSIcon({ size = 36, uid = "a" }) {
   return (
     <svg width={size} height={size} viewBox="0 0 56 56" fill="none">
       <defs>
-        <linearGradient id={`bg${uid}`} x1="0" y1="0" x2="56" y2="56" gradientUnits="userSpaceOnUse">
-          <stop offset="0%" stopColor="#0D2137"/><stop offset="100%" stopColor="#0C4A6E"/>
-        </linearGradient>
-        <linearGradient id={`ar${uid}`} x1="42" y1="12" x2="42" y2="40" gradientUnits="userSpaceOnUse">
-          <stop offset="0%" stopColor="#38BDF8"/><stop offset="100%" stopColor="#22D3EE"/>
-        </linearGradient>
+        <linearGradient id={`bg${uid}`} x1="0" y1="0" x2="56" y2="56" gradientUnits="userSpaceOnUse"><stop offset="0%" stopColor="#0D2137"/><stop offset="100%" stopColor="#0C4A6E"/></linearGradient>
+        <linearGradient id={`ar${uid}`} x1="42" y1="12" x2="42" y2="40" gradientUnits="userSpaceOnUse"><stop offset="0%" stopColor="#38BDF8"/><stop offset="100%" stopColor="#22D3EE"/></linearGradient>
       </defs>
       <rect width="56" height="56" rx="13" fill={`url(#bg${uid})`}/>
       <rect x="10" y="14" width="22" height="5.5" rx="2.75" fill="white"/>
@@ -93,53 +66,154 @@ function BSIcon({ size = 36, uid = "a" }) {
   );
 }
 
-// ─── MAIN ─────────────────────────────────────────────────────────────────────
-function CookieBanner() {
-  const [show, setShow] = useState(false);
-  useEffect(() => {
-    try { if (!localStorage.getItem("bs_cookie_consent")) setShow(true); } catch (e) {}
-  }, []);
-  if (!show) return null;
-  const decide = (v) => { try { localStorage.setItem("bs_cookie_consent", v); } catch (e) {} setShow(false); };
-  return (
-    <div style={{ position:"fixed", left:16, right:16, bottom:16, zIndex:200, maxWidth:720, margin:"0 auto", background:"#fff", border:"1px solid #E2E8F0", borderRadius:14, boxShadow:"0 12px 40px rgba(0,0,0,0.18)", padding:"16px 18px", display:"flex", flexWrap:"wrap", alignItems:"center", gap:12 }}>
-      <div style={{ flex:1, minWidth:220, fontSize:13, color:"#334155", lineHeight:1.5 }}>
-        Usiamo cookie tecnici necessari al funzionamento del sito e, previo consenso, cookie di misurazione. Dettagli nella <a href="/legale#cookie" style={{ color:"#0EA5E9", fontWeight:600 }}>Cookie Policy</a>.
-      </div>
-      <div style={{ display:"flex", gap:8 }}>
-        <button onClick={() => decide("rejected")} style={{ padding:"9px 16px", borderRadius:9, border:"1.5px solid #CBD5E1", background:"#fff", color:"#334155", fontSize:13, fontWeight:600, cursor:"pointer" }}>Rifiuta</button>
-        <button onClick={() => decide("accepted")} style={{ padding:"9px 16px", borderRadius:9, border:"none", background:"#0EA5E9", color:"#fff", fontSize:13, fontWeight:700, cursor:"pointer" }}>Accetta</button>
-      </div>
-    </div>
-  );
+// ─── HELPERS ──────────────────────────────────────────────────────────────────
+const VAT = 0.22;
+const PALLET_KG = 1000;   // peso di 1 pallet di questo prodotto: soglia per aprire un pool
+function priceForQty(supplier, qty) {
+  for (const [maxKg, price] of supplier.tiers) if (qty <= maxKg) return price;
+  return supplier.tiers[supplier.tiers.length-1][1];
+}
+function compute(supplier, qty) {
+  const unit = priceForQty(supplier, qty);
+  const product = unit * qty;
+  const shipping = supplier.shipBase + supplier.shipKg * qty;
+  const vat = (product + shipping) * VAT;
+  const total = product + shipping + vat;
+  return { unit, product, shipping, vat, total, allInKg: total / qty };
+}
+const eur = (n) => n.toLocaleString("it-IT", { style:"currency", currency:"EUR", maximumFractionDigits:0 });
+const eurKg = (n) => "€" + n.toLocaleString("it-IT", { minimumFractionDigits:2, maximumFractionDigits:2 });
+const tierLabel = (qty) => qty<5000?"1–5 t":qty<20000?"5–20 t":qty<50000?"20–50 t":"50 t+";
+
+/* ─── MAPPERS DB → shape del componente ─────────────────────────────────────
+ * Il render usa la shape demo (SEED_*). Questi mapper convertono i dati reali
+ * di getProduct()/getOpenPoolForProduct() nella stessa shape, così tutto il
+ * render e gli helper priceForQty()/compute() restano identici. */
+const FLAG = { "Italia":"🇮🇹","Cina":"🇨🇳","Argentina":"🇦🇷","Polonia":"🇵🇱","Francia":"🇫🇷","Germania":"🇩🇪","Spagna":"🇪🇸","Paesi Bassi":"🇳🇱","India":"🇮🇳","Stati Uniti":"🇺🇸","Turchia":"🇹🇷" };
+const flagFor = (country) => FLAG[country] || "🏳️";
+// stima trasporto: nessun dato per fornitore nel DB → stima per area geografica
+function shipFor(country) {
+  if (country === "Italia") return { shipBase:80, shipKg:0.05 };
+  const eu = ["Francia","Germania","Spagna","Polonia","Paesi Bassi","Portogallo","Belgio","Austria"];
+  if (eu.includes(country)) return { shipBase:100, shipKg:0.06 };
+  return { shipBase:180, shipKg:0.12 }; // extra-UE
+}
+// da { tiers:[{min_kg,max_kg,price_per_kg}] } (getProduct) → shape componente
+function mapDbSupplier(s) {
+  const ship = shipFor(s.country);
+  // tiers [[maxKg,price]] ordinati per min_kg; ultimo maxKg = Infinity
+  const sorted = [...(s.tiers || [])].sort((a,b) => a.min_kg - b.min_kg);
+  const tiers = sorted.map((t) => [t.max_kg == null ? Infinity : Number(t.max_kg), Number(t.price_per_kg)]);
+  if (!tiers.length) tiers.push([Infinity, s.best_price || 0]);
+  const purity = (s.grade && /\d/.test(s.grade)) ? (s.grade.match(/[\d.,]+%/)?.[0] || "") : "";
+  return {
+    id: s.supplier_product_id,
+    company_id: s.company_id,
+    name: s.name,
+    origin: s.country,
+    flag: flagFor(s.country),
+    rating: s.rating ?? 0,
+    reviews: s.reviews_count ?? 0,
+    delivery: s.lead_time_days != null ? `${s.lead_time_days} gg` : "—",
+    type: s.grade || (s.origin === "natural" ? "Naturale" : s.origin === "synthetic" ? "Sintetico" : "—"),
+    purity,
+    certs: s.certifications || [],
+    tiers,
+    shipBase: ship.shipBase,
+    shipKg: ship.shipKg,
+  };
+}
+// da getProduct() (senza suppliers) → shape SEED_PRODUCT
+function mapDbProduct(p) {
+  return {
+    name: p.canonical_name,
+    enum: p.e_number || "—",
+    cas: p.cas_number || "—",
+    formula: p.formula || "—",
+    mw: p.iupac_name || "—",
+    category: p.merch_classes || (p.description ? p.description : "Materia prima"),
+    form: p.default_unit === "L" ? "Liquido" : "Polvere / granulare",
+    purityRange: "—",
+    description: p.description || "",
+    pallet_kg: p.pallet_kg || 1000,
+  };
+}
+// da getOpenPoolForProduct() → shape SEED_POOL
+function mapDbPool(pool) {
+  if (!pool) return { exists:false, id:null, bestPrice:0, current:0, companies:0, suppliers:0, closesIn:"" };
+  return {
+    exists: true,
+    id: pool.id,
+    bestPrice: pool.best_price_per_kg != null ? Number(pool.best_price_per_kg) : 0,
+    current: Number(pool.total_volume_kg) || 0,
+    companies: Number(pool.participants) || 0,
+    suppliers: Number(pool.num_bids) || 0,
+    closesIn: untilLabel(pool.status === "final_phase" ? pool.final_phase_ends_at : pool.closes_at),
+  };
+}
+// etichetta "Xg Yh" da un timestamp futuro
+function untilLabel(iso) {
+  if (!iso) return "";
+  const ms = new Date(iso).getTime() - Date.now();
+  if (ms <= 0) return "in chiusura";
+  const h = Math.floor(ms / 3600000);
+  const d = Math.floor(h / 24);
+  return d > 0 ? `${d}g ${h % 24}h` : `${h}h`;
 }
 
-export default function BulkStrikeLight() {
-  const [searchCat, setSearchCat]   = useState("Tutte le categorie");
-  const [showCatDd, setShowCatDd]   = useState(false);
-  const [searchQ, setSearchQ]       = useState("");
-  const [activeChart, setActiveChart] = useState("Acido Citrico");
-  const [activeTab, setActiveTab]   = useState("acquirente");
-  const [chatOpen, setChatOpen]     = useState(false);
-  const [count, setCount]           = useState({ pools:0, materials:0, countries:0, volume:0 });
-  const [sectors, setSectors]             = useState([]);
-  const [activeSector, setActiveSector]   = useState(null);
-  const [searchResults, setSearchResults] = useState([]);
-  const [searchOpen, setSearchOpen]       = useState(false);
+// ─── MAIN ─────────────────────────────────────────────────────────────────────
+export default function ProductPage() {
+  const [qty, setQty] = useState(8000);
+  const [selectedId, setSelectedId] = useState(null);   // null = auto best all-in
+  const [showSpecs, setShowSpecs] = useState(false);
+  const [openQa, setOpenQa] = useState(null);
+  const [chatOpen, setChatOpen] = useState(false);
 
+  // ── stato data-driven (default = demo SEED; /prodotto senza id resta la demo)
+  const [product, setProduct] = useState(SEED_PRODUCT);
+  const [suppliers, setSuppliers] = useState(SEED_SUPPLIERS);
+  const [pool, setPool] = useState(SEED_POOL);
+  const [qa, setQa] = useState(SEED_QA);
+  const [productId, setProductId] = useState(null);
+  const [priceRef, setPriceRef] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [actionMsg, setActionMsg] = useState("");
+  const [searchQ, setSearchQ] = useState("");
+  const [searchResults, setSearchResults] = useState([]);
+  const [searchOpen, setSearchOpen] = useState(false);
+
+  // carica il prodotto reale da ?id=
   useEffect(() => {
-    const targets = { pools:142, materials:2400, countries:38, volume:12 };
-    let step = 0;
-    const t = setInterval(() => {
-      step++; const e = 1 - Math.pow(1 - step/60, 3);
-      setCount({ pools:Math.round(targets.pools*e), materials:Math.round(targets.materials*e), countries:Math.round(targets.countries*e), volume:Math.round(targets.volume*e) });
-      if (step >= 60) clearInterval(t);
-    }, 1800/60);
-    return () => clearInterval(t);
+    const id = new URLSearchParams(window.location.search).get("id");
+    if (!id) return;                    // nessun id → resta la demo
+    setProductId(id);
+    setLoading(true);
+    (async () => {
+      try {
+        const [p, op, ref] = await Promise.all([
+          getProduct(id),
+          getOpenPoolForProduct(id).catch(() => null),
+          getPriceReference(id).catch(() => null),
+        ]);
+        if (p) {
+          setProduct(mapDbProduct(p));
+          setSuppliers((p.suppliers || []).map(mapDbSupplier));
+          setPriceRef(ref != null ? Number(ref) : null);
+          setPool(mapDbPool(op));
+          setSelectedId(null);
+          // le FAQ SEED sono specifiche dell'acido tartarico: mostrale solo per quel prodotto
+          setQa(id === "ba475798-09b8-4471-91d4-f7555e4b0c9b" ? SEED_QA : []);
+        }
+      } catch (e) {
+        setActionMsg(poolErrorMessage(e));
+      } finally {
+        setLoading(false);
+      }
+    })();
   }, []);
 
-  useEffect(() => { getSectorsWithProducts().then(setSectors).catch(() => {}); }, []);
-
+  // ricerca prodotti (debounced) per la barra in nav
   useEffect(() => {
     const q = searchQ.trim();
     if (q.length < 2) { setSearchResults([]); setSearchOpen(false); return; }
@@ -151,517 +225,590 @@ export default function BulkStrikeLight() {
 
   function runSearch() {
     const q = searchQ.trim();
-    if (q.length < 2) { setSearchResults([]); setSearchOpen(false); return; }
+    if (q.length < 2) return;
     searchProducts(q).then(rows => { setSearchResults(rows); setSearchOpen(true); }).catch(() => {});
   }
+  const ranked = useMemo(() => {
+    return suppliers.map(s => ({ ...s, calc: compute(s, qty) })).sort((a,b) => a.calc.allInKg - b.calc.allInKg);
+  }, [suppliers, qty]);
 
-  const C = { blue:"#0EA5E9", dark:"#0284C7", text:"#0F172A", muted:"#64748B", border:"#E2E8F0", bg:"#F8FAFE", green:"#059669", red:"#DC2626", amber:"#D97706" };
+  const featured = (selectedId ? ranked.find(s => s.id === selectedId) : ranked[0]) || null;
+  const others = featured ? ranked.filter(s => s.id !== featured.id) : [];
+  const cheapestId = ranked.length ? ranked[0].id : null;
+
+  // pool nudge: shown when the instant order is >= 1 pallet
+  const palletKg = product.pallet_kg || PALLET_KG;
+  const canOpenPool = qty >= palletKg;
+  // best instant unit price across suppliers at this qty (for comparison with the active pool)
+  const bestInstantUnit = ranked.length ? Math.min(...ranked.map(s => s.calc.unit)) : 0;
+  const joinSavings = Math.max(0, (bestInstantUnit - pool.bestPrice) * qty);
+  // potential pool saving = cheapest supplier's deeper volume tier vs its current unit price
+  const poolPotential = (() => {
+    const s = ranked[0];
+    if (!s) return { deeperPrice:0, pct:0 };
+    const curUnit = priceForQty(s, qty);
+    const deeper = s.tiers.find(([maxKg]) => maxKg > qty && maxKg !== Infinity) || s.tiers[s.tiers.length-1];
+    const deeperPrice = deeper[1];
+    const pct = Math.max(0, Math.round((1 - deeperPrice/curUnit) * 100));
+    return { deeperPrice, pct };
+  })();
+
+  const setQtySafe = (v) => setQty(Math.max(1000, Math.min(200000, v)));
+
+  // ── azioni reali (openPool / createInstantOrder richiedono login → altrimenti /registrati)
+  async function requireAuth() {
+    const session = await getSession();
+    if (!session) { window.location.href = "/registrati"; return false; }
+    return true;
+  }
+  async function handleOpenPool() {
+    if (!productId) { window.location.href = "/registrati"; return; }
+    if (pool.exists && pool.id) { window.location.href = `/pool?id=${pool.id}`; return; } // esiste già → unisciti
+    if (!(await requireAuth())) return;
+    setBusy(true); setActionMsg("");
+    try {
+      const newId = await openPool(productId, qty, true);
+      window.location.href = `/pool?id=${newId}`;
+    } catch (e) {
+      if (pool.id) { window.location.href = `/pool?id=${pool.id}`; return; } // POOL_ALREADY_OPEN
+      setActionMsg(poolErrorMessage(e));
+    } finally { setBusy(false); }
+  }
+  async function handleBuyNow() {
+    if (!productId) { window.location.href = "/registrati"; return; }
+    if (!(await requireAuth())) return;
+    setBusy(true); setActionMsg("");
+    try {
+      const supplierId = featured?.company_id || null;
+      const orderId = await createInstantOrder(productId, qty, supplierId);
+      window.location.href = `/dashboard?ordine=${orderId}`;
+    } catch (e) {
+      setActionMsg(poolErrorMessage(e));
+    } finally { setBusy(false); }
+  }
+  const goToPool = () => { if (pool.id) window.location.href = `/pool?id=${pool.id}`; };
 
   return (
-    <div style={{ backgroundColor:"#FFFFFF", color:C.text, fontFamily:"'Inter',system-ui,sans-serif", minHeight:"100vh", overflowX:"hidden" }}>
+    <div style={{ background:"#fff", color:C.text, fontFamily:"'Inter',system-ui,sans-serif", minHeight:"100vh", overflowX:"hidden" }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap');
         * { box-sizing:border-box; }
+        .bs-num { font-family:'JetBrains Mono',monospace; }
         .bs-ticker-wrap { overflow:hidden; width:100%; }
         .bs-ticker { display:flex; width:max-content; animation:tick 45s linear infinite; }
         .bs-ticker:hover { animation-play-state:paused; }
         @keyframes tick { 0%{transform:translateX(0)} 100%{transform:translateX(-50%)} }
-        .bs-num { font-family:'JetBrains Mono',monospace; }
-        .bs-cats { display:flex; gap:12px; overflow-x:auto; padding:20px 24px; scrollbar-width:none; }
-        .bs-cats::-webkit-scrollbar { display:none; }
-        .bs-cat { display:flex; flex-direction:column; align-items:center; gap:8px; cursor:pointer; flex-shrink:0; width:76px; transition:transform 0.15s; }
-        .bs-cat:hover { transform:translateY(-2px); }
-        .bs-cat-icon { width:56px; height:56px; border-radius:14px; display:flex; align-items:center; justify-content:center; font-size:26px; border:1.5px solid; transition:all 0.15s; }
-        .bs-cat.active .bs-cat-icon { outline:2px solid #0EA5E9; outline-offset:2px; }
-        .bs-section { max-width:1280px; margin:0 auto; padding:64px 24px; }
-        .bs-card { background:#FFFFFF; border:1px solid ${C.border}; border-radius:16px; padding:24px; transition:box-shadow 0.2s,transform 0.2s; }
-        .bs-card:hover { box-shadow:0 8px 32px rgba(14,165,233,0.10); transform:translateY(-2px); }
-        .bs-btn { background:#0EA5E9; color:#fff; border:none; border-radius:10px; padding:13px 24px; font-size:15px; font-weight:700; cursor:pointer; display:inline-flex; align-items:center; gap:8px; transition:all 0.2s; font-family:'Inter',system-ui; }
+        .bs-btn { background:#0EA5E9; color:#fff; border:none; border-radius:10px; padding:13px 24px; font-size:15px; font-weight:700; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; gap:8px; transition:all 0.2s; font-family:'Inter',system-ui; }
         .bs-btn:hover { background:#0284C7; transform:translateY(-1px); box-shadow:0 6px 20px rgba(14,165,233,0.3); }
-        .bs-btn-out { background:transparent; color:#0EA5E9; border:1.5px solid #0EA5E9; border-radius:10px; padding:12px 24px; font-size:15px; font-weight:600; cursor:pointer; display:inline-flex; align-items:center; gap:8px; font-family:'Inter',system-ui; transition:all 0.2s; }
-        .bs-btn-out:hover { background:#EFF6FF; }
-        .bs-pool-btn { width:100%; background:transparent; color:#0EA5E9; border:1.5px solid #E2E8F0; border-radius:8px; padding:10px; font-size:14px; font-weight:600; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px; font-family:'Inter',system-ui; transition:all 0.2s; }
-        .bs-pool-btn:hover { border-color:#0EA5E9; background:#EFF6FF; }
-        .bs-tab { padding:9px 22px; border-radius:100px; font-size:14px; font-weight:600; cursor:pointer; border:1.5px solid; transition:all 0.2s; font-family:'Inter',system-ui; }
-        .bs-chart-tab { padding:7px 14px; border-radius:8px; font-size:13px; font-weight:600; border:1px solid; cursor:pointer; transition:all 0.2s; font-family:'Inter',system-ui; }
-        .bs-label { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.1em; color:#0EA5E9; margin-bottom:8px; }
-        .bs-h2 { font-size:34px; font-weight:800; letter-spacing:-0.02em; }
-        .bs-progress { height:6px; background:#E2E8F0; border-radius:100px; overflow:hidden; }
-        .bs-progress-bar { height:100%; border-radius:100px; transition:width 1.2s ease; }
-        .bs-search-wrap { display:flex; border:2px solid #0EA5E9; border-radius:10px; overflow:hidden; height:46px; flex:1; max-width:580px; background:#fff; }
-        .bs-search-cat { background:#F1F5F9; border:none; border-right:1px solid #E2E8F0; padding:0 14px; font-size:13px; font-weight:600; cursor:pointer; color:#475569; white-space:nowrap; display:flex; align-items:center; gap:6px; font-family:'Inter',system-ui; min-width:170px; }
-        .bs-search-input { flex:1; border:none; padding:0 16px; font-size:14px; outline:none; color:#0F172A; font-family:'Inter',system-ui; }
-        .bs-search-btn { background:#0EA5E9; border:none; padding:0 18px; cursor:pointer; display:flex; align-items:center; justify-content:center; }
-        .bs-cat-dd { position:absolute; top:100%; left:0; background:#fff; border:1px solid #E2E8F0; border-radius:8px; box-shadow:0 8px 24px rgba(0,0,0,0.1); z-index:100; min-width:200px; overflow:hidden; }
-        .bs-cat-dd-item { padding:9px 14px; font-size:13px; cursor:pointer; color:#374151; transition:background 0.1s; }
-        .bs-cat-dd-item:hover { background:#EFF6FF; color:#0EA5E9; }
-        .bs-chatbot { position:fixed; bottom:24px; right:24px; z-index:1000; }
-        .bs-chatbot-panel { position:absolute; bottom:70px; right:0; width:300px; background:#fff; border-radius:16px; border:1px solid #E2E8F0; box-shadow:0 20px 60px rgba(0,0,0,0.15); overflow:hidden; }
-        .bs-chatbot-btn { width:56px; height:56px; border-radius:50%; background:#0EA5E9; border:3px solid #fff; cursor:pointer; display:flex; align-items:center; justify-content:center; box-shadow:0 4px 20px rgba(14,165,233,0.4); transition:transform 0.2s; }
-        .bs-chatbot-btn:hover { transform:scale(1.08); }
-        @media (max-width:768px) {
-          .bs-grid-2 { grid-template-columns:1fr !important; gap:32px !important; }
-          .bs-grid-3 { grid-template-columns:1fr !important; }
-          .bs-grid-4 { grid-template-columns:repeat(2,1fr) !important; }
-          .bs-h2 { font-size:26px; }
-          .bs-hero-h1 { font-size:32px !important; }
-          .bs-section { padding:48px 16px; }
+        .bs-btn-ghost { background:transparent; color:#0EA5E9; border:1.5px solid #E2E8F0; border-radius:8px; padding:10px 16px; font-size:14px; font-weight:600; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; gap:6px; transition:all 0.2s; font-family:'Inter',system-ui; }
+        .bs-btn-ghost:hover { border-color:#0EA5E9; background:#EFF6FF; }
+        .bs-chip { border-radius:6px; padding:3px 9px; font-size:11px; font-weight:600; display:inline-flex; align-items:center; gap:4px; }
+        .bs-search-wrap { display:flex; border:2px solid #0EA5E9; border-radius:10px; overflow:hidden; height:44px; flex:1; max-width:520px; background:#fff; }
+        .bs-search-input { flex:1; border:none; padding:0 14px; font-size:14px; outline:none; font-family:'Inter',system-ui; }
+        .bs-supplier-row { display:grid; grid-template-columns:1.6fr 1fr 1fr 1.2fr 0.9fr auto; gap:14px; align-items:center; padding:16px; border:1px solid #E2E8F0; border-radius:12px; transition:all 0.15s; }
+        .bs-supplier-row:hover { border-color:#0EA5E9; box-shadow:0 4px 16px rgba(14,165,233,0.08); }
+        .bs-qty-btn { width:38px; height:38px; border:1px solid #E2E8F0; background:#fff; border-radius:8px; cursor:pointer; display:flex; align-items:center; justify-content:center; color:#475569; }
+        .bs-qty-btn:hover { border-color:#0EA5E9; color:#0EA5E9; }
+        .bs-chatbot-btn { width:56px; height:56px; border-radius:50%; background:#0EA5E9; border:3px solid #fff; cursor:pointer; display:flex; align-items:center; justify-content:center; box-shadow:0 4px 20px rgba(14,165,233,0.4); }
+        .bs-spec-row { display:flex; justify-content:space-between; padding:10px 0; border-bottom:1px solid #F1F5F9; font-size:14px; }
+        @media (max-width:880px){
+          .bs-grid-main { grid-template-columns:1fr !important; }
+          .bs-supplier-row { grid-template-columns:1fr 1fr !important; gap:10px !important; }
+          .bs-supplier-row .bs-col-hide { display:none !important; }
           .bs-nav-links { display:none !important; }
           .bs-search-wrap { max-width:100% !important; }
-          .bs-search-cat { min-width:120px !important; }
-          .bs-cta-btns { flex-direction:column !important; }
-          .bs-hero-grid { grid-template-columns:1fr !important; gap:32px !important; }
+          .bs-chart-grid { grid-template-columns:1fr !important; }
         }
       `}</style>
 
-      {/* ── NAVBAR ── */}
+      {/* NAVBAR */}
       <nav style={{ position:"sticky", top:0, zIndex:50, background:"rgba(255,255,255,0.96)", backdropFilter:"blur(12px)", borderBottom:`1px solid ${C.border}` }}>
-        <div style={{ maxWidth:1280, margin:"0 auto", padding:"0 24px", height:68, display:"flex", alignItems:"center", gap:20 }}>
-          {/* Logo */}
-          <div onClick={() => { window.location.href = "/"; }} style={{ display:"flex", alignItems:"center", gap:10, flexShrink:0, cursor:"pointer" }}>
-            <BSIcon size={36} uid="nav" />
-            <div style={{ display:"flex", alignItems:"baseline", fontFamily:"Inter,system-ui,sans-serif" }}>
-              <span style={{ fontSize:20, fontWeight:900, color:C.text, letterSpacing:"-0.03em" }}>Bulk</span>
-              <span style={{ fontSize:20, fontWeight:900, letterSpacing:"-0.03em", background:"linear-gradient(90deg,#0EA5E9,#22D3EE)", WebkitBackgroundClip:"text", backgroundClip:"text", color:"transparent" }}>Strike</span>
+        <div style={{ maxWidth:1200, margin:"0 auto", padding:"0 20px", height:64, display:"flex", alignItems:"center", gap:18 }}>
+          <div onClick={() => { window.location.href = "/"; }} style={{ display:"flex", alignItems:"center", gap:9, flexShrink:0, cursor:"pointer" }}>
+            <BSIcon size={34} uid="nav" />
+            <div style={{ display:"flex", alignItems:"baseline" }}>
+              <span style={{ fontSize:19, fontWeight:900, letterSpacing:"-0.03em" }}>Bulk</span>
+              <span style={{ fontSize:19, fontWeight:900, letterSpacing:"-0.03em", background:"linear-gradient(90deg,#0EA5E9,#22D3EE)", WebkitBackgroundClip:"text", backgroundClip:"text", color:"transparent" }}>Strike</span>
             </div>
           </div>
-
-          {/* Search bar */}
-          <div style={{ position:"relative", flex:1, display:"flex", justifyContent:"center" }}>
-            <div className="bs-search-wrap">
-              <div className="bs-search-cat" onClick={() => setShowCatDd(!showCatDd)}>
-                <span style={{ overflow:"hidden", textOverflow:"ellipsis", maxWidth:110 }}>{searchCat}</span>
-                <ChevronDown size={14} color="#64748B" />
+          <div style={{ flex:1, display:"flex", justifyContent:"center" }}>
+            <div style={{ position:"relative", flex:1, maxWidth:520 }}>
+              <div className="bs-search-wrap" style={{ maxWidth:"100%" }}>
+                <input className="bs-search-input" placeholder="Cerca materie prime, fornitori, specifiche..." value={searchQ} onChange={e => setSearchQ(e.target.value)} onKeyDown={e => { if (e.key === "Enter") runSearch(); }} />
+                <button style={{ background:C.blue, border:"none", padding:"0 16px", cursor:"pointer" }} onClick={runSearch}><Search size={18} color="#fff" /></button>
               </div>
-              {showCatDd && (
-                <div className="bs-cat-dd" style={{ top:46 }}>
-                  {SEARCH_CATS.map(c => (
-                    <div key={c} className="bs-cat-dd-item" onClick={() => { setSearchCat(c); setShowCatDd(false); }}>{c}</div>
-                  ))}
-                </div>
-              )}
-              <input className="bs-search-input" placeholder="Cerca materie prime, fornitori, specifiche..." value={searchQ} onChange={e => setSearchQ(e.target.value)} onKeyDown={e => { if (e.key === "Enter") runSearch(); }} />
-              <button className="bs-search-btn" onClick={runSearch}><Search size={20} color="white" /></button>
               {searchOpen && searchResults.length > 0 && (
-                <div style={{ position:"absolute", top:46, left:0, right:0, background:"#fff", border:`1px solid ${C.border}`, borderRadius:10, boxShadow:"0 12px 30px rgba(0,0,0,0.12)", zIndex:60, maxHeight:340, overflowY:"auto" }}>
+                <div style={{ position:"absolute", top:48, left:0, right:0, background:"#fff", border:`1px solid ${C.border}`, borderRadius:10, boxShadow:"0 12px 30px rgba(0,0,0,0.12)", zIndex:60, maxHeight:340, overflowY:"auto" }}>
                   {searchResults.map(p => (
                     <div key={p.id} onClick={() => { window.location.href = `/prodotto?id=${p.id}`; }} style={{ padding:"10px 14px", cursor:"pointer", borderBottom:`1px solid ${C.border}`, display:"flex", justifyContent:"space-between", gap:10 }}>
                       <span style={{ fontSize:14, color:C.text }}>{p.canonical_name}</span>
-                      <span style={{ fontSize:12, color:C.muted, whiteSpace:"nowrap" }}>{p.e_number || p.cas_number || ""}</span>
+                      {p.e_number && <span style={{ fontSize:12, color:C.muted }}>{p.e_number}</span>}
                     </div>
                   ))}
                 </div>
               )}
               {searchOpen && searchResults.length === 0 && searchQ.trim().length >= 2 && (
-                <div style={{ position:"absolute", top:46, left:0, right:0, background:"#fff", border:`1px solid ${C.border}`, borderRadius:10, padding:"12px 14px", zIndex:60, fontSize:13, color:C.muted }}>Nessun prodotto trovato per “{searchQ}”.</div>
+                <div style={{ position:"absolute", top:48, left:0, right:0, background:"#fff", border:`1px solid ${C.border}`, borderRadius:10, padding:"12px 14px", zIndex:60, fontSize:13, color:C.muted }}>Nessun prodotto trovato per “{searchQ}”.</div>
               )}
             </div>
           </div>
-
-          {/* Nav right */}
-          <div style={{ display:"flex", alignItems:"center", gap:20, flexShrink:0 }}>
-            <div className="bs-nav-links" style={{ display:"flex", gap:20 }}>
-              {[["Pool Attivi","/pool"],["Prezzi","/pool"],["Fornitori","/registrati"],["Come funziona","#come-funziona"]].map(([l,href]) => (
-                <span key={l} onClick={() => { window.location.href = href; }} style={{ fontSize:14, color:C.muted, cursor:"pointer", fontWeight:500, whiteSpace:"nowrap" }}>{l}</span>
-              ))}
-            </div>
-            <span onClick={() => { window.location.href = "/auth/login"; }} style={{ fontSize:14, color:C.muted, cursor:"pointer", fontWeight:500, whiteSpace:"nowrap" }}>Accedi</span>
-            <button className="bs-btn" onClick={() => { window.location.href = "/registrati"; }} style={{ padding:"9px 18px", fontSize:14 }}>Registrati</button>
+          <div className="bs-nav-links" style={{ display:"flex", gap:18, alignItems:"center" }}>
+            {[["Pool","/pool"],["Prezzi","/pool"],["Fornitori","/registrati"]].map(([l,href]) => <span key={l} onClick={() => { window.location.href = href; }} style={{ fontSize:14, color:C.muted, cursor:"pointer", fontWeight:500 }}>{l}</span>)}
+            <button className="bs-btn" style={{ padding:"8px 16px", fontSize:14 }} onClick={() => { window.location.href = "/auth/login"; }}>Accedi</button>
           </div>
         </div>
       </nav>
 
-      {/* ── TICKER TAPE ── */}
-      <div style={{ background:"#07111E", borderBottom:`1px solid #1A3454`, padding:"10px 0" }}>
-        <div className="bs-ticker-wrap">
-          <div className="bs-ticker">
-            {[...TICKER,...TICKER].map((item,i) => (
-              <div key={i} style={{ display:"flex", alignItems:"center", gap:8, padding:"0 24px", whiteSpace:"nowrap" }}>
-                <span style={{ fontSize:13, color:"#6B94B8" }}>{item.name}</span>
-                <span className="bs-num" style={{ fontSize:13, fontWeight:600, color:"#F0F6FF" }}>{item.price}/kg</span>
-                <span className="bs-num" style={{ fontSize:12, color:item.change>=0?"#10B981":"#F43F5E" }}>
-                  {item.change>=0?"▲":"▼"} {Math.abs(item.change)}%
-                </span>
-                <span style={{ color:"#1A3454", margin:"0 4px" }}>·</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* ── SETTORI (reali) ── */}
-      <div style={{ borderBottom:`1px solid ${C.border}`, background:"#fff" }}>
-        <div style={{ maxWidth:1280, margin:"0 auto" }}>
-          <div className="bs-cats">
-            {sectors.map(s => {
-              const ic = SECTOR_ICONS[s.slug] || SECTOR_FALLBACK;
-              const on = activeSector?.id === s.id;
-              return (
-                <div key={s.id} className={`bs-cat${on?" active":""}`} onClick={() => setActiveSector(on ? null : s)}>
-                  <div className="bs-cat-icon" style={{ background:ic.bg, borderColor:on?"#0EA5E9":ic.border }}>
-                    {ic.icon}
-                  </div>
-                  <span style={{ fontSize:11, color:on?"#0EA5E9":C.muted, textAlign:"center", lineHeight:1.2, fontWeight:on?700:400 }}>
-                    {s.name}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-          {activeSector && (
-            <div style={{ padding:"2px 16px 20px" }}>
-              <div style={{ fontSize:13, color:C.muted, margin:"0 0 10px" }}>{activeSector.products.length} prodotti in <b style={{ color:C.text }}>{activeSector.name}</b></div>
-              <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))", gap:8 }}>
-                {activeSector.products.map(p => (
-                  <div key={p.id} onClick={() => { window.location.href = `/prodotto?id=${p.id}`; }} style={{ padding:"10px 12px", border:`1px solid ${C.border}`, borderRadius:9, cursor:"pointer", fontSize:13, color:C.text, background:"#fff", display:"flex", alignItems:"center", justifyContent:"space-between", gap:8 }}>
-                    <span>{p.canonical_name}</span>
-                    <ChevronRight size={14} color={C.muted} />
-                  </div>
-                ))}
-              </div>
+      {/* TICKER */}
+      <div style={{ background:"#07111E", padding:"9px 0" }}>
+        <div className="bs-ticker-wrap"><div className="bs-ticker">
+          {[...Array(2)].flatMap((_,k) => [
+            ["Acido Tartarico","€2,49",-2.8],["Acido Citrico","€0,81",-2.3],["Metabisolfito K","€1,95",+1.1],["Bentonite","€0,42",-0.6],["Acido Malico","€3,10",+0.9],["Gomma Arabica","€8,40",+2.2],["Mannoproteine","€14,20",-0.3],["MCR","€0,95",+1.7]
+          ].map(([n,p,c],i) => (
+            <div key={k+"-"+i} style={{ display:"flex", alignItems:"center", gap:8, padding:"0 22px", whiteSpace:"nowrap" }}>
+              <span style={{ fontSize:13, color:"#6B94B8" }}>{n}</span>
+              <span className="bs-num" style={{ fontSize:13, fontWeight:600, color:"#F0F6FF" }}>{p}/kg</span>
+              <span className="bs-num" style={{ fontSize:12, color:c>=0?"#10B981":"#F43F5E" }}>{c>=0?"▲":"▼"} {Math.abs(c)}%</span>
+              <span style={{ color:"#1A3454", margin:"0 4px" }}>·</span>
             </div>
-          )}
-        </div>
+          )))}
+        </div></div>
       </div>
 
-      {/* ── HERO ── */}
-      <div className="bs-section" style={{ paddingTop:56, paddingBottom:56 }}>
-        <div className="bs-hero-grid" style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:56, alignItems:"center" }}>
+      <div style={{ maxWidth:1200, margin:"0 auto", padding:"20px 20px 60px" }}>
+
+        {/* BREADCRUMB */}
+        <div style={{ display:"flex", alignItems:"center", gap:8, fontSize:13, color:C.muted, marginBottom:20, flexWrap:"wrap" }}>
+          <span onClick={() => { window.location.href = "/"; }} style={{ cursor:"pointer" }}>Home</span><ChevronRight size={13}/>
+          <span style={{ cursor:"pointer" }}>Enologia</span><ChevronRight size={13}/>
+          <span style={{ cursor:"pointer" }}>Acidificanti</span><ChevronRight size={13}/>
+          <span style={{ color:C.text, fontWeight:600 }}>{product.name}</span>
+        </div>
+
+        {/* PRODUCT HEADER */}
+        <div style={{ display:"flex", gap:18, alignItems:"flex-start", marginBottom:28, flexWrap:"wrap" }}>
+          <div style={{ width:84, height:84, borderRadius:16, background:"#EFF6FF", border:"1px solid #BFDBFE", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+            <Beaker size={38} color={C.blue} />
+          </div>
+          <div style={{ flex:1, minWidth:260 }}>
+            <div style={{ display:"flex", gap:8, marginBottom:8, flexWrap:"wrap" }}>
+              <span className="bs-chip" style={{ background:"#EFF6FF", color:"#1D4ED8" }}>{product.enum}</span>
+              <span className="bs-chip" style={{ background:"#F1F5F9", color:C.muted }}>{product.category}</span>
+              <span className="bs-chip" style={{ background:"#ECFDF5", color:C.green }}><Check size={11}/> {ranked.length} fornitori disponibili</span>
+            </div>
+            <h1 style={{ fontSize:32, fontWeight:800, letterSpacing:"-0.02em", marginBottom:6 }}>{product.name}</h1>
+            <p style={{ fontSize:14, color:C.muted }}>{product.form} · Purezza {product.purityRange} · CAS {product.cas}</p>
+          </div>
+          <div style={{ textAlign:"right" }}>
+            <div style={{ fontSize:12, color:C.muted }}>Prezzo indicativo da</div>
+            <div className="bs-num" style={{ fontSize:28, fontWeight:800, color:C.blue }}>{eurKg(ranked[0].calc.allInKg)}<span style={{ fontSize:14, fontWeight:400, color:C.muted }}>/kg</span></div>
+            <div style={{ display:"flex", alignItems:"center", gap:4, justifyContent:"flex-end", fontSize:12, color:C.green }}><TrendingDown size={12}/> -15,6% da gennaio</div>
+          </div>
+        </div>
+
+        {/* MAIN GRID: left = buy flow, right = sticky summary could be; keep single col on mobile */}
+        <div className="bs-grid-main" style={{ display:"grid", gridTemplateColumns:"1fr 340px", gap:24, alignItems:"start" }}>
+
+          {/* LEFT COLUMN */}
           <div>
-            <div style={{ display:"inline-flex", alignItems:"center", gap:8, background:"#EFF6FF", border:"1px solid #BFDBFE", borderRadius:100, padding:"6px 14px", marginBottom:20 }}>
-              <div style={{ width:8, height:8, borderRadius:"50%", background:C.green, boxShadow:`0 0 6px ${C.green}` }} />
-              <span style={{ fontSize:13, color:"#1D4ED8", fontWeight:600 }}>142 Pool attivi in questo momento</span>
+            {/* QUANTITY SELECTOR */}
+            <div style={{ border:`1px solid ${C.border}`, borderRadius:14, padding:20, marginBottom:20, background:C.bg }}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12, flexWrap:"wrap", gap:10 }}>
+                <div>
+                  <div style={{ fontSize:14, fontWeight:700 }}>Di quanto hai bisogno?</div>
+                  <div style={{ fontSize:12, color:C.muted }}>Il prezzo si aggiorna in base allo scaglione di volume</div>
+                </div>
+                <span className="bs-chip" style={{ background:"#EFF6FF", color:"#1D4ED8" }}>Scaglione attuale: {tierLabel(qty)}</span>
+              </div>
+              <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap" }}>
+                <button className="bs-qty-btn" onClick={() => setQtySafe(qty - 1000)}><Minus size={16}/></button>
+                <div style={{ display:"flex", alignItems:"baseline", gap:6, background:"#fff", border:`1px solid ${C.border}`, borderRadius:8, padding:"8px 14px" }}>
+                  <input className="bs-num" style={{ width:90, border:"none", outline:"none", fontSize:20, fontWeight:700, color:C.text }} value={qty} onChange={e => setQtySafe(parseInt(e.target.value.replace(/\D/g,"")||"0"))} />
+                  <span style={{ fontSize:14, color:C.muted }}>kg</span>
+                </div>
+                <button className="bs-qty-btn" onClick={() => setQtySafe(qty + 1000)}><Plus size={16}/></button>
+                <div style={{ display:"flex", gap:6, marginLeft:4, flexWrap:"wrap" }}>
+                  {[2000,8000,25000,60000].map(q => (
+                    <button key={q} onClick={() => { setQty(q); setSelectedId(null); }} style={{ padding:"7px 12px", borderRadius:7, border:`1px solid ${qty===q?C.blue:C.border}`, background:qty===q?"#EFF6FF":"#fff", color:qty===q?C.blue:C.muted, fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:"Inter,system-ui" }}>
+                      {q>=1000?`${q/1000}t`:`${q}kg`}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
-            <h1 className="bs-hero-h1" style={{ fontSize:52, fontWeight:900, lineHeight:1.06, letterSpacing:"-0.03em", marginBottom:18 }}>
-              Il mercato delle{" "}
-              <span style={{ background:"linear-gradient(90deg,#0EA5E9,#22D3EE)", WebkitBackgroundClip:"text", backgroundClip:"text", color:"transparent" }}>materie prime</span>{" "}
-              a prezzi industriali
-            </h1>
-            <p style={{ fontSize:17, color:C.muted, lineHeight:1.65, marginBottom:28, maxWidth:460 }}>
-              Acquista sfuso insieme ad altri. Vendi a chi vuole davvero comprare. Pool di acquisto collettivo, aste a ribasso, prezzi in tempo reale. Da 1 kg a 50 tonnellate.
-            </p>
-            <div className="bs-cta-btns" style={{ display:"flex", gap:12, flexWrap:"wrap" }}>
-              <button className="bs-btn" onClick={() => { window.location.href = "/registrati"; }}>Inizia ad acquistare <ArrowRight size={18} /></button>
-              <button className="bs-btn-out" onClick={() => { window.location.href = "/registrati"; }}>Diventa fornitore</button>
+
+            {/* POOL BANNER — an active pool already exists for this product */}
+            {pool.exists && (
+              <div style={{ border:`1.5px solid ${C.purple}`, background:"linear-gradient(135deg,#F5F0FF,#EDE4F7)", borderRadius:14, padding:"18px 20px", marginBottom:24 }}>
+                <div style={{ display:"flex", gap:14, alignItems:"flex-start" }}>
+                  <div style={{ width:42, height:42, borderRadius:11, background:C.purple, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, position:"relative" }}>
+                    <Gavel size={20} color="#fff"/>
+                    <span style={{ position:"absolute", top:-3, right:-3, width:11, height:11, borderRadius:"50%", background:C.red, border:"2px solid #fff" }}/>
+                  </div>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:4, flexWrap:"wrap" }}>
+                      <span style={{ fontSize:16, fontWeight:800 }}>C'è già un pool attivo per questo prodotto</span>
+                      <span className="bs-chip" style={{ background:"#fff", color:C.purple, border:`1px solid ${C.purple}44` }}><Clock size={11}/> chiude tra {pool.closesIn}</span>
+                    </div>
+                    <div style={{ fontSize:14, color:C.muted, lineHeight:1.6, marginBottom:14 }}>
+                      È un'<b style={{ color:C.text }}>asta a ribasso</b>: <b style={{ color:C.text }}>{pool.companies} aziende</b> si sono già aggregate e <b style={{ color:C.text }}>{pool.suppliers} fornitori certificati</b> competono. Unendoti, paghi il prezzo più basso raggiunto — e il prezzo <b style={{ color:C.text }}>può solo scendere</b> fino alla chiusura.
+                    </div>
+                    <div style={{ display:"flex", gap:18, flexWrap:"wrap", marginBottom:14 }}>
+                      <Fact icon={<Gavel size={15} color={C.purple}/>} label="Prezzo pool ora" value={`${eurKg(pool.bestPrice)}/kg`} />
+                      <Fact icon={<TrendingDown size={15} color={C.green}/>} label="Risparmio stimato" value={joinSavings>0?eur(joinSavings):"in calo"} />
+                      <Fact icon={<Users size={15} color={C.purple}/>} label="Già aggregate" value={`${pool.companies} aziende`} />
+                    </div>
+                    {/* disclaimer */}
+                    <div style={{ display:"flex", gap:8, background:"#FFF7ED", border:`1px solid ${C.amber}44`, borderRadius:9, padding:"10px 12px", marginBottom:14 }}>
+                      <Info size={18} color={C.amber} style={{ flexShrink:0 }}/>
+                      <span style={{ fontSize:12, color:"#7C2D12", lineHeight:1.5 }}>
+                        Unendoti accetti il <b>fornitore più economico</b> tra quelli certificati e attendi fino alla <b>chiusura del pool</b> — che dipende da quando è stato aperto (qui: tra {pool.closesIn}) e può anche essere imminente. Vuoi scegliere un fornitore o ricevere subito? Continua con l'Acquisto Rapido qui sotto.
+                      </span>
+                    </div>
+                    <div style={{ display:"flex", gap:12, flexWrap:"wrap", alignItems:"center" }}>
+                      <button onClick={goToPool} style={{ background:C.purple, color:"#fff", border:"none", borderRadius:9, padding:"12px 22px", fontSize:14, fontWeight:700, cursor:"pointer", display:"inline-flex", alignItems:"center", gap:7, fontFamily:"Inter,system-ui" }}>
+                        <Users size={16}/> Unisciti al pool <ArrowRight size={15}/>
+                      </button>
+                      <span style={{ fontSize:12, color:C.muted }}>oppure acquista subito qui sotto</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* POOL NUDGE — no active pool yet, but order is large enough to open one */}
+            {!pool.exists && canOpenPool && (
+              <div style={{ border:`1.5px solid ${C.purple}44`, background:"linear-gradient(135deg,#FBF7FF,#F3EEFF)", borderRadius:14, padding:"18px 20px", marginBottom:24 }}>
+                <div style={{ display:"flex", gap:14, alignItems:"flex-start" }}>
+                  <div style={{ width:42, height:42, borderRadius:11, background:C.purple, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+                    <Gavel size={20} color="#fff"/>
+                  </div>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ fontSize:16, fontWeight:800, marginBottom:4 }}>
+                      Stai acquistando {(qty/1000).toLocaleString("it-IT")}t — apri un pool e potresti pagare meno
+                    </div>
+                    <div style={{ fontSize:14, color:C.muted, lineHeight:1.6, marginBottom:14 }}>
+                      Trasforma il tuo acquisto in un'<b style={{ color:C.text }}>asta a ribasso</b>: altre aziende possono aggregarsi alla tua richiesta e il prezzo <b style={{ color:C.text }}>può solo scendere</b>. {ranked.length} fornitori certificati competono. In cambio, l'ordine si concretizza in <b style={{ color:C.text }}>7 giorni</b> anziché subito.
+                    </div>
+                    <div style={{ display:"flex", gap:18, flexWrap:"wrap", marginBottom:14 }}>
+                      <Fact icon={<TrendingDown size={15} color={C.green}/>} label="Risparmio potenziale" value={poolPotential.pct>0?`fino a -${poolPotential.pct}%`:"prezzo in calo"} />
+                      <Fact icon={<Users size={15} color={C.purple}/>} label="Fornitori in gara" value={`${ranked.length} certificati`} />
+                      <Fact icon={<Clock size={15} color={C.amber}/>} label="Tempi" value="entro 7 giorni" />
+                    </div>
+                    <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:16, flexWrap:"wrap" }}>
+                      <span style={{ fontSize:12, color:C.muted }}>Competono:</span>
+                      {ranked.map(s => (
+                        <span key={s.id} style={{ fontSize:12, color:C.text, display:"flex", alignItems:"center", gap:5, background:"#fff", border:`1px solid ${C.border}`, borderRadius:100, padding:"3px 10px" }}>
+                          <span>{s.flag}</span> {s.name}
+                        </span>
+                      ))}
+                    </div>
+                    <div style={{ display:"flex", gap:12, flexWrap:"wrap", alignItems:"center" }}>
+                      <button onClick={handleOpenPool} disabled={busy} style={{ background:C.purple, color:"#fff", border:"none", borderRadius:9, padding:"12px 22px", fontSize:14, fontWeight:700, cursor:busy?"default":"pointer", opacity:busy?0.6:1, display:"inline-flex", alignItems:"center", gap:7, fontFamily:"Inter,system-ui" }}>
+                        <Gavel size={16}/> Apri un pool con {(qty/1000).toLocaleString("it-IT")}t <ArrowRight size={15}/>
+                      </button>
+                      <span style={{ fontSize:12, color:C.muted }}>oppure acquista subito qui sotto</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* FEATURED SUPPLIER */}
+            {featured ? (<>
+            <div style={{ fontSize:12, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.08em", color:C.blue, marginBottom:10 }}>In evidenza</div>
+            <div style={{ border:`2px solid ${C.blue}`, borderRadius:16, padding:24, marginBottom:24, position:"relative", boxShadow:"0 8px 30px rgba(14,165,233,0.10)" }}>
+              <div style={{ position:"absolute", top:-12, left:20, display:"flex", gap:8 }}>
+                {featured.id===cheapestId && <span style={{ background:C.green, color:"#fff", borderRadius:100, padding:"4px 12px", fontSize:12, fontWeight:700 }}>★ Miglior prezzo all-in</span>}
+                {featured.id!==cheapestId && <span style={{ background:C.blue, color:"#fff", borderRadius:100, padding:"4px 12px", fontSize:12, fontWeight:700 }}>Selezionato da te</span>}
+              </div>
+
+              <div style={{ display:"flex", justifyContent:"space-between", gap:16, flexWrap:"wrap", marginBottom:18 }}>
+                <div>
+                  <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:4 }}>
+                    <span style={{ fontSize:20, fontWeight:800 }}>{featured.name}</span>
+                    <span style={{ fontSize:18 }}>{featured.flag}</span>
+                  </div>
+                  <div style={{ display:"flex", alignItems:"center", gap:12, fontSize:13, color:C.muted, flexWrap:"wrap" }}>
+                    <span style={{ display:"flex", alignItems:"center", gap:4 }}><Star size={13} fill={C.amber} color={C.amber}/> <b style={{ color:C.text }}>{featured.rating.toFixed(1)}</b> ({featured.reviews})</span>
+                    <span>{featured.origin}</span>
+                    <span>{featured.type}</span>
+                    <span style={{ display:"flex", alignItems:"center", gap:4 }}><Truck size={13}/> {featured.delivery}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* ALL-IN BREAKDOWN */}
+              <div style={{ display:"grid", gridTemplateColumns:"1.4fr 1fr", gap:16, alignItems:"center" }}>
+                <div style={{ background:C.bg, borderRadius:12, padding:"16px 18px" }}>
+                  <div style={{ fontSize:12, color:C.muted, marginBottom:10, fontWeight:600 }}>Prezzo finale tutto incluso · {(qty/1000)}t</div>
+                  <div style={{ display:"flex", flexDirection:"column", gap:7 }}>
+                    <Row label={`Prodotto (${eurKg(featured.calc.unit)}/kg)`} val={eur(featured.calc.product)} />
+                    <Row label="Spedizione alla tua sede" val={eur(featured.calc.shipping)} />
+                    <Row label="IVA 22%" val={eur(featured.calc.vat)} />
+                    <div style={{ borderTop:`1px solid ${C.border}`, marginTop:4, paddingTop:9, display:"flex", justifyContent:"space-between", alignItems:"baseline" }}>
+                      <span style={{ fontSize:14, fontWeight:700 }}>Totale</span>
+                      <span className="bs-num" style={{ fontSize:24, fontWeight:800, color:C.text }}>{eur(featured.calc.total)}</span>
+                    </div>
+                  </div>
+                </div>
+                <div style={{ textAlign:"center" }}>
+                  <div style={{ fontSize:12, color:C.muted }}>Prezzo all-in</div>
+                  <div className="bs-num" style={{ fontSize:40, fontWeight:800, color:C.blue, lineHeight:1.1 }}>{eurKg(featured.calc.allInKg)}</div>
+                  <div style={{ fontSize:13, color:C.muted, marginBottom:14 }}>/kg · IVA e trasporto inclusi</div>
+                  <button className="bs-btn" onClick={handleBuyNow} disabled={busy || !featured} style={{ width:"100%", fontSize:16, padding:"14px", opacity:(busy||!featured)?0.6:1, cursor:(busy||!featured)?"default":"pointer" }}>Acquista ora <ArrowRight size={18}/></button>
+                  {actionMsg && <div style={{ marginTop:8, fontSize:12, color:C.red, fontWeight:600 }}>{actionMsg}</div>}
+                  {pool.exists && (
+                  <div style={{ marginTop:10, fontSize:13 }}>
+                    <span style={{ color:C.muted }}>oppure </span>
+                    <span onClick={goToPool} style={{ color:C.purple, fontWeight:600, cursor:"pointer" }}>c'è un pool attivo: ora {eurKg(pool.bestPrice)}/kg ↓</span>
+                  </div>
+                  )}
+                </div>
+              </div>
+
+              {/* certs */}
+              <div style={{ display:"flex", gap:8, marginTop:16, flexWrap:"wrap", alignItems:"center" }}>
+                <span style={{ fontSize:12, color:C.muted, display:"flex", alignItems:"center", gap:4 }}><Shield size={13}/> Certificazioni:</span>
+                {featured.certs.map(c => <span key={c} className="bs-chip" style={{ background:"#ECFDF5", color:C.green }}><Check size={10}/> {c}</span>)}
+                <span style={{ marginLeft:"auto", fontSize:12, color:C.muted }}>Purezza <b style={{ color:C.text }}>{featured.purity}</b></span>
+              </div>
             </div>
-            <div style={{ display:"flex", gap:20, marginTop:20, flexWrap:"wrap" }}>
-              {["✓ Registrazione gratuita","✓ Nessun abbonamento","✓ Pool senza impegno"].map(t => (
-                <span key={t} style={{ fontSize:13, color:C.muted }}>{t}</span>
+
+            {/* OTHER SUPPLIERS */}
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12, flexWrap:"wrap", gap:8 }}>
+              <div style={{ fontSize:12, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.08em", color:C.muted }}>Altri {others.length} fornitori per {(qty/1000)}t</div>
+              <span style={{ fontSize:12, color:C.muted }}>Ordinati per prezzo all-in</span>
+            </div>
+            <div style={{ display:"flex", flexDirection:"column", gap:10, marginBottom:28 }}>
+              {others.map(s => (
+                <div key={s.id} className="bs-supplier-row">
+                  <div>
+                    <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:3 }}>
+                      <span style={{ fontSize:15, fontWeight:700 }}>{s.name}</span><span>{s.flag}</span>
+                    </div>
+                    <div style={{ display:"flex", alignItems:"center", gap:8, fontSize:12, color:C.muted, flexWrap:"wrap" }}>
+                      <span style={{ display:"flex", alignItems:"center", gap:3 }}><Star size={11} fill={C.amber} color={C.amber}/> {s.rating.toFixed(1)}</span>
+                      <span>{s.type}</span>
+                    </div>
+                  </div>
+                  <div className="bs-col-hide" style={{ textAlign:"center" }}>
+                    <div style={{ fontSize:11, color:C.muted }}>Purezza</div>
+                    <div style={{ fontSize:14, fontWeight:600 }}>{s.purity}</div>
+                  </div>
+                  <div className="bs-col-hide" style={{ textAlign:"center" }}>
+                    <div style={{ fontSize:11, color:C.muted, display:"flex", alignItems:"center", justifyContent:"center", gap:3 }}><Truck size={11}/></div>
+                    <div style={{ fontSize:13, fontWeight:600 }}>{s.delivery}</div>
+                  </div>
+                  <div style={{ textAlign:"center" }}>
+                    <div style={{ fontSize:11, color:C.muted }}>All-in/kg</div>
+                    <div className="bs-num" style={{ fontSize:18, fontWeight:800, color:C.blue }}>{eurKg(s.calc.allInKg)}</div>
+                  </div>
+                  <div className="bs-col-hide" style={{ textAlign:"center" }}>
+                    <div style={{ fontSize:11, color:C.muted }}>Totale</div>
+                    <div className="bs-num" style={{ fontSize:14, fontWeight:600 }}>{eur(s.calc.total)}</div>
+                  </div>
+                  <button className="bs-btn-ghost" onClick={() => { setSelectedId(s.id); window.scrollTo({top:0,behavior:"smooth"}); }}>Seleziona</button>
+                </div>
               ))}
             </div>
-          </div>
-          {/* Hero pool card */}
-          <div style={{ background:"#fff", border:`1px solid ${C.border}`, borderRadius:16, padding:24, boxShadow:"0 4px 24px rgba(14,165,233,0.08)", position:"relative" }}>
-            <div style={{ position:"absolute", top:-12, right:16, background:C.red, borderRadius:100, padding:"4px 12px", fontSize:12, fontWeight:700, color:"#fff" }}>🔥 Quasi completo</div>
-            <div style={{ marginBottom:16 }}>
-              <div style={{ fontSize:11, color:C.muted, marginBottom:4 }}>Pool più vicino all'attivazione</div>
-              <div style={{ fontSize:19, fontWeight:800, color:C.text, marginBottom:2 }}>Polipropilene GP H030S</div>
-              <div style={{ fontSize:13, color:C.muted }}>Vergine · 4 fornitori · 🇰🇷 🇩🇪 🇮🇹</div>
-            </div>
-            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:18 }}>
-              <div style={{ background:C.bg, borderRadius:10, padding:"12px 14px" }}>
-                <div style={{ fontSize:11, color:C.muted, marginBottom:3 }}>Prezzo pool all-in</div>
-                <div className="bs-num" style={{ fontSize:24, fontWeight:700, color:C.blue }}>€0,98<span style={{ fontSize:12, fontWeight:400 }}>/kg</span></div>
+            </>) : (
+              <div style={{ border:`1px dashed ${C.border}`, borderRadius:14, padding:"28px 24px", marginBottom:28, textAlign:"center", color:C.muted }}>
+                <Beaker size={26} color={C.muted} style={{ marginBottom:8 }} />
+                <div style={{ fontSize:15, fontWeight:700, color:C.text, marginBottom:4 }}>Nessun fornitore quotato per questo prodotto</div>
+                <div style={{ fontSize:13, marginBottom:14 }}>Puoi comunque aprire un pool: aggreghi la domanda e i fornitori certificati competono al ribasso.</div>
+                {canOpenPool
+                  ? <button onClick={handleOpenPool} disabled={busy} style={{ background:C.purple, color:"#fff", border:"none", borderRadius:9, padding:"12px 22px", fontSize:14, fontWeight:700, cursor:busy?"default":"pointer", opacity:busy?0.6:1, display:"inline-flex", alignItems:"center", gap:7, fontFamily:"Inter,system-ui" }}><Gavel size={16}/> Apri un pool con {(qty/1000).toLocaleString("it-IT")}t</button>
+                  : <div style={{ fontSize:12 }}>Imposta almeno {(palletKg/1000).toLocaleString("it-IT")}t (1 pallet) per aprire un pool.</div>}
+                {actionMsg && <div style={{ marginTop:8, fontSize:12, color:C.red, fontWeight:600 }}>{actionMsg}</div>}
               </div>
-              <div style={{ background:C.bg, borderRadius:10, padding:"12px 14px" }}>
-                <div style={{ fontSize:11, color:C.muted, marginBottom:3 }}>Risparmio</div>
-                <div className="bs-num" style={{ fontSize:24, fontWeight:700, color:C.green }}>-12%</div>
-                <div style={{ fontSize:11, color:C.muted }}>vs €1,12/kg singolo</div>
-              </div>
-            </div>
-            <div style={{ marginBottom:16 }}>
-              <div style={{ display:"flex", justifyContent:"space-between", marginBottom:6 }}>
-                <span style={{ fontSize:13, color:C.muted }}>Volume raccolto</span>
-                <span className="bs-num" style={{ fontSize:13, fontWeight:600 }}>9.100 / 10.000 kg</span>
-              </div>
-              <div className="bs-progress">
-                <div className="bs-progress-bar" style={{ background:`linear-gradient(90deg,${C.amber},${C.red})`, width:"91%" }} />
-              </div>
-              <div style={{ display:"flex", justifyContent:"space-between", marginTop:5 }}>
-                <span style={{ fontSize:12, color:C.amber, fontWeight:600 }}>91% — quasi pieno!</span>
-                <span style={{ fontSize:12, color:C.muted }}>Mancano 900 kg</span>
-              </div>
-            </div>
-            <button className="bs-btn" onClick={() => { window.location.href = "/pool?id=7191a826-ac9c-404b-8001-8e8fc8f08100"; }} style={{ width:"100%", justifyContent:"center" }}>Unisciti al Pool <ArrowRight size={16} /></button>
-          </div>
-        </div>
-      </div>
+            )}
 
-      {/* ── STATS BAR ── */}
-      <div style={{ background:C.bg, borderTop:`1px solid ${C.border}`, borderBottom:`1px solid ${C.border}` }}>
-        <div style={{ maxWidth:1280, margin:"0 auto", padding:"36px 24px" }}>
-          <div className="bs-grid-4" style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:24 }}>
-            {[
-              { label:"Pool attivi ora",    val:count.pools,     suffix:"",   color:"#0EA5E9" },
-              { label:"Materie prime",      val:count.materials, suffix:"+",  color:"#0284C7" },
-              { label:"Paesi coperti",      val:count.countries, suffix:"",   color:C.green },
-              { label:"Mln € / mese",       val:count.volume,    suffix:"M€", color:C.amber },
-            ].map(({ label, val, suffix, color }) => (
-              <div key={label} style={{ textAlign:"center" }}>
-                <div className="bs-num" style={{ fontSize:40, fontWeight:800, color, letterSpacing:"-0.02em" }}>{val.toLocaleString("it-IT")}{suffix}</div>
-                <div style={{ fontSize:13, color:C.muted, marginTop:4 }}>{label}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* ── ACTIVE POOLS ── */}
-      <div className="bs-section">
-        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-end", marginBottom:36, flexWrap:"wrap", gap:12 }}>
-          <div>
-            <div className="bs-label">Mercato Live</div>
-            <h2 className="bs-h2">Pool attivi ora</h2>
-            <p style={{ fontSize:15, color:C.muted, marginTop:8 }}>Risparmia fino al 20% rispetto ai prezzi singoli</p>
-          </div>
-          <button onClick={() => { window.location.href = "/pool"; }} style={{ display:"flex", alignItems:"center", gap:6, color:C.blue, background:"none", border:"none", fontSize:14, fontWeight:600, cursor:"pointer" }}>
-            Vedi tutti <ChevronRight size={16} />
-          </button>
-        </div>
-        <div className="bs-grid-3" style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:20 }}>
-          {POOLS.map(pool => {
-            const pct = Math.round((pool.current/pool.target)*100);
-            return (
-              <div key={pool.id} className="bs-card">
-                <div style={{ display:"flex", justifyContent:"space-between", marginBottom:14, flexWrap:"wrap", gap:8 }}>
-                  <div>
-                    <div style={{ display:"flex", gap:6, marginBottom:8, flexWrap:"wrap" }}>
-                      <span style={{ background:"#EFF6FF", color:"#1D4ED8", borderRadius:4, padding:"2px 8px", fontSize:11, fontWeight:600 }}>{pool.tag}</span>
-                      {pool.hot && <span style={{ background:"#FFF1F2", color:C.red, borderRadius:4, padding:"2px 8px", fontSize:11, fontWeight:600 }}>🔥 Quasi pieno</span>}
+            {/* TECHNICAL DATASHEET — collapsible */}
+            <div style={{ border:`1px solid ${C.border}`, borderRadius:14, overflow:"hidden", marginBottom:24 }}>
+              <div style={{ padding:"18px 20px", background:C.bg }}>
+                <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:14 }}>
+                  <FileText size={18} color={C.blue} />
+                  <span style={{ fontSize:16, fontWeight:700 }}>Scheda tecnica</span>
+                </div>
+                {/* summary always visible */}
+                <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))", gap:14 }}>
+                  {[["Denominazione",product.name],["Numero E",product.enum],["CAS",product.cas],["Forma",product.form],["Purezza",product.purityRange]].map(([k,v]) => (
+                    <div key={k}>
+                      <div style={{ fontSize:11, color:C.muted, marginBottom:2 }}>{k}</div>
+                      <div style={{ fontSize:13, fontWeight:600 }}>{v}</div>
                     </div>
-                    <h3 style={{ fontSize:17, fontWeight:700, marginBottom:2, color:C.text }}>{pool.name}</h3>
-                    <p style={{ fontSize:13, color:C.muted }}>{pool.grade}</p>
-                  </div>
-                  <div style={{ textAlign:"right" }}>
-                    <div style={{ display:"flex", alignItems:"center", gap:4, justifyContent:"flex-end", fontSize:12, color:C.muted }}>
-                      <Clock size={11} /> {pool.expires}
-                    </div>
-                    <div style={{ fontSize:14, marginTop:4 }}>{pool.flags}</div>
-                  </div>
+                  ))}
                 </div>
-                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:16 }}>
-                  <div style={{ background:C.bg, borderRadius:10, padding:"12px 14px" }}>
-                    <div style={{ fontSize:11, color:C.muted, marginBottom:2 }}>Prezzo pool</div>
-                    <div className="bs-num" style={{ fontSize:20, fontWeight:700, color:C.blue }}>{pool.price}<span style={{ fontSize:11 }}>/kg</span></div>
-                  </div>
-                  <div style={{ background:C.bg, borderRadius:10, padding:"12px 14px" }}>
-                    <div style={{ fontSize:11, color:C.muted, marginBottom:2 }}>Risparmio</div>
-                    <div className="bs-num" style={{ fontSize:20, fontWeight:700, color:C.green }}>-{pool.savings}</div>
-                    <div style={{ fontSize:11, color:C.muted }}>vs {pool.orig}/kg</div>
-                  </div>
-                </div>
-                <div style={{ marginBottom:14 }}>
-                  <div style={{ display:"flex", justifyContent:"space-between", marginBottom:5 }}>
-                    <span style={{ fontSize:12, color:C.muted }}>Volume</span>
-                    <span className="bs-num" style={{ fontSize:12, fontWeight:600 }}>{(pool.current/1000).toFixed(1)}t / {pool.target/1000}t</span>
-                  </div>
-                  <div className="bs-progress">
-                    <div className="bs-progress-bar" style={{ background:pct>=80?`linear-gradient(90deg,${C.amber},${C.red})`:`linear-gradient(90deg,${C.blue},#22D3EE)`, width:`${pct}%` }} />
-                  </div>
-                  <div style={{ fontSize:12, color:pct>=80?C.amber:C.muted, marginTop:4, textAlign:"right" }}>{pct}%</div>
-                </div>
-                <button className="bs-pool-btn" onClick={() => { window.location.href = "/pool?id=7191a826-ac9c-404b-8001-8e8fc8f08100"; }}>Unisciti al Pool <ArrowRight size={14} /></button>
               </div>
-            );
-          })}
-        </div>
-      </div>
+              {showSpecs && (
+                <div style={{ padding:"4px 20px 8px" }}>
+                  {[
+                    ["Formula molecolare", product.formula],
+                    ["Peso molecolare", product.mw],
+                    ["Rotazione ottica", "+12,0° a +13,0° (soluzione 20%)"],
+                    ["Perdita all'essiccamento", "≤ 0,5%"],
+                    ["Residuo all'incenerimento (solfati)", "≤ 0,1%"],
+                    ["Metalli pesanti (come Pb)", "≤ 10 mg/kg"],
+                    ["Arsenico", "≤ 3 mg/kg"],
+                    ["Conformità", "Reg. (UE) 231/2012 · Codex OIV · FCC"],
+                    ["Packaging disponibile", "Sacchi 25 kg · Big bag 500/1000 kg"],
+                    ["Shelf life", "36 mesi se conservato in luogo asciutto"],
+                  ].map(([k,v]) => (
+                    <div key={k} className="bs-spec-row"><span style={{ color:C.muted }}>{k}</span><span style={{ fontWeight:600, textAlign:"right" }}>{v}</span></div>
+                  ))}
+                  <div style={{ display:"flex", gap:10, marginTop:16, flexWrap:"wrap" }}>
+                    <button className="bs-btn-ghost"><Download size={14}/> Scheda di Sicurezza (SDS)</button>
+                    <button className="bs-btn-ghost"><Download size={14}/> Certificato di Analisi (CoA)</button>
+                    <button className="bs-btn-ghost"><Download size={14}/> Scheda tecnica PDF</button>
+                  </div>
+                </div>
+              )}
+              <button onClick={() => setShowSpecs(!showSpecs)} style={{ width:"100%", padding:"12px", background:"#fff", border:"none", borderTop:`1px solid ${C.border}`, color:C.blue, fontSize:14, fontWeight:600, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:6, fontFamily:"Inter,system-ui" }}>
+                {showSpecs ? <>Mostra meno <ChevronUp size={16}/></> : <>Mostra scheda tecnica completa <ChevronDown size={16}/></>}
+              </button>
+            </div>
 
-      {/* ── PRICE CHARTS ── */}
-      <div style={{ background:C.bg, borderTop:`1px solid ${C.border}`, borderBottom:`1px solid ${C.border}` }}>
-        <div className="bs-section">
-          <div className="bs-grid-2" style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:56, alignItems:"start" }}>
-            <div>
-              <div className="bs-label">Market Intelligence</div>
-              <h2 className="bs-h2" style={{ marginBottom:12 }}>Andamento prezzi in tempo reale</h2>
-              <p style={{ fontSize:15, color:C.muted, lineHeight:1.65, marginBottom:24 }}>
-                Ogni transazione su BulkStrike alimenta l'indice prezzi. Un dato proprietario che non trovi da nessuna altra parte.
-              </p>
-              <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:24 }}>
-                {Object.keys(CHART_DATA).map(name => (
-                  <button key={name} className="bs-chart-tab" onClick={() => setActiveChart(name)}
-                    style={{ background:activeChart===name?C.blue:"#fff", color:activeChart===name?"#fff":C.muted, borderColor:activeChart===name?C.blue:C.border }}>
-                    {name}
+            {/* Q&A */}
+            {qa.length > 0 && (
+            <div style={{ marginBottom:8 }}>
+              <div style={{ fontSize:16, fontWeight:700, marginBottom:12 }}>Domande tecniche</div>
+              {qa.map((item,i) => (
+                <div key={i} style={{ border:`1px solid ${C.border}`, borderRadius:10, marginBottom:8, overflow:"hidden" }}>
+                  <button onClick={() => setOpenQa(openQa===i?null:i)} style={{ width:"100%", padding:"14px 16px", background:"#fff", border:"none", cursor:"pointer", display:"flex", justifyContent:"space-between", alignItems:"center", gap:10, textAlign:"left", fontFamily:"Inter,system-ui" }}>
+                    <span style={{ fontSize:14, fontWeight:600, color:C.text }}>{item.q}</span>
+                    <ChevronDown size={16} color={C.muted} style={{ transform:openQa===i?"rotate(180deg)":"none", transition:"transform 0.2s", flexShrink:0 }}/>
                   </button>
-                ))}
-              </div>
-              <div style={{ display:"flex", alignItems:"baseline", gap:10, flexWrap:"wrap" }}>
-                <span className="bs-num" style={{ fontSize:42, fontWeight:800, color:C.blue }}>
-                  €{CHART_DATA[activeChart][CHART_DATA[activeChart].length-1].v.toFixed(2)}
-                </span>
-                <span style={{ fontSize:14, color:C.muted }}>/kg · prezzo pool attuale</span>
-              </div>
-              <div style={{ display:"flex", alignItems:"center", gap:4, fontSize:14, color:C.green, marginTop:4 }}>
-                <TrendingDown size={14} /> -14,7% rispetto a gennaio
-              </div>
+                  {openQa===i && <div style={{ padding:"0 16px 14px", fontSize:14, color:C.muted, lineHeight:1.6 }}>{item.a}</div>}
+                </div>
+              ))}
             </div>
-            <div>
-              <ResponsiveContainer width="100%" height={220}>
-                <LineChart data={CHART_DATA[activeChart]}>
-                  <XAxis dataKey="t" tick={{ fill:C.muted, fontSize:12 }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fill:C.muted, fontSize:12, fontFamily:"JetBrains Mono" }} axisLine={false} tickLine={false} tickFormatter={v=>`€${v}`} domain={["auto","auto"]} />
-                  <Tooltip contentStyle={{ background:"#fff", border:`1px solid ${C.border}`, borderRadius:10 }} formatter={v=>[`€${v.toFixed(2)}/kg`,"Prezzo"]} />
-                  <Line type="monotone" dataKey="v" stroke={C.blue} strokeWidth={2.5} dot={{ fill:C.blue, r:4, strokeWidth:0 }} activeDot={{ r:6 }} />
+            )}
+          </div>
+
+          {/* RIGHT COLUMN — sticky cards */}
+          <div style={{ position:"sticky", top:80, display:"flex", flexDirection:"column", gap:16 }}>
+            {/* POOL CARD */}
+            {pool.exists && (
+            <div style={{ border:`1px solid ${C.purple}33`, borderRadius:14, padding:18, background:"#FBF7FF" }}>
+              <div style={{ display:"flex", alignItems:"center", gap:7, marginBottom:8 }}>
+                <Gavel size={15} color={C.purple}/>
+                <span style={{ fontSize:13, fontWeight:700, color:C.purple }}>Pool attivo · asta a ribasso</span>
+                <span style={{ marginLeft:"auto", fontSize:12, color:C.muted, display:"flex", alignItems:"center", gap:3 }}><Clock size={11}/> {pool.closesIn}</span>
+              </div>
+              <div style={{ display:"flex", alignItems:"baseline", gap:8, marginBottom:8 }}>
+                <span className="bs-num" style={{ fontSize:24, fontWeight:800, color:C.purple }}>{eurKg(pool.bestPrice)}</span>
+                <span style={{ fontSize:12, color:C.muted }}>/kg · miglior prezzo ora</span>
+              </div>
+              <p style={{ fontSize:13, color:C.muted, marginBottom:12, lineHeight:1.5 }}>
+                <b style={{ color:C.text }}>{pool.companies} aziende</b> già aggregate · <b style={{ color:C.text }}>{pool.suppliers} fornitori</b> in gara. Il prezzo può solo scendere fino alla chiusura.
+              </p>
+              <div style={{ display:"flex", justifyContent:"space-between", fontSize:12, marginBottom:6 }}>
+                <span style={{ color:C.muted }}>Volume aggregato</span>
+                <span className="bs-num" style={{ fontWeight:600 }}>{(pool.current/1000).toFixed(1)}t</span>
+              </div>
+              <div style={{ height:7, background:"#EDE4F7", borderRadius:100, overflow:"hidden", marginBottom:14 }}>
+                <div style={{ width:`${Math.max(6, Math.min(100, Math.round((pool.current/(palletKg*20))*100)))}%`, height:"100%", background:`linear-gradient(90deg,${C.purple},#A855F7)`, borderRadius:100 }}/>
+              </div>
+              <button onClick={goToPool} style={{ width:"100%", background:C.purple, color:"#fff", border:"none", borderRadius:9, padding:"12px", fontSize:14, fontWeight:700, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:6, fontFamily:"Inter,system-ui" }}>
+                Unisciti al Pool <ArrowRight size={15}/>
+              </button>
+            </div>
+            )}
+
+            {/* PRICE HISTORY */}
+            <div style={{ border:`1px solid ${C.border}`, borderRadius:14, padding:18 }}>
+              <div style={{ fontSize:13, fontWeight:700, marginBottom:2 }}>Andamento prezzo</div>
+              <div style={{ display:"flex", alignItems:"baseline", gap:6, marginBottom:10 }}>
+                <span className="bs-num" style={{ fontSize:22, fontWeight:800, color:C.blue }}>€2,42</span>
+                <span style={{ fontSize:12, color:C.green, display:"flex", alignItems:"center", gap:2 }}><TrendingDown size={11}/> -15,6%</span>
+              </div>
+              <ResponsiveContainer width="100%" height={120}>
+                <LineChart data={CHART} margin={{ top:4, right:4, bottom:0, left:-22 }}>
+                  <XAxis dataKey="t" tick={{ fill:C.muted, fontSize:10 }} axisLine={false} tickLine={false}/>
+                  <YAxis tick={{ fill:C.muted, fontSize:10, fontFamily:"JetBrains Mono" }} axisLine={false} tickLine={false} domain={["auto","auto"]} tickFormatter={v=>`€${v.toFixed(1)}`}/>
+                  <Tooltip contentStyle={{ background:"#fff", border:`1px solid ${C.border}`, borderRadius:8, fontSize:12 }} formatter={v=>[`€${v.toFixed(2)}/kg`,"Prezzo"]}/>
+                  <Line type="monotone" dataKey="v" stroke={C.blue} strokeWidth={2.5} dot={false} activeDot={{ r:4 }}/>
                 </LineChart>
               </ResponsiveContainer>
-              <div style={{ display:"flex", gap:8, marginTop:10, flexWrap:"wrap" }}>
-                {["1M","3M","6M","1A"].map(t => (
-                  <button key={t} style={{ flex:1, minWidth:36, padding:"6px 4px", background:t==="6M"?"#EFF6FF":"transparent", border:`1px solid ${t==="6M"?C.blue:C.border}`, borderRadius:6, fontSize:12, color:t==="6M"?C.blue:C.muted, cursor:"pointer", fontFamily:"Inter,system-ui" }}>{t}</button>
-                ))}
+              <div style={{ display:"flex", gap:5, marginTop:8 }}>
+                {["1M","3M","6M","1A"].map(t => <button key={t} style={{ flex:1, padding:"5px", fontSize:11, border:`1px solid ${t==="6M"?C.blue:C.border}`, background:t==="6M"?"#EFF6FF":"#fff", color:t==="6M"?C.blue:C.muted, borderRadius:6, cursor:"pointer", fontFamily:"Inter,system-ui" }}>{t}</button>)}
+              </div>
+            </div>
+
+            {/* SAMPLE / SAFETY NOTE */}
+            <div style={{ border:`1px solid ${C.border}`, borderRadius:14, padding:18 }}>
+              <button className="bs-btn-ghost" style={{ width:"100%", marginBottom:10 }}><Beaker size={14}/> Richiedi un campione</button>
+              <div style={{ display:"flex", gap:8, fontSize:12, color:C.muted, lineHeight:1.5 }}>
+                <Shield size={26} color={C.green} style={{ flexShrink:0 }}/>
+                <span>Pagamento protetto in <b style={{ color:C.text }}>escrow</b>: il fornitore viene pagato solo dopo la tua conferma di consegna conforme.</span>
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* ── HOW IT WORKS ── */}
-      <div id="come-funziona" className="bs-section" style={{ textAlign:"center" }}>
-        <div className="bs-label" style={{ textAlign:"center" }}>Come funziona</div>
-        <h2 className="bs-h2" style={{ marginBottom:32 }}>Semplice da entrambi i lati</h2>
-        <div style={{ display:"flex", gap:8, justifyContent:"center", marginBottom:40, flexWrap:"wrap" }}>
-          {["acquirente","fornitore"].map(tab => (
-            <button key={tab} className="bs-tab" onClick={() => setActiveTab(tab)}
-              style={{ background:activeTab===tab?C.blue:"transparent", color:activeTab===tab?"#fff":C.muted, borderColor:activeTab===tab?C.blue:C.border }}>
-              {tab==="acquirente"?"Sono un Acquirente":"Sono un Fornitore"}
-            </button>
-          ))}
-        </div>
-        <div className="bs-grid-3" style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:16 }}>
-          {(activeTab==="acquirente"?BUYER_STEPS:SELLER_STEPS).map((step,i) => (
-            <div key={i} className="bs-card" style={{ textAlign:"left" }}>
-              <div className="bs-num" style={{ fontSize:44, fontWeight:900, color:"#E2E8F0", letterSpacing:"-0.03em", marginBottom:14 }}>{step.n}</div>
-              <h3 style={{ fontSize:17, fontWeight:700, marginBottom:8, color:C.text }}>{step.title}</h3>
-              <p style={{ fontSize:14, color:C.muted, lineHeight:1.7 }}>{step.desc}</p>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* ── AI ASSISTANT ── */}
-      <div style={{ background:C.bg, borderTop:`1px solid ${C.border}`, borderBottom:`1px solid ${C.border}` }}>
-        <div className="bs-section">
-          <div className="bs-grid-2" style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:56, alignItems:"center" }}>
-            <div>
-              <div style={{ display:"inline-flex", alignItems:"center", gap:8, background:"#F3E8FF", border:"1px solid #D8B4FE", borderRadius:100, padding:"6px 14px", marginBottom:20 }}>
-                <Bot size={14} color="#7C3AED" />
-                <span style={{ fontSize:13, color:"#7C3AED", fontWeight:600 }}>AI-Powered</span>
-              </div>
-              <h2 className="bs-h2" style={{ marginBottom:12 }}>Il tuo assistente personale per le materie prime</h2>
-              <p style={{ fontSize:15, color:C.muted, lineHeight:1.65, marginBottom:24 }}>
-                Descrivi cosa cerchi in italiano. L'AI trova il prodotto, confronta i fornitori, calcola il risparmio e completa l'acquisto con la tua conferma.
-              </p>
-              {["Trova il fornitore più economico in Europa","Uniscimi al pool più vantaggioso","Aggiorna il mio listino prezzi","Quanto ho risparmiato questo mese?"].map(f => (
-                <div key={f} style={{ display:"flex", alignItems:"center", gap:10, marginBottom:10 }}>
-                  <div style={{ width:20, height:20, borderRadius:"50%", background:"#ECFDF5", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
-                    <Check size={11} color={C.green} />
-                  </div>
-                  <span style={{ fontSize:14, color:C.muted }}>{f}</span>
-                </div>
-              ))}
-            </div>
-            {/* Chat mockup */}
-            <div style={{ background:"#fff", border:`1px solid ${C.border}`, borderRadius:16, overflow:"hidden", boxShadow:"0 4px 20px rgba(0,0,0,0.06)" }}>
-              <div style={{ display:"flex", alignItems:"center", gap:10, background:"#0EA5E9", padding:"14px 20px" }}>
-                <div style={{ width:32, height:32, borderRadius:"50%", background:"rgba(255,255,255,0.2)", display:"flex", alignItems:"center", justifyContent:"center" }}>
-                  <Bot size={18} color="white" />
-                </div>
-                <div>
-                  <div style={{ fontSize:14, fontWeight:700, color:"white" }}>BulkStrike AI</div>
-                  <div style={{ fontSize:12, color:"rgba(255,255,255,0.8)" }}>● Online</div>
-                </div>
-              </div>
-              <div style={{ padding:"16px 16px 0", display:"flex", flexDirection:"column", gap:10 }}>
-                {AI_MSGS.map((msg,i) => (
-                  <div key={i} style={{ display:"flex", justifyContent:msg.u?"flex-end":"flex-start" }}>
-                    <div style={{
-                      maxWidth:"85%", padding:"10px 14px",
-                      borderRadius:msg.u?"16px 16px 4px 16px":"16px 16px 16px 4px",
-                      background:msg.u?C.blue:"#F1F5F9",
-                      color:msg.u?"#fff":C.text,
-                      fontSize:13, lineHeight:1.55, whiteSpace:"pre-line", wordBreak:"break-word"
-                    }}>{msg.t}</div>
-                  </div>
-                ))}
-              </div>
-              <div style={{ display:"flex", gap:8, padding:"14px 16px", borderTop:`1px solid ${C.border}`, marginTop:14 }}>
-                <input placeholder="Scrivi un messaggio..." style={{ flex:1, border:`1px solid ${C.border}`, borderRadius:8, padding:"9px 12px", fontSize:13, outline:"none", fontFamily:"Inter,system-ui" }} />
-                <button style={{ background:C.blue, border:"none", borderRadius:8, width:36, cursor:"pointer", color:"white", fontWeight:700, flexShrink:0 }}>↑</button>
-              </div>
-            </div>
+      {/* FOOTER */}
+      <div style={{ background:"#050D18", padding:"28px 20px" }}>
+        <div style={{ maxWidth:1200, margin:"0 auto", display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:14 }}>
+          <div onClick={() => { window.location.href = "/"; }} style={{ display:"flex", alignItems:"center", gap:9, cursor:"pointer" }}>
+            <BSIcon size={26} uid="foot"/>
+            <span style={{ fontSize:15, fontWeight:900, color:"#F0F6FF" }}>BulkStrike</span>
           </div>
-        </div>
-      </div>
-
-      {/* ── CTA ── */}
-      <div style={{ background:"#07111E" }}>
-        <div className="bs-section" style={{ textAlign:"center" }}>
-          <h2 style={{ fontSize:40, fontWeight:900, letterSpacing:"-0.03em", marginBottom:14, color:"#F0F6FF" }}>
-            Pronto a comprare al <span style={{ background:"linear-gradient(90deg,#0EA5E9,#22D3EE)", WebkitBackgroundClip:"text", backgroundClip:"text", color:"transparent" }}>prezzo giusto?</span>
-          </h2>
-          <p style={{ fontSize:16, color:"#6B94B8", marginBottom:36, maxWidth:480, margin:"0 auto 36px" }}>
-            Registrazione gratuita. Nessun abbonamento. Unisciti a 2.400+ aziende che già comprano e vendono su BulkStrike.
-          </p>
-          <div className="bs-cta-btns" style={{ display:"flex", gap:12, justifyContent:"center", flexWrap:"wrap" }}>
-            <button className="bs-btn" onClick={() => { window.location.href = "/registrati"; }} style={{ fontSize:17, padding:"15px 32px" }}>Crea account gratis <ArrowRight size={20} /></button>
-            <button onClick={() => { document.getElementById("come-funziona")?.scrollIntoView({ behavior:"smooth" }); }} style={{ background:"transparent", color:"#F0F6FF", border:"1px solid #1A3454", borderRadius:10, padding:"15px 24px", fontSize:16, fontWeight:600, cursor:"pointer", fontFamily:"Inter,system-ui" }}>Guarda come funziona</button>
-          </div>
-        </div>
-      </div>
-
-      {/* ── FOOTER ── */}
-      <div style={{ background:"#050D18", borderTop:"1px solid #1A3454", padding:"32px 24px" }}>
-        <div style={{ maxWidth:1280, margin:"0 auto", display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:16 }}>
-          <div onClick={() => { window.location.href = "/"; }} style={{ display:"flex", alignItems:"center", gap:10, cursor:"pointer" }}>
-            <BSIcon size={28} uid="foot" />
-            <div style={{ display:"flex", alignItems:"baseline" }}>
-              <span style={{ fontSize:16, fontWeight:900, color:"#F0F6FF", letterSpacing:"-0.03em" }}>Bulk</span>
-              <span style={{ fontSize:16, fontWeight:900, letterSpacing:"-0.03em", background:"linear-gradient(90deg,#0EA5E9,#22D3EE)", WebkitBackgroundClip:"text", backgroundClip:"text", color:"transparent" }}>Strike</span>
-            </div>
-            <span style={{ fontSize:13, color:"#3B5A7A" }}>— Il mercato B2B delle materie prime sfuse</span>
-          </div>
-          <div style={{ display:"flex", gap:20, flexWrap:"wrap" }}>
-            {[["Termini","/legale#termini"],["Privacy","/legale#privacy"],["Cookie","/legale#cookie"],["Contatti","mailto:info@bulkstrike.com"]].map(([l,href]) => (
-              <a key={l} href={href} style={{ fontSize:13, color:"#3B5A7A", cursor:"pointer", textDecoration:"none" }}>{l}</a>
-            ))}
+          <div style={{ display:"flex", gap:18, flexWrap:"wrap" }}>
+            {[["Termini","/legale#termini"],["Privacy","/legale#privacy"],["Cookie","/legale#cookie"],["Contatti","mailto:info@bulkstrike.com"]].map(([l,href]) => <a key={l} href={href} style={{ fontSize:13, color:"#3B5A7A", cursor:"pointer", textDecoration:"none" }}>{l}</a>)}
           </div>
           <div style={{ fontSize:13, color:"#3B5A7A" }}>© 2026 BulkStrike S.r.l.</div>
         </div>
       </div>
 
-      {/* ── CHATBOT FISSO ── */}
-      <div className="bs-chatbot">
+      {/* CHATBOT */}
+      <div style={{ position:"fixed", bottom:24, right:24, zIndex:1000 }}>
         {chatOpen && (
-          <div className="bs-chatbot-panel">
+          <div style={{ position:"absolute", bottom:70, right:0, width:300, background:"#fff", borderRadius:16, border:`1px solid ${C.border}`, boxShadow:"0 20px 60px rgba(0,0,0,0.15)", overflow:"hidden" }}>
             <div style={{ background:C.blue, padding:"14px 16px", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
-              <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-                <Bot size={18} color="white" />
-                <div>
-                  <div style={{ fontSize:13, fontWeight:700, color:"white" }}>BulkStrike AI</div>
-                  <div style={{ fontSize:11, color:"rgba(255,255,255,0.8)" }}>Assistente virtuale AI · ● Online</div>
-                </div>
+              <div style={{ display:"flex", alignItems:"center", gap:9 }}>
+                <Bot size={18} color="#fff"/>
+                <div><div style={{ fontSize:13, fontWeight:700, color:"#fff" }}>BulkStrike AI</div><div style={{ fontSize:11, color:"rgba(255,255,255,0.8)" }}>Assistente virtuale AI · ● Online</div></div>
               </div>
-              <button onClick={() => setChatOpen(false)} style={{ background:"none", border:"none", cursor:"pointer", color:"rgba(255,255,255,0.7)", display:"flex" }}>
-                <X size={16} color="white" />
-              </button>
+              <button onClick={() => setChatOpen(false)} style={{ background:"none", border:"none", cursor:"pointer" }}><X size={16} color="#fff"/></button>
             </div>
-            <div style={{ padding:12, display:"flex", flexDirection:"column", gap:8, maxHeight:180, overflowY:"auto" }}>
-              <div style={{ background:C.bg, borderRadius:"12px 12px 12px 4px", padding:"10px 12px", fontSize:13, maxWidth:"85%", color:C.text, lineHeight:1.5 }}>
-                Ciao! Sono l'assistente virtuale (AI) di BulkStrike — non una persona. Posso aiutarti a trovare materie prime, confrontare fornitori o unirti a un pool. Per parlare con una persona, scrivi a davide@bulkstrike.com. Come posso aiutarti?
+            <div style={{ padding:12 }}>
+              <div style={{ background:C.bg, borderRadius:"12px 12px 12px 4px", padding:"10px 12px", fontSize:13, color:C.text, lineHeight:1.5 }}>
+                Sono l'assistente virtuale (AI) di BulkStrike, non una persona. Stai guardando l'Acido Tartarico: vuoi che ti trovi il prezzo migliore per la tua quantità o che ti unisca al pool attivo? Per parlare con una persona, scrivi a davide@bulkstrike.com.
               </div>
             </div>
             <div style={{ borderTop:`1px solid ${C.border}` }}>
               <div style={{ padding:"6px 12px 0", fontSize:10, color:C.muted, textAlign:"center" }}>Risposte generate da intelligenza artificiale</div>
               <div style={{ padding:10, display:"flex", gap:8 }}>
-                <input placeholder="Scrivi un messaggio..." style={{ flex:1, border:`1px solid ${C.border}`, borderRadius:8, padding:"8px 12px", fontSize:13, outline:"none", fontFamily:"Inter,system-ui" }} />
-                <button style={{ background:C.blue, border:"none", borderRadius:8, width:34, cursor:"pointer", color:"white", fontWeight:700, flexShrink:0, fontFamily:"Inter,system-ui" }}>↑</button>
+                <input placeholder="Scrivi un messaggio..." style={{ flex:1, border:`1px solid ${C.border}`, borderRadius:8, padding:"8px 12px", fontSize:13, outline:"none", fontFamily:"Inter,system-ui" }}/>
+                <button style={{ background:C.blue, border:"none", borderRadius:8, width:34, cursor:"pointer", color:"#fff", fontWeight:700 }}>↑</button>
               </div>
             </div>
           </div>
         )}
-        <button className="bs-chatbot-btn" onClick={() => setChatOpen(!chatOpen)}>
-          {chatOpen ? <X size={22} color="white" /> : <Bot size={24} color="white" />}
-        </button>
-        <CookieBanner />
+        <button className="bs-chatbot-btn" onClick={() => setChatOpen(!chatOpen)}>{chatOpen ? <X size={22} color="#fff"/> : <Bot size={24} color="#fff"/>}</button>
+      </div>
+    </div>
+  );
+}
+
+function Row({ label, val }) {
+  return (
+    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline" }}>
+      <span style={{ fontSize:13, color:"#64748B" }}>{label}</span>
+      <span className="bs-num" style={{ fontSize:14, fontWeight:600 }}>{val}</span>
+    </div>
+  );
+}
+
+function Fact({ icon, label, value }) {
+  return (
+    <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+      <div style={{ flexShrink:0 }}>{icon}</div>
+      <div>
+        <div style={{ fontSize:11, color:"#64748B" }}>{label}</div>
+        <div style={{ fontSize:14, fontWeight:700, color:"#0F172A" }}>{value}</div>
       </div>
     </div>
   );
