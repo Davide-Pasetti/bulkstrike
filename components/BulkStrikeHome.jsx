@@ -94,6 +94,26 @@ function BSIcon({ size = 36, uid = "a" }) {
 }
 
 // ─── MAIN ─────────────────────────────────────────────────────────────────────
+function CookieBanner() {
+  const [show, setShow] = useState(false);
+  useEffect(() => {
+    try { if (!localStorage.getItem("bs_cookie_consent")) setShow(true); } catch (e) {}
+  }, []);
+  if (!show) return null;
+  const decide = (v) => { try { localStorage.setItem("bs_cookie_consent", v); } catch (e) {} setShow(false); };
+  return (
+    <div style={{ position:"fixed", left:16, right:16, bottom:16, zIndex:200, maxWidth:720, margin:"0 auto", background:"#fff", border:"1px solid #E2E8F0", borderRadius:14, boxShadow:"0 12px 40px rgba(0,0,0,0.18)", padding:"16px 18px", display:"flex", flexWrap:"wrap", alignItems:"center", gap:12 }}>
+      <div style={{ flex:1, minWidth:220, fontSize:13, color:"#334155", lineHeight:1.5 }}>
+        Usiamo cookie tecnici necessari al funzionamento del sito e, previo consenso, cookie di misurazione. Dettagli nella <a href="/legale#cookie" style={{ color:"#0EA5E9", fontWeight:600 }}>Cookie Policy</a>.
+      </div>
+      <div style={{ display:"flex", gap:8 }}>
+        <button onClick={() => decide("rejected")} style={{ padding:"9px 16px", borderRadius:9, border:"1.5px solid #CBD5E1", background:"#fff", color:"#334155", fontSize:13, fontWeight:600, cursor:"pointer" }}>Rifiuta</button>
+        <button onClick={() => decide("accepted")} style={{ padding:"9px 16px", borderRadius:9, border:"none", background:"#0EA5E9", color:"#fff", fontSize:13, fontWeight:700, cursor:"pointer" }}>Accetta</button>
+      </div>
+    </div>
+  );
+}
+
 export default function BulkStrikeLight() {
   const [searchCat, setSearchCat]   = useState("Tutte le categorie");
   const [showCatDd, setShowCatDd]   = useState(false);
@@ -198,7 +218,7 @@ export default function BulkStrikeLight() {
       <nav style={{ position:"sticky", top:0, zIndex:50, background:"rgba(255,255,255,0.96)", backdropFilter:"blur(12px)", borderBottom:`1px solid ${C.border}` }}>
         <div style={{ maxWidth:1280, margin:"0 auto", padding:"0 24px", height:68, display:"flex", alignItems:"center", gap:20 }}>
           {/* Logo */}
-          <div style={{ display:"flex", alignItems:"center", gap:10, flexShrink:0 }}>
+          <div onClick={() => { window.location.href = "/"; }} style={{ display:"flex", alignItems:"center", gap:10, flexShrink:0, cursor:"pointer" }}>
             <BSIcon size={36} uid="nav" />
             <div style={{ display:"flex", alignItems:"baseline", fontFamily:"Inter,system-ui,sans-serif" }}>
               <span style={{ fontSize:20, fontWeight:900, color:C.text, letterSpacing:"-0.03em" }}>Bulk</span>
@@ -241,7 +261,7 @@ export default function BulkStrikeLight() {
           {/* Nav right */}
           <div style={{ display:"flex", alignItems:"center", gap:20, flexShrink:0 }}>
             <div className="bs-nav-links" style={{ display:"flex", gap:20 }}>
-              {[["Pool Attivi","/pool"],["Prezzi","/pool"],["Fornitori","/registrati"],["Come funziona","#"]].map(([l,href]) => (
+              {[["Pool Attivi","/pool"],["Prezzi","/pool"],["Fornitori","/registrati"],["Come funziona","#come-funziona"]].map(([l,href]) => (
                 <span key={l} onClick={() => { window.location.href = href; }} style={{ fontSize:14, color:C.muted, cursor:"pointer", fontWeight:500, whiteSpace:"nowrap" }}>{l}</span>
               ))}
             </div>
@@ -495,7 +515,7 @@ export default function BulkStrikeLight() {
       </div>
 
       {/* ── HOW IT WORKS ── */}
-      <div className="bs-section" style={{ textAlign:"center" }}>
+      <div id="come-funziona" className="bs-section" style={{ textAlign:"center" }}>
         <div className="bs-label" style={{ textAlign:"center" }}>Come funziona</div>
         <h2 className="bs-h2" style={{ marginBottom:32 }}>Semplice da entrambi i lati</h2>
         <div style={{ display:"flex", gap:8, justifyContent:"center", marginBottom:40, flexWrap:"wrap" }}>
@@ -583,7 +603,7 @@ export default function BulkStrikeLight() {
           </p>
           <div className="bs-cta-btns" style={{ display:"flex", gap:12, justifyContent:"center", flexWrap:"wrap" }}>
             <button className="bs-btn" onClick={() => { window.location.href = "/registrati"; }} style={{ fontSize:17, padding:"15px 32px" }}>Crea account gratis <ArrowRight size={20} /></button>
-            <button style={{ background:"transparent", color:"#F0F6FF", border:"1px solid #1A3454", borderRadius:10, padding:"15px 24px", fontSize:16, fontWeight:600, cursor:"pointer", fontFamily:"Inter,system-ui" }}>Guarda come funziona</button>
+            <button onClick={() => { document.getElementById("come-funziona")?.scrollIntoView({ behavior:"smooth" }); }} style={{ background:"transparent", color:"#F0F6FF", border:"1px solid #1A3454", borderRadius:10, padding:"15px 24px", fontSize:16, fontWeight:600, cursor:"pointer", fontFamily:"Inter,system-ui" }}>Guarda come funziona</button>
           </div>
         </div>
       </div>
@@ -591,7 +611,7 @@ export default function BulkStrikeLight() {
       {/* ── FOOTER ── */}
       <div style={{ background:"#050D18", borderTop:"1px solid #1A3454", padding:"32px 24px" }}>
         <div style={{ maxWidth:1280, margin:"0 auto", display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:16 }}>
-          <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+          <div onClick={() => { window.location.href = "/"; }} style={{ display:"flex", alignItems:"center", gap:10, cursor:"pointer" }}>
             <BSIcon size={28} uid="foot" />
             <div style={{ display:"flex", alignItems:"baseline" }}>
               <span style={{ fontSize:16, fontWeight:900, color:"#F0F6FF", letterSpacing:"-0.03em" }}>Bulk</span>
@@ -600,8 +620,8 @@ export default function BulkStrikeLight() {
             <span style={{ fontSize:13, color:"#3B5A7A" }}>— Il mercato B2B delle materie prime sfuse</span>
           </div>
           <div style={{ display:"flex", gap:20, flexWrap:"wrap" }}>
-            {["Termini","Privacy","Cookie","Contatti"].map(l => (
-              <span key={l} style={{ fontSize:13, color:"#3B5A7A", cursor:"pointer" }}>{l}</span>
+            {[["Termini","/legale#termini"],["Privacy","/legale#privacy"],["Cookie","/legale#cookie"],["Contatti","mailto:info@bulkstrike.com"]].map(([l,href]) => (
+              <a key={l} href={href} style={{ fontSize:13, color:"#3B5A7A", cursor:"pointer", textDecoration:"none" }}>{l}</a>
             ))}
           </div>
           <div style={{ fontSize:13, color:"#3B5A7A" }}>© 2026 BulkStrike S.r.l.</div>
@@ -641,6 +661,7 @@ export default function BulkStrikeLight() {
         <button className="bs-chatbot-btn" onClick={() => setChatOpen(!chatOpen)}>
           {chatOpen ? <X size={22} color="white" /> : <Bot size={24} color="white" />}
         </button>
+        <CookieBanner />
       </div>
     </div>
   );
