@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect } from "react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { Search, Bot, ArrowRight, Check, Clock, ChevronDown, ChevronRight, ChevronUp, Star, Shield, Truck, FileText, Download, Plus, Minus, X, Beaker, TrendingDown, Users, Gavel, Info } from "lucide-react";
 import { getProduct, getOpenPoolForProduct, getPriceReference, getSession, openPool, createInstantOrder, poolErrorMessage, searchProducts } from "@/lib/api";
+import NavAuth from "@/components/BulkStrikeNavAuth";
 
 // ─── PALETTE (matches homepage) ───────────────────────────────────────────────
 const C = { blue:"#0EA5E9", dark:"#0284C7", text:"#0F172A", muted:"#64748B", border:"#E2E8F0", bg:"#F8FAFE", green:"#059669", red:"#DC2626", amber:"#D97706", purple:"#7C3AED" };
@@ -354,7 +355,7 @@ export default function ProductPage() {
           </div>
           <div className="bs-nav-links" style={{ display:"flex", gap:18, alignItems:"center" }}>
             {[["Pool","/pool"],["Prezzi","/pool"],["Fornitori","/registrati"]].map(([l,href]) => <span key={l} onClick={() => { window.location.href = href; }} style={{ fontSize:14, color:C.muted, cursor:"pointer", fontWeight:500 }}>{l}</span>)}
-            <button className="bs-btn" style={{ padding:"8px 16px", fontSize:14 }} onClick={() => { window.location.href = "/auth/login"; }}>Accedi</button>
+            <NavAuth />
           </div>
         </div>
       </nav>

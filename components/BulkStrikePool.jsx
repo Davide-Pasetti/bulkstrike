@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { getPoolDetail, getPoolBids, joinPool, poolErrorMessage } from "@/lib/api";
+import NavAuth from "@/components/BulkStrikeNavAuth";
 import { Search, Bot, ArrowRight, Check, Clock, ChevronRight, Shield, Users, TrendingDown, X, Plus, Minus, Info, Gavel, Award } from "lucide-react";
 
 const C = { blue:"#0EA5E9", dark:"#0284C7", text:"#0F172A", muted:"#64748B", border:"#E2E8F0", bg:"#F8FAFE", green:"#059669", red:"#DC2626", amber:"#D97706", purple:"#7C3AED" };
@@ -190,7 +191,7 @@ export default function PoolAuctionPage() {
       {/* NAVBAR */}
       <nav style={{ position:"sticky", top:0, zIndex:50, background:"rgba(255,255,255,0.96)", backdropFilter:"blur(12px)", borderBottom:`1px solid ${C.border}` }}>
         <div style={{ maxWidth:1200, margin:"0 auto", padding:"0 20px", height:64, display:"flex", alignItems:"center", gap:18 }}>
-          <div style={{ display:"flex", alignItems:"center", gap:9, flexShrink:0 }}>
+          <div onClick={() => { window.location.href = "/"; }} style={{ display:"flex", alignItems:"center", gap:9, flexShrink:0, cursor:"pointer" }}>
             <BSIcon size={34} uid="nav" />
             <div style={{ display:"flex", alignItems:"baseline" }}>
               <span style={{ fontSize:19, fontWeight:900, letterSpacing:"-0.03em" }}>Bulk</span>
@@ -199,13 +200,13 @@ export default function PoolAuctionPage() {
           </div>
           <div style={{ flex:1, display:"flex", justifyContent:"center" }}>
             <div className="bs-search-wrap">
-              <input style={{ flex:1, border:"none", padding:"0 14px", fontSize:14, outline:"none", fontFamily:"Inter,system-ui" }} defaultValue="Acido tartarico" />
+              <input style={{ flex:1, border:"none", padding:"0 14px", fontSize:14, outline:"none", fontFamily:"Inter,system-ui" }} placeholder="Cerca materie prime, fornitori, specifiche..." onKeyDown={(e) => { if (e.key === "Enter" && e.target.value.trim()) window.location.href = "/"; }} />
               <button style={{ background:C.blue, border:"none", padding:"0 16px", cursor:"pointer" }}><Search size={18} color="#fff" /></button>
             </div>
           </div>
           <div className="bs-nav-links" style={{ display:"flex", gap:18, alignItems:"center" }}>
-            {["Pool","Prezzi","Fornitori"].map(l => <span key={l} style={{ fontSize:14, color:C.muted, cursor:"pointer", fontWeight:500 }}>{l}</span>)}
-            <button className="bs-btn bs-btn-blue" style={{ padding:"8px 16px", fontSize:14 }}>Accedi</button>
+            {[["Pool","/pool"],["Prezzi","/pool"],["Fornitori","/registrati"]].map(([l,href]) => <span key={l} onClick={() => { window.location.href = href; }} style={{ fontSize:14, color:C.muted, cursor:"pointer", fontWeight:500 }}>{l}</span>)}
+            <NavAuth />
           </div>
         </div>
       </nav>
@@ -505,11 +506,11 @@ export default function PoolAuctionPage() {
       {/* FOOTER */}
       <div style={{ background:"#050D18", padding:"28px 20px" }}>
         <div style={{ maxWidth:1200, margin:"0 auto", display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:14 }}>
-          <div style={{ display:"flex", alignItems:"center", gap:9 }}>
+          <div onClick={() => { window.location.href = "/"; }} style={{ display:"flex", alignItems:"center", gap:9, cursor:"pointer" }}>
             <BSIcon size={26} uid="foot"/><span style={{ fontSize:15, fontWeight:900, color:"#F0F6FF" }}>BulkStrike</span>
           </div>
           <div style={{ display:"flex", gap:18, flexWrap:"wrap" }}>
-            {["Termini","Privacy","Cookie","Contatti"].map(l => <span key={l} style={{ fontSize:13, color:"#3B5A7A", cursor:"pointer" }}>{l}</span>)}
+            {[["Termini","/legale#termini"],["Privacy","/legale#privacy"],["Cookie","/legale#cookie"],["Contatti","mailto:info@bulkstrike.com"]].map(([l,href]) => <a key={l} href={href} style={{ fontSize:13, color:"#3B5A7A", cursor:"pointer", textDecoration:"none" }}>{l}</a>)}
           </div>
           <div style={{ fontSize:13, color:"#3B5A7A" }}>© 2026 BulkStrike S.r.l.</div>
         </div>

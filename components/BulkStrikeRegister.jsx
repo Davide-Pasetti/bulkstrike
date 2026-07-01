@@ -245,14 +245,14 @@ export default function RegisterPage() {
       {/* NAVBAR */}
       <nav style={{ background:"#fff", borderBottom:`1px solid ${C.border}` }}>
         <div style={{ maxWidth:1000, margin:"0 auto", padding:"0 20px", height:64, display:"flex", alignItems:"center", justifyContent:"space-between" }}>
-          <div style={{ display:"flex", alignItems:"center", gap:9 }}>
+          <div onClick={() => { window.location.href = "/"; }} style={{ display:"flex", alignItems:"center", gap:9, cursor:"pointer" }}>
             <BSIcon size={34} uid="nav"/>
             <div style={{ display:"flex", alignItems:"baseline" }}>
               <span style={{ fontSize:19, fontWeight:900, letterSpacing:"-0.03em" }}>Bulk</span>
               <span style={{ fontSize:19, fontWeight:900, letterSpacing:"-0.03em", background:"linear-gradient(90deg,#0EA5E9,#22D3EE)", WebkitBackgroundClip:"text", backgroundClip:"text", color:"transparent" }}>Strike</span>
             </div>
           </div>
-          <div style={{ fontSize:14, color:C.muted }}>Hai già un account? <span style={{ color:C.blue, fontWeight:600, cursor:"pointer" }}>Accedi</span></div>
+          <div style={{ fontSize:14, color:C.muted }}>Hai già un account? <span onClick={() => { window.location.href = "/auth/login"; }} style={{ color:C.blue, fontWeight:600, cursor:"pointer" }}>Accedi</span></div>
         </div>
       </nav>
 

@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { Search, Bot, ArrowRight, Check, Clock, ChevronRight, TrendingDown, X, ChevronDown } from "lucide-react";
 import { getSectorsWithProducts, searchProducts } from "@/lib/api";
+import NavAuth from "@/components/BulkStrikeNavAuth";
 
 // ─── DATA ─────────────────────────────────────────────────────────────────────
 const SEARCH_CATS = ["Tutte le categorie","Chimica","Metallurgia","Agricoltura","Tessuti","Plastiche","Minerali","Alimentari","Farmaceutici","Carta","Energia","Gomma"];
@@ -265,8 +266,7 @@ export default function BulkStrikeLight() {
                 <span key={l} onClick={() => { window.location.href = href; }} style={{ fontSize:14, color:C.muted, cursor:"pointer", fontWeight:500, whiteSpace:"nowrap" }}>{l}</span>
               ))}
             </div>
-            <span onClick={() => { window.location.href = "/auth/login"; }} style={{ fontSize:14, color:C.muted, cursor:"pointer", fontWeight:500, whiteSpace:"nowrap" }}>Accedi</span>
-            <button className="bs-btn" onClick={() => { window.location.href = "/registrati"; }} style={{ padding:"9px 18px", fontSize:14 }}>Registrati</button>
+            <NavAuth />
           </div>
         </div>
       </nav>
@@ -605,6 +605,24 @@ export default function BulkStrikeLight() {
             <button className="bs-btn" onClick={() => { window.location.href = "/registrati"; }} style={{ fontSize:17, padding:"15px 32px" }}>Crea account gratis <ArrowRight size={20} /></button>
             <button onClick={() => { document.getElementById("come-funziona")?.scrollIntoView({ behavior:"smooth" }); }} style={{ background:"transparent", color:"#F0F6FF", border:"1px solid #1A3454", borderRadius:10, padding:"15px 24px", fontSize:16, fontWeight:600, cursor:"pointer", fontFamily:"Inter,system-ui" }}>Guarda come funziona</button>
           </div>
+        </div>
+      </div>
+
+      {/* ── ERP INTEGRATION CTA ── */}
+      <div style={{ background:"linear-gradient(135deg,#EFF6FF,#ECFEFF)", borderTop:"1px solid #E2E8F0", padding:"56px 24px" }}>
+        <div style={{ maxWidth:820, margin:"0 auto", textAlign:"center" }}>
+          <div style={{ display:"inline-flex", alignItems:"center", gap:8, background:"#fff", border:"1px solid #BAE6FD", borderRadius:100, padding:"6px 14px", fontSize:12, fontWeight:700, color:"#0369A1", marginBottom:18, letterSpacing:"0.03em" }}>
+            <Bot size={14} /> INTEGRAZIONE GESTIONALE
+          </div>
+          <h2 style={{ fontSize:28, fontWeight:800, letterSpacing:"-0.02em", color:"#0F172A", marginBottom:14, lineHeight:1.25 }}>
+            Collega il tuo gestionale a BulkStrike
+          </h2>
+          <p style={{ fontSize:16, lineHeight:1.6, color:"#475569", marginBottom:26, maxWidth:640, marginLeft:"auto", marginRight:"auto" }}>
+            Ordini generati in automatico in base alle tue scadenze e necessità di produzione. Contattaci per scoprire se il tuo gestionale supporta questa funzione.
+          </p>
+          <a href="mailto:info@bulkstrike.com?subject=Integrazione%20gestionale%20BulkStrike" style={{ display:"inline-flex", alignItems:"center", gap:8, background:"#0EA5E9", color:"#fff", fontSize:16, fontWeight:700, padding:"14px 28px", borderRadius:10, textDecoration:"none" }}>
+            Contattaci <ArrowRight size={18} />
+          </a>
         </div>
       </div>
 

@@ -292,7 +292,7 @@ export default function Dashboard() {
       {/* HEADER */}
       <header style={{ background:"#fff", borderBottom:`1px solid ${C.border}`, position:"sticky", top:0, zIndex:50 }}>
         <div style={{ maxWidth:1180, margin:"0 auto", padding:"0 20px", height:62, display:"flex", alignItems:"center", gap:16 }}>
-          <div style={{ display:"flex", alignItems:"center", gap:9 }}>
+          <div onClick={() => { window.location.href = "/"; }} style={{ display:"flex", alignItems:"center", gap:9, cursor:"pointer" }}>
             <BSIcon size={32} uid="nav"/>
             <div style={{ display:"flex", alignItems:"baseline" }}>
               <span style={{ fontSize:18, fontWeight:900, letterSpacing:"-0.03em" }}>Bulk</span>

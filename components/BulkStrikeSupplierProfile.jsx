@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Search, Bot, ArrowRight, Check, Star, Shield, Truck, Clock, MapPin, Award, BadgeCheck, MessageSquare, Beaker, TrendingUp, X, ChevronRight } from "lucide-react";
+import NavAuth from "@/components/BulkStrikeNavAuth";
 
 const C = { blue:"#0EA5E9", dark:"#0284C7", text:"#0F172A", muted:"#64748B", border:"#E2E8F0", bg:"#F8FAFE", green:"#059669", amber:"#D97706", purple:"#7C3AED" };
 
@@ -75,7 +76,7 @@ export default function SupplierProfile() {
       {/* NAVBAR */}
       <nav style={{ position:"sticky", top:0, zIndex:50, background:"rgba(255,255,255,0.96)", backdropFilter:"blur(12px)", borderBottom:`1px solid ${C.border}` }}>
         <div style={{ maxWidth:1100, margin:"0 auto", padding:"0 20px", height:64, display:"flex", alignItems:"center", gap:18 }}>
-          <div style={{ display:"flex", alignItems:"center", gap:9, flexShrink:0 }}>
+          <div onClick={() => { window.location.href = "/"; }} style={{ display:"flex", alignItems:"center", gap:9, flexShrink:0, cursor:"pointer" }}>
             <BSIcon size={34} uid="nav"/>
             <div style={{ display:"flex", alignItems:"baseline" }}>
               <span style={{ fontSize:19, fontWeight:900, letterSpacing:"-0.03em" }}>Bulk</span>
@@ -89,8 +90,8 @@ export default function SupplierProfile() {
             </div>
           </div>
           <div className="bs-nav-links" style={{ display:"flex", gap:18, alignItems:"center" }}>
-            {["Pool","Prezzi","Fornitori"].map(l=><span key={l} style={{ fontSize:14, color:C.muted, cursor:"pointer", fontWeight:500 }}>{l}</span>)}
-            <button className="bs-btn" style={{ padding:"8px 16px", fontSize:14 }}>Accedi</button>
+            {[["Pool","/pool"],["Prezzi","/pool"],["Fornitori","/registrati"]].map(([l,href])=><span key={l} onClick={() => { window.location.href = href; }} style={{ fontSize:14, color:C.muted, cursor:"pointer", fontWeight:500 }}>{l}</span>)}
+            <NavAuth />
           </div>
         </div>
       </nav>
