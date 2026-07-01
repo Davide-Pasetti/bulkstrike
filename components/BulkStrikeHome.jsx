@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { Search, Bot, ArrowRight, Check, Clock, ChevronRight, TrendingDown, X, ChevronDown } from "lucide-react";
-import { getSectorsWithProducts, searchProducts } from "@/lib/api";
+import { getMacroAreas, getSectorProducts, searchProducts } from "@/lib/api";
 import NavAuth from "@/components/BulkStrikeNavAuth";
 
 // ─── DATA ─────────────────────────────────────────────────────────────────────
@@ -123,8 +123,11 @@ export default function BulkStrikeLight() {
   const [activeTab, setActiveTab]   = useState("acquirente");
   const [chatOpen, setChatOpen]     = useState(false);
   const [count, setCount]           = useState({ pools:0, materials:0, countries:0, volume:0 });
-  const [sectors, setSectors]             = useState([]);
+  const [macros, setMacros]               = useState([]);
+  const [activeMacro, setActiveMacro]     = useState(null);
   const [activeSector, setActiveSector]   = useState(null);
+  const [sectorProducts, setSectorProducts] = useState([]);
+  const [loadingProducts, setLoadingProducts] = useState(false);
   const [searchResults, setSearchResults] = useState([]);
   const [searchOpen, setSearchOpen]       = useState(false);
 
@@ -139,7 +142,16 @@ export default function BulkStrikeLight() {
     return () => clearInterval(t);
   }, []);
 
-  useEffect(() => { getSectorsWithProducts().then(setSectors).catch(() => {}); }, []);
+  useEffect(() => { getMacroAreas().then(setMacros).catch(() => {}); }, []);
+
+  // apre una sotto-area e carica SOLO i suoi prodotti (filtro rigoroso per settore)
+  const openSector = (sec) => {
+    if (activeSector?.id === sec.id) { setActiveSector(null); setSectorProducts([]); return; }
+    setActiveSector(sec); setSectorProducts([]); setLoadingProducts(true);
+    getSectorProducts(sec.id)
+      .then((ps) => { setSectorProducts(ps); setLoadingProducts(false); })
+      .catch(() => setLoadingProducts(false));
+  };
 
   useEffect(() => {
     const q = searchQ.trim();
@@ -289,36 +301,67 @@ export default function BulkStrikeLight() {
         </div>
       </div>
 
-      {/* ── SETTORI (reali) ── */}
+      {/* ── DISCOVERY a due livelli: macro-aree → sotto-aree → prodotti ── */}
       <div style={{ borderBottom:`1px solid ${C.border}`, background:"#fff" }}>
         <div style={{ maxWidth:1280, margin:"0 auto" }}>
+          {/* livello 1: macro-aree */}
           <div className="bs-cats">
-            {sectors.map(s => {
-              const ic = SECTOR_ICONS[s.slug] || SECTOR_FALLBACK;
-              const on = activeSector?.id === s.id;
+            {macros.map(m => {
+              const on = activeMacro?.id === m.id;
               return (
-                <div key={s.id} className={`bs-cat${on?" active":""}`} onClick={() => setActiveSector(on ? null : s)}>
-                  <div className="bs-cat-icon" style={{ background:ic.bg, borderColor:on?"#0EA5E9":ic.border }}>
-                    {ic.icon}
+                <div key={m.id} className={`bs-cat${on?" active":""}`}
+                     onClick={() => { const next = on ? null : m; setActiveMacro(next); setActiveSector(null); setSectorProducts([]); }}>
+                  <div className="bs-cat-icon" style={{ background:on?"#EFF6FF":"#F1F5F9", borderColor:on?"#0EA5E9":"#E2E8F0" }}>
+                    {m.icon || "📦"}
                   </div>
                   <span style={{ fontSize:11, color:on?"#0EA5E9":C.muted, textAlign:"center", lineHeight:1.2, fontWeight:on?700:400 }}>
-                    {s.name}
+                    {m.name}
                   </span>
                 </div>
               );
             })}
           </div>
-          {activeSector && (
-            <div style={{ padding:"2px 16px 20px" }}>
-              <div style={{ fontSize:13, color:C.muted, margin:"0 0 10px" }}>{activeSector.products.length} prodotti in <b style={{ color:C.text }}>{activeSector.name}</b></div>
-              <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))", gap:8 }}>
-                {activeSector.products.map(p => (
-                  <div key={p.id} onClick={() => { window.location.href = `/prodotto?id=${p.id}`; }} style={{ padding:"10px 12px", border:`1px solid ${C.border}`, borderRadius:9, cursor:"pointer", fontSize:13, color:C.text, background:"#fff", display:"flex", alignItems:"center", justifyContent:"space-between", gap:8 }}>
-                    <span>{p.canonical_name}</span>
-                    <ChevronRight size={14} color={C.muted} />
+
+          {/* livello 2: sotto-aree della macro selezionata */}
+          {activeMacro && (
+            <div style={{ padding:"12px 16px", display:"flex", flexWrap:"wrap", gap:8, borderTop:`1px solid ${C.border}`, background:"#FAFCFF" }}>
+              {(activeMacro.sub_areas || []).filter(s => (s.product_count||0) > 0).map(s => {
+                const on = activeSector?.id === s.id;
+                return (
+                  <div key={s.id} onClick={() => openSector(s)}
+                       style={{ display:"inline-flex", alignItems:"center", gap:7, padding:"8px 14px", borderRadius:100, cursor:"pointer",
+                                border:`1.5px solid ${on?"#0EA5E9":C.border}`, background:on?"#EFF6FF":"#fff",
+                                fontSize:13, fontWeight:on?700:500, color:on?"#0369A1":C.text, whiteSpace:"nowrap" }}>
+                    <span style={{ fontSize:15 }}>{s.icon || "📦"}</span>
+                    {s.name}
+                    <span style={{ fontSize:11, color:on?"#0EA5E9":C.muted, background:on?"#DBEAFE":"#F1F5F9", borderRadius:100, padding:"1px 7px", fontWeight:700 }}>{s.product_count}</span>
                   </div>
-                ))}
-              </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* livello 3: prodotti della sotto-area selezionata (solo di quel settore) */}
+          {activeSector && (
+            <div style={{ padding:"14px 16px 20px", borderTop:`1px solid ${C.border}` }}>
+              {loadingProducts ? (
+                <div style={{ fontSize:13, color:C.muted, padding:"8px 2px" }}>Caricamento prodotti…</div>
+              ) : (
+                <>
+                  <div style={{ fontSize:13, color:C.muted, margin:"0 0 10px" }}>
+                    {sectorProducts.length} prodotti in <b style={{ color:C.text }}>{activeSector.name}</b>
+                  </div>
+                  <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))", gap:8 }}>
+                    {sectorProducts.map(p => (
+                      <div key={p.id} onClick={() => { window.location.href = `/prodotto?id=${p.id}`; }}
+                           style={{ padding:"10px 12px", border:`1px solid ${C.border}`, borderRadius:9, cursor:"pointer", fontSize:13, color:C.text, background:"#fff", display:"flex", alignItems:"center", justifyContent:"space-between", gap:8 }}>
+                        <span>{p.canonical_name}</span>
+                        <ChevronRight size={14} color={C.muted} />
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
           )}
         </div>
