@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
-import { Search, Bot, ArrowRight, Check, Clock, ChevronDown, ChevronRight, ChevronUp, Star, Shield, Truck, FileText, Download, Plus, Minus, X, Beaker, TrendingDown, Users, Gavel, Info } from "lucide-react";
-import { getProduct, getOpenPoolForProduct, getPriceReference, getProductBreadcrumb, getSession, openPool, createInstantOrder, poolErrorMessage, searchProducts } from "@/lib/api";
+import { Search, Bot, ArrowRight, Check, Clock, ChevronDown, ChevronRight, ChevronUp, Star, Shield, Truck, FileText, Download, Plus, Minus, X, Beaker, TrendingDown, Users, Gavel, Info, ShoppingCart } from "lucide-react";
+import { getProduct, getOpenPoolForProduct, getPriceReference, getProductBreadcrumb, getSession, openPool, createInstantOrder, upsertCartItem, poolErrorMessage, searchProducts } from "@/lib/api";
 import NavAuth from "@/components/BulkStrikeNavAuth";
 
 // ─── PALETTE (matches homepage) ───────────────────────────────────────────────
@@ -185,6 +185,7 @@ export default function ProductPage() {
   const [loading, setLoading] = useState(true);
   const [crumb, setCrumb] = useState(null); // { macro, sector } reali del prodotto
   const [busy, setBusy] = useState(false);
+  const [cartOk, setCartOk] = useState(false);
   const [actionMsg, setActionMsg] = useState("");
   const [searchQ, setSearchQ] = useState("");
   const [searchResults, setSearchResults] = useState([]);
@@ -290,7 +291,19 @@ export default function ProductPage() {
     try {
       const supplierId = featured?.company_id || null;
       const orderId = await createInstantOrder(productId, qty, supplierId);
-      window.location.href = `/dashboard?ordine=${orderId}`;
+      window.location.href = `/ordine?id=${orderId}`;
+    } catch (e) {
+      setActionMsg(poolErrorMessage(e));
+    } finally { setBusy(false); }
+  }
+  async function handleAddToCart() {
+    if (!productId) { window.location.href = "/registrati"; return; }
+    if (!(await requireAuth())) return;
+    if (!featured?.company_id) { setActionMsg("Nessun fornitore disponibile per questa quantità."); return; }
+    setBusy(true); setActionMsg(""); setCartOk(false);
+    try {
+      await upsertCartItem(productId, featured.company_id, qty);
+      setCartOk(true);
     } catch (e) {
       setActionMsg(poolErrorMessage(e));
     } finally { setBusy(false); }
@@ -586,6 +599,8 @@ export default function ProductPage() {
                   <div className="bs-num" style={{ fontSize:40, fontWeight:800, color:C.blue, lineHeight:1.1 }}>{eurKg(featured.calc.allInKg)}</div>
                   <div style={{ fontSize:13, color:C.muted, marginBottom:14 }}>/kg · IVA e trasporto inclusi</div>
                   <button className="bs-btn" onClick={handleBuyNow} disabled={busy || !featured} style={{ width:"100%", fontSize:16, padding:"14px", opacity:(busy||!featured)?0.6:1, cursor:(busy||!featured)?"default":"pointer" }}>Acquista ora <ArrowRight size={18}/></button>
+                  <button onClick={handleAddToCart} disabled={busy || !featured} style={{ width:"100%", marginTop:8, background:"transparent", color:C.blue, border:`1.5px solid ${C.blue}`, borderRadius:10, padding:"12px", fontSize:14.5, fontWeight:700, cursor:(busy||!featured)?"default":"pointer", opacity:(busy||!featured)?0.6:1, display:"flex", alignItems:"center", justifyContent:"center", gap:8, fontFamily:"Inter,system-ui" }}><ShoppingCart size={16}/> Aggiungi al carrello</button>
+                  {cartOk && <div style={{ marginTop:8, fontSize:12.5, color:C.green, fontWeight:700, display:"flex", alignItems:"center", gap:5 }}><Check size={13}/> Aggiunto! <span onClick={() => { window.location.href = "/carrello"; }} style={{ cursor:"pointer", textDecoration:"underline" }}>Vai al carrello</span></div>}
                   {actionMsg && <div style={{ marginTop:8, fontSize:12, color:C.red, fontWeight:600 }}>{actionMsg}</div>}
                   {pool.exists && (
                   <div style={{ marginTop:10, fontSize:13 }}>

@@ -3,8 +3,8 @@
 // Dati da get_supplier_profile(): solo campi business pubblici (whitelist lato DB).
 // Da qui si può ordinare direttamente ogni prodotto del listino (Acquisto Rapido).
 import { useState, useEffect, useMemo, useRef } from "react";
-import { Search, Star, ShieldCheck, MapPin, Phone, Globe, Mail, User, FileText, Package, Layers, Award, Clock, ChevronRight, ArrowRight, Flame, Building2, Truck, ExternalLink, Check, X, MessageSquare, Send } from "lucide-react";
-import { getSupplierProfile, getSession, createInstantOrder, poolErrorMessage, getSupplierReviews, getReviewableOrders, submitReview } from "@/lib/api";
+import { Search, Star, ShieldCheck, MapPin, Phone, Globe, Mail, User, FileText, Package, Layers, Award, Clock, ChevronRight, ArrowRight, Flame, Building2, Truck, ExternalLink, Check, X, MessageSquare, Send, ShoppingCart } from "lucide-react";
+import { getSupplierProfile, getSession, createInstantOrder, upsertCartItem, poolErrorMessage, getSupplierReviews, getReviewableOrders, submitReview } from "@/lib/api";
 import NavAuth from "@/components/BulkStrikeNavAuth";
 
 const C = { blue:"#0EA5E9", dark:"#0284C7", text:"#0F172A", muted:"#64748B", border:"#E2E8F0", bg:"#F8FAFE", green:"#059669", red:"#DC2626", amber:"#D97706", purple:"#7C3AED" };
@@ -122,6 +122,19 @@ export default function SupplierPage() {
   const qtyFor = (p) => qtyById[p.product_id] ?? Math.max(p.min_order_kg || 25, 100);
   const setQtyFor = (p, v) => setQtyById(prev => ({ ...prev, [p.product_id]: Math.max(1, Math.round(Number(v) || 0)) }));
 
+  async function handleAddToCart(p) {
+    setGlobalMsg("");
+    setOrderState(prev => ({ ...prev, [p.product_id]: { busy:true } }));
+    try {
+      const session = await getSession();
+      if (!session) { setOrderState(prev => ({ ...prev, [p.product_id]: {} })); setGlobalMsg("login"); return; }
+      await upsertCartItem(p.product_id, profile.id, qtyFor(p));
+      setOrderState(prev => ({ ...prev, [p.product_id]: { cart:true } }));
+    } catch (e) {
+      setOrderState(prev => ({ ...prev, [p.product_id]: { err: poolErrorMessage(e) } }));
+    }
+  }
+
   async function handleOrder(p) {
     setGlobalMsg("");
     setOrderState(prev => ({ ...prev, [p.product_id]: { busy:true } }));
@@ -207,7 +220,7 @@ export default function SupplierPage() {
           </div>
           <div style={{ display:"flex", alignItems:"center", gap:18 }}>
             <div className="sup-nav-links" style={{ display:"flex", gap:18 }}>
-              {[["Pool","/pool"],["Catalogo","/catalogo"],["Fornitori","/fornitori"]].map(([l,href]) => <span key={l} onClick={() => { window.location.href = href; }} style={{ fontSize:14, color:C.muted, cursor:"pointer", fontWeight:500 }}>{l}</span>)}
+              {[["Catalogo","/catalogo"],["Fornitori","/fornitori"],["Carrello","/carrello"],["Ordini","/ordini"]].map(([l,href]) => <span key={l} onClick={() => { window.location.href = href; }} style={{ fontSize:14, color:C.muted, cursor:"pointer", fontWeight:500 }}>{l}</span>)}
             </div>
             <NavAuth />
           </div>
@@ -350,7 +363,11 @@ export default function SupplierPage() {
                       <div className="sup-num" style={{ fontSize:12.5 }}>{p.lead_time_days != null ? `${p.lead_time_days} gg` : "—"}</div>
                       <div style={{ textAlign:"right" }}>
                         <div className="sup-num" style={{ fontSize:16, fontWeight:800, color:C.blue, marginBottom:6 }}>{eurKg(p.best_price)}<span style={{ fontSize:11, fontWeight:400, color:C.muted }}>/kg</span></div>
-                        {st.ok ? (
+                        {st.cart ? (
+                          <div style={{ display:"inline-flex", alignItems:"center", gap:5, fontSize:12, fontWeight:700, color:C.green }}>
+                            <Check size={13}/> Nel carrello · <span onClick={() => { window.location.href = "/carrello"; }} style={{ cursor:"pointer", textDecoration:"underline" }}>vai al carrello</span>
+                          </div>
+                        ) : st.ok ? (
                           <div style={{ display:"inline-flex", alignItems:"center", gap:5, fontSize:12, fontWeight:700, color:C.green }}>
                             <Check size={13}/> Ordine creato · <span onClick={() => { window.location.href = "/dashboard"; }} style={{ cursor:"pointer", textDecoration:"underline" }}>vai agli ordini</span>
                           </div>
@@ -362,6 +379,10 @@ export default function SupplierPage() {
                             <button onClick={() => handleOrder(p)} disabled={st.busy}
                                     style={{ background:C.blue, color:"#fff", border:"none", borderRadius:8, padding:"8px 13px", fontSize:12.5, fontWeight:700, cursor:st.busy?"default":"pointer", opacity:st.busy?0.6:1, display:"inline-flex", alignItems:"center", gap:5, fontFamily:"Inter,system-ui" }}>
                               {st.busy ? "…" : <>Ordina <ArrowRight size={13}/></>}
+                            </button>
+                            <button onClick={() => handleAddToCart(p)} disabled={st.busy} title="Aggiungi al carrello"
+                                    style={{ background:"transparent", color:C.blue, border:`1.5px solid ${C.blue}`, borderRadius:8, padding:"7px 9px", cursor:st.busy?"default":"pointer", opacity:st.busy?0.6:1, display:"inline-flex", alignItems:"center", fontFamily:"Inter,system-ui" }}>
+                              <ShoppingCart size={14}/>
                             </button>
                           </div>
                         )}
