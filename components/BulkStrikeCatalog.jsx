@@ -90,7 +90,7 @@ export default function CatalogPage() {
   const activeCount = (activeMacro ? 1 : 0) + (activeSector ? 1 : 0) + (poolOnly ? 1 : 0) + (minP ? 1 : 0) + (maxP ? 1 : 0);
 
   return (
-    <div style={{ background:"#fff", color:C.text, fontFamily:"'Inter',system-ui,sans-serif", minHeight:"100vh" }}>
+    <div style={{ background:"#fff", color:C.text, fontFamily:"'Inter',system-ui,sans-serif", minHeight:"100vh", colorScheme:"light" }}>
       <style>{`
         .cat-layout { display:grid; grid-template-columns:264px 1fr; gap:24px; }
         .cat-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(230px,1fr)); gap:14px; }

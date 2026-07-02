@@ -300,7 +300,7 @@ export default function ProductPage() {
   // Mentre carichiamo il prodotto reale non mostriamo il demo: loader brandizzato.
   if (loading) {
     return (
-      <div style={{ minHeight:"100vh", background:C.bg, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:16, fontFamily:"'Inter',system-ui,sans-serif" }}>
+      <div style={{ minHeight:"100vh", background:C.bg, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:16, fontFamily:"'Inter',system-ui,sans-serif", colorScheme:"light" }}>
         <div onClick={() => { window.location.href = "/"; }} style={{ display:"flex", alignItems:"center", gap:10, cursor:"pointer" }}>
           <BSIcon size={40} uid="load" />
           <div style={{ display:"flex", alignItems:"baseline" }}>
@@ -314,7 +314,7 @@ export default function ProductPage() {
   }
 
   return (
-    <div style={{ background:"#fff", color:C.text, fontFamily:"'Inter',system-ui,sans-serif", minHeight:"100vh", overflowX:"hidden" }}>
+    <div style={{ background:"#fff", color:C.text, fontFamily:"'Inter',system-ui,sans-serif", minHeight:"100vh", overflowX:"hidden", colorScheme:"light" }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap');
         * { box-sizing:border-box; }
