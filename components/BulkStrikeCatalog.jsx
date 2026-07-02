@@ -85,12 +85,11 @@ export default function CatalogPage() {
   }, [all, q, activeMacro, activeSector, poolOnly, minP, maxP, sort]);
 
   const activeMacroObj = macros.find(m => m.slug === activeMacro);
-  const activeSectorObj = (activeMacroObj?.sub_areas || []).find(s => s.slug === activeSector);
   const clearFilters = () => { setQ(""); setActiveMacro(null); setActiveSector(null); setMinP(""); setMaxP(""); setPoolOnly(false); };
   const activeCount = (activeMacro ? 1 : 0) + (activeSector ? 1 : 0) + (poolOnly ? 1 : 0) + (minP ? 1 : 0) + (maxP ? 1 : 0);
 
   return (
-    <div style={{ background:"#fff", color:C.text, fontFamily:"'Inter',system-ui,sans-serif", minHeight:"100vh", colorScheme:"light" }}>
+    <div style={{ background:"#fff", color:C.text, fontFamily:"'Inter',system-ui,sans-serif", minHeight:"100vh" }}>
       <style>{`
         .cat-layout { display:grid; grid-template-columns:264px 1fr; gap:24px; }
         .cat-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(230px,1fr)); gap:14px; }
@@ -125,7 +124,7 @@ export default function CatalogPage() {
             </div>
           </div>
           <div className="cat-nav-links" style={{ gap:18, alignItems:"center" }}>
-            {[["Pool","/pool"],["Catalogo","/catalogo"],["Fornitori","/fornitori"]].map(([l,href]) => <span key={l} onClick={() => { window.location.href = href; }} style={{ fontSize:14, color:C.muted, cursor:"pointer", fontWeight:500 }}>{l}</span>)}
+            {[["Pool","/pool"],["Catalogo","/catalogo"],["Fornitori","/registrati"]].map(([l,href]) => <span key={l} onClick={() => { window.location.href = href; }} style={{ fontSize:14, color:C.muted, cursor:"pointer", fontWeight:500 }}>{l}</span>)}
             <NavAuth />
           </div>
         </div>
@@ -253,7 +252,7 @@ export default function CatalogPage() {
                        style={{ border:`1px solid ${C.border}`, borderRadius:12, padding:14, cursor:"pointer", background:"#fff", display:"flex", flexDirection:"column", gap:10, minHeight:150 }}>
                     <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:8 }}>
                       <span style={{ display:"inline-flex", alignItems:"center", gap:5, fontSize:11, color:C.muted, background:C.bg, border:`1px solid ${C.border}`, borderRadius:100, padding:"3px 9px", maxWidth:"100%", overflow:"hidden", whiteSpace:"nowrap", textOverflow:"ellipsis" }}>
-                        <span>{activeSectorObj?.icon || p.primary_icon || "📦"}</span>{activeSectorObj?.name || p.primary_sector || "Materie prime"}
+                        <span>{p.primary_icon || "📦"}</span>{p.primary_sector || "Materie prime"}
                       </span>
                       {p.has_pool && <span style={{ display:"inline-flex", alignItems:"center", gap:4, fontSize:10, fontWeight:800, color:"#B45309", background:"#FEF3C7", borderRadius:100, padding:"3px 8px", flexShrink:0 }}><Flame size={11}/>POOL</span>}
                     </div>
