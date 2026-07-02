@@ -5,8 +5,8 @@
 //  · fornitore: segna come spedito quando l'escrow è versato
 // Tutte le transizioni sono validate server-side (RPC dedicate).
 import { useState, useEffect } from "react";
-import { ChevronRight, Check, Truck, CreditCard, PackageCheck, Star, ShieldCheck, FileText, Clock, AlertTriangle, ArrowRight } from "lucide-react";
-import { getOrderDetail, getSession, markOrderPaidDemo, markOrderShipped, confirmDelivery, poolErrorMessage } from "@/lib/api";
+import { ChevronRight, Check, Truck, CreditCard, PackageCheck, Star, ShieldCheck, FileText, Clock, AlertTriangle, ArrowRight, MapPin, MessageSquareWarning, X } from "lucide-react";
+import { getOrderDetail, getSession, markOrderPaidDemo, markOrderShipped, confirmDelivery, raiseDispute, poolErrorMessage } from "@/lib/api";
 import NavAuth from "@/components/BulkStrikeNavAuth";
 
 const C = { blue:"#0EA5E9", dark:"#0284C7", text:"#0F172A", muted:"#64748B", border:"#E2E8F0", bg:"#F8FAFE", green:"#059669", red:"#DC2626", amber:"#D97706", purple:"#7C3AED" };
@@ -63,6 +63,8 @@ export default function OrderPage() {
   const [needLogin, setNeedLogin] = useState(false);
   const [notFound, setNotFound] = useState(false);
   const [acting, setActing] = useState(false);
+  const [disputeOpen, setDisputeOpen] = useState(false);
+  const [disputeReason, setDisputeReason] = useState("");
   const [err, setErr] = useState("");
   const [justDone, setJustDone] = useState("");
 
@@ -93,6 +95,27 @@ export default function OrderPage() {
     } finally {
       setActing(false);
     }
+  }
+
+  async function submitDispute() {
+    if (!disputeReason.trim()) { setErr("Spiega il motivo della contestazione."); return; }
+    setActing(true); setErr("");
+    try {
+      await raiseDispute(order.id, disputeReason);
+      await reload(order.id);
+      setDisputeOpen(false); setDisputeReason("");
+      setJustDone("Contestazione registrata. Lo sblocco automatico del pagamento è sospeso; ti contatteremo per la risoluzione.");
+    } catch (e) {
+      setErr(poolErrorMessage(e));
+    } finally {
+      setActing(false);
+    }
+  }
+
+  function daysLeft(iso) {
+    if (!iso) return null;
+    const ms = new Date(iso).getTime() - Date.now();
+    return Math.max(0, Math.ceil(ms / 86400000));
   }
 
   const st = order ? statusOf(order.status) : null;
@@ -222,15 +245,41 @@ export default function OrderPage() {
                 {isBuyer && ["paid","shipped","delivered"].includes(order.status) && (
                   <div className="od-card" style={{ borderColor: order.status === "paid" ? C.border : C.green, background: order.status === "paid" ? "#fff" : "#F0FDF4" }}>
                     <div style={{ fontSize:14.5, fontWeight:800, marginBottom:6, display:"flex", alignItems:"center", gap:7 }}><PackageCheck size={16} color={C.green}/> Conferma la consegna</div>
-                    <p style={{ fontSize:13, color:C.muted, lineHeight:1.6, marginBottom:14 }}>
+                    <p style={{ fontSize:13, color:C.muted, lineHeight:1.6, marginBottom:order.status === "paid" ? 14 : 8 }}>
                       {order.status === "paid"
-                        ? "Il fornitore sta preparando la spedizione. Quando ricevi la merce e verifichi che è conforme, conferma qui la consegna: sblocca il pagamento al fornitore."
-                        : "Hai ricevuto la merce? Verificala e conferma la consegna: l'escrow viene sbloccato a favore del fornitore e potrai lasciare una recensione."}
+                        ? "Il fornitore sta preparando la spedizione. Quando ricevi la merce e verifichi che è conforme, conferma qui la consegna: sblocca subito il pagamento al fornitore."
+                        : "Hai ricevuto la merce? Verificala e conferma la consegna: sblocchi subito il pagamento al fornitore e potrai lasciare una recensione."}
                     </p>
-                    <button onClick={() => doAction(confirmDelivery, "Consegna confermata. Ora puoi lasciare una recensione al fornitore.")} disabled={acting}
-                            style={{ background:C.green, color:"#fff", border:"none", borderRadius:10, padding:"13px 24px", fontSize:14, fontWeight:700, cursor:acting?"default":"pointer", opacity:acting?0.6:1, display:"inline-flex", alignItems:"center", gap:8, fontFamily:"Inter,system-ui" }}>
-                      {acting ? "Conferma…" : <>Confermo: merce ricevuta e conforme <Check size={15}/></>}
-                    </button>
+                    {order.status !== "paid" && order.auto_release_at && (
+                      <div style={{ display:"flex", alignItems:"center", gap:6, fontSize:12.5, color:C.muted, background:C.bg, borderRadius:8, padding:"8px 11px", marginBottom:14 }}>
+                        <Clock size={13}/> Se non fai nulla, si sblocca automaticamente {daysLeft(order.auto_release_at) === 0 ? "oggi" : `tra ${daysLeft(order.auto_release_at)} giorn${daysLeft(order.auto_release_at) === 1 ? "o" : "i"}`} — salvo contestazione.
+                      </div>
+                    )}
+                    <div style={{ display:"flex", gap:10, flexWrap:"wrap" }}>
+                      <button onClick={() => doAction(confirmDelivery, "Consegna confermata. Ora puoi lasciare una recensione al fornitore.")} disabled={acting}
+                              style={{ background:C.green, color:"#fff", border:"none", borderRadius:10, padding:"13px 24px", fontSize:14, fontWeight:700, cursor:acting?"default":"pointer", opacity:acting?0.6:1, display:"inline-flex", alignItems:"center", gap:8, fontFamily:"Inter,system-ui" }}>
+                        {acting ? "Conferma…" : <>Confermo: merce ricevuta e conforme <Check size={15}/></>}
+                      </button>
+                      <button onClick={() => setDisputeOpen(true)} disabled={acting}
+                              style={{ background:"transparent", color:C.red, border:`1.5px solid #FCA5A5`, borderRadius:10, padding:"13px 18px", fontSize:13.5, fontWeight:700, cursor:"pointer", display:"inline-flex", alignItems:"center", gap:7, fontFamily:"Inter,system-ui" }}>
+                        <MessageSquareWarning size={15}/> C'è un problema
+                      </button>
+                    </div>
+                    {disputeOpen && (
+                      <div style={{ marginTop:14, paddingTop:14, borderTop:`1px solid ${C.border}` }}>
+                        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
+                          <span style={{ fontSize:13, fontWeight:700 }}>Descrivi il problema</span>
+                          <X size={15} color={C.muted} style={{ cursor:"pointer" }} onClick={() => { setDisputeOpen(false); setDisputeReason(""); }}/>
+                        </div>
+                        <textarea value={disputeReason} onChange={e => setDisputeReason(e.target.value)} rows={3} placeholder="Es. merce mancante, non conforme, danneggiata…"
+                                  style={{ width:"100%", padding:"10px 12px", border:`1.5px solid ${C.border}`, borderRadius:8, fontSize:13, outline:"none", resize:"vertical", fontFamily:"Inter,system-ui", marginBottom:10 }}/>
+                        <button onClick={submitDispute} disabled={acting}
+                                style={{ background:C.red, color:"#fff", border:"none", borderRadius:9, padding:"10px 20px", fontSize:13, fontWeight:700, cursor:acting?"default":"pointer", opacity:acting?0.6:1, fontFamily:"Inter,system-ui" }}>
+                          {acting ? "Invio…" : "Invia contestazione"}
+                        </button>
+                        <div style={{ fontSize:11.5, color:C.muted, marginTop:8 }}>Sospende lo sblocco automatico del pagamento; il nostro team ti contatta per risolvere.</div>
+                      </div>
+                    )}
                   </div>
                 )}
                 {isBuyer && ["accepted","completed"].includes(order.status) && !order.reviewed && (
@@ -252,7 +301,19 @@ export default function OrderPage() {
                 {!isBuyer && ["shipped","delivered"].includes(order.status) && (
                   <div className="od-card" style={{ display:"flex", gap:9, alignItems:"flex-start" }}>
                     <Clock size={16} color={C.blue} style={{ marginTop:2, flexShrink:0 }}/>
-                    <div style={{ fontSize:13, color:C.muted, lineHeight:1.6 }}>Merce in viaggio. Quando l'acquirente confermerà la consegna conforme, l'escrow verrà sbloccato a tuo favore.</div>
+                    <div style={{ fontSize:13, color:C.muted, lineHeight:1.6 }}>
+                      Merce in viaggio. L'escrow si sblocca a tuo favore quando l'acquirente conferma la consegna
+                      {order.auto_release_at && <> — o automaticamente {daysLeft(order.auto_release_at) === 0 ? "oggi" : `tra ${daysLeft(order.auto_release_at)} giorn${daysLeft(order.auto_release_at) === 1 ? "o" : "i"}`} se non ci sono contestazioni</>}.
+                    </div>
+                  </div>
+                )}
+                {order.status === "disputed" && (
+                  <div className="od-card" style={{ borderColor:"#FCA5A5", background:"#FEF2F2" }}>
+                    <div style={{ fontSize:14.5, fontWeight:800, marginBottom:6, display:"flex", alignItems:"center", gap:7, color:C.red }}><MessageSquareWarning size={16}/> Ordine in contestazione</div>
+                    <p style={{ fontSize:13, color:C.muted, lineHeight:1.6 }}>
+                      {isBuyer ? "Hai segnalato un problema con questo ordine" : "L'acquirente ha segnalato un problema con questo ordine"}
+                      {order.disputed_at && <> il {new Date(order.disputed_at).toLocaleDateString("it-IT")}</>}: <i>"{order.dispute_reason}"</i>. Lo sblocco automatico del pagamento è sospeso — il nostro team vi contatterà per la risoluzione. Per urgenze scrivi a <a href="mailto:info@bulkstrike.com" style={{ color:C.blue }}>info@bulkstrike.com</a>.
+                    </p>
                   </div>
                 )}
                 {["accepted","completed"].includes(order.status) && !isBuyer && (
@@ -272,6 +333,14 @@ export default function OrderPage() {
                     <div><div style={{ fontSize:11, color:C.muted }}>Modalità</div><div style={{ fontWeight:600 }}>{order.mode === "instant" ? "Acquisto rapido" : order.mode === "pool" ? "Pool collettivo" : order.mode}</div></div>
                   </div>
                 </div>
+
+                {order.shipping_address && (
+                  <div className="od-card">
+                    <div style={{ fontSize:13, fontWeight:800, textTransform:"uppercase", letterSpacing:"0.05em", color:C.muted, marginBottom:10, display:"flex", alignItems:"center", gap:7 }}><MapPin size={14}/> Indirizzo di consegna</div>
+                    <div style={{ fontSize:13.5, fontWeight:600 }}>{order.shipping_address}</div>
+                    {order.shipping_notes && <div style={{ fontSize:12.5, color:C.muted, marginTop:6 }}>{order.shipping_notes}</div>}
+                  </div>
+                )}
               </div>
 
               {/* DESTRA: riepilogo economico */}
