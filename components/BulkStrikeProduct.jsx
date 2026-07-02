@@ -331,6 +331,8 @@ export default function ProductPage() {
         .bs-search-wrap { display:flex; border:2px solid #0EA5E9; border-radius:10px; overflow:hidden; height:44px; flex:1; max-width:520px; background:#fff; }
         .bs-search-input { flex:1; border:none; padding:0 14px; font-size:14px; outline:none; font-family:'Inter',system-ui; }
         .bs-supplier-row { display:grid; grid-template-columns:1.6fr 1fr 1fr 1.2fr 0.9fr auto; gap:14px; align-items:center; padding:16px; border:1px solid #E2E8F0; border-radius:12px; transition:all 0.15s; }
+        .bs-suplink { cursor:pointer; transition:color 0.12s; }
+        .bs-suplink:hover { color:#0EA5E9; text-decoration:underline; }
         .bs-supplier-row:hover { border-color:#0EA5E9; box-shadow:0 4px 16px rgba(14,165,233,0.08); }
         .bs-qty-btn { width:38px; height:38px; border:1px solid #E2E8F0; background:#fff; border-radius:8px; cursor:pointer; display:flex; align-items:center; justify-content:center; color:#475569; }
         .bs-qty-btn:hover { border-color:#0EA5E9; color:#0EA5E9; }
@@ -525,7 +527,7 @@ export default function ProductPage() {
                     <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:16, flexWrap:"wrap" }}>
                       <span style={{ fontSize:12, color:C.muted }}>Competono:</span>
                       {ranked.map(s => (
-                        <span key={s.id} style={{ fontSize:12, color:C.text, display:"flex", alignItems:"center", gap:5, background:"#fff", border:`1px solid ${C.border}`, borderRadius:100, padding:"3px 10px" }}>
+                        <span key={s.id} className={s.company_id ? "bs-suplink" : ""} onClick={() => { if (s.company_id) window.location.href = `/fornitore?id=${s.company_id}`; }} style={{ fontSize:12, color:C.text, display:"flex", alignItems:"center", gap:5, background:"#fff", border:`1px solid ${C.border}`, borderRadius:100, padding:"3px 10px" }}>
                           <span>{s.flag}</span> {s.name}
                         </span>
                       ))}
@@ -553,7 +555,7 @@ export default function ProductPage() {
               <div style={{ display:"flex", justifyContent:"space-between", gap:16, flexWrap:"wrap", marginBottom:18 }}>
                 <div>
                   <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:4 }}>
-                    <span style={{ fontSize:20, fontWeight:800 }}>{featured.name}</span>
+                    <span className={featured.company_id ? "bs-suplink" : ""} onClick={() => { if (featured.company_id) window.location.href = `/fornitore?id=${featured.company_id}`; }} style={{ fontSize:20, fontWeight:800 }}>{featured.name}</span>
                     <span style={{ fontSize:18 }}>{featured.flag}</span>
                   </div>
                   <div style={{ display:"flex", alignItems:"center", gap:12, fontSize:13, color:C.muted, flexWrap:"wrap" }}>
@@ -612,7 +614,7 @@ export default function ProductPage() {
                 <div key={s.id} className="bs-supplier-row">
                   <div>
                     <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:3 }}>
-                      <span style={{ fontSize:15, fontWeight:700 }}>{s.name}</span><span>{s.flag}</span>
+                      <span className={s.company_id ? "bs-suplink" : ""} onClick={() => { if (s.company_id) window.location.href = `/fornitore?id=${s.company_id}`; }} style={{ fontSize:15, fontWeight:700 }}>{s.name}</span><span>{s.flag}</span>
                     </div>
                     <div style={{ display:"flex", alignItems:"center", gap:8, fontSize:12, color:C.muted, flexWrap:"wrap" }}>
                       <span style={{ display:"flex", alignItems:"center", gap:3 }}><Star size={11} fill={C.amber} color={C.amber}/> {s.rating.toFixed(1)}</span>

@@ -125,7 +125,7 @@ export default function CatalogPage() {
             </div>
           </div>
           <div className="cat-nav-links" style={{ gap:18, alignItems:"center" }}>
-            {[["Pool","/pool"],["Catalogo","/catalogo"],["Fornitori","/registrati"]].map(([l,href]) => <span key={l} onClick={() => { window.location.href = href; }} style={{ fontSize:14, color:C.muted, cursor:"pointer", fontWeight:500 }}>{l}</span>)}
+            {[["Pool","/pool"],["Catalogo","/catalogo"],["Fornitori","/fornitori"]].map(([l,href]) => <span key={l} onClick={() => { window.location.href = href; }} style={{ fontSize:14, color:C.muted, cursor:"pointer", fontWeight:500 }}>{l}</span>)}
             <NavAuth />
           </div>
         </div>

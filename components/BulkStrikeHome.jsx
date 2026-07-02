@@ -274,7 +274,7 @@ export default function BulkStrikeLight() {
           {/* Nav right */}
           <div style={{ display:"flex", alignItems:"center", gap:20, flexShrink:0 }}>
             <div className="bs-nav-links" style={{ display:"flex", gap:20 }}>
-              {[["Pool Attivi","/pool"],["Prezzi","/catalogo"],["Fornitori","/registrati"],["Come funziona","#come-funziona"]].map(([l,href]) => (
+              {[["Pool Attivi","/pool"],["Prezzi","/catalogo"],["Fornitori","/fornitori"],["Come funziona","#come-funziona"]].map(([l,href]) => (
                 <span key={l} onClick={() => { window.location.href = href; }} style={{ fontSize:14, color:C.muted, cursor:"pointer", fontWeight:500, whiteSpace:"nowrap" }}>{l}</span>
               ))}
             </div>
