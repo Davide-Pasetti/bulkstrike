@@ -402,11 +402,12 @@ export default function ProductPage() {
 
       <div style={{ maxWidth:1200, margin:"0 auto", padding:"20px 20px 60px" }}>
 
-        {/* BREADCRUMB — macro-area e settore reali del prodotto (da product_sectors) */}
+        {/* BREADCRUMB — macro-area e settore reali del prodotto (da product_sectors);
+            i click portano al catalogo con i filtri già applicati */}
         <div style={{ display:"flex", alignItems:"center", gap:8, fontSize:13, color:C.muted, marginBottom:20, flexWrap:"wrap" }}>
           <span onClick={() => { window.location.href = "/"; }} style={{ cursor:"pointer" }}>Home</span><ChevronRight size={13}/>
-          {crumb?.macro && (<><span onClick={() => { window.location.href = "/catalogo"; }} style={{ cursor:"pointer" }}>{crumb.macro}</span><ChevronRight size={13}/></>)}
-          {crumb?.sector && (<><span onClick={() => { window.location.href = "/catalogo"; }} style={{ cursor:"pointer" }}>{crumb.sector}</span><ChevronRight size={13}/></>)}
+          {crumb?.macro && (<><span onClick={() => { window.location.href = `/catalogo?macro=${encodeURIComponent(crumb.macro_slug || "")}`; }} style={{ cursor:"pointer" }}>{crumb.macro}</span><ChevronRight size={13}/></>)}
+          {crumb?.sector && (<><span onClick={() => { window.location.href = `/catalogo?macro=${encodeURIComponent(crumb.macro_slug || "")}&settore=${encodeURIComponent(crumb.sector_slug || "")}`; }} style={{ cursor:"pointer" }}>{crumb.sector}</span><ChevronRight size={13}/></>)}
           {!crumb?.macro && !crumb?.sector && (<><span onClick={() => { window.location.href = "/catalogo"; }} style={{ cursor:"pointer" }}>Catalogo</span><ChevronRight size={13}/></>)}
           <span style={{ color:C.text, fontWeight:600 }}>{product.name}</span>
         </div>
