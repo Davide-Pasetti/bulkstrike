@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { Search, Bot, ArrowRight, Check, Clock, ChevronDown, ChevronRight, ChevronUp, Star, Shield, Truck, FileText, Download, Plus, Minus, X, Beaker, TrendingDown, Users, Gavel, Info } from "lucide-react";
-import { getProduct, getOpenPoolForProduct, getPriceReference, getSession, openPool, createInstantOrder, poolErrorMessage, searchProducts } from "@/lib/api";
+import { getProduct, getOpenPoolForProduct, getPriceReference, getProductBreadcrumb, getSession, openPool, createInstantOrder, poolErrorMessage, searchProducts } from "@/lib/api";
 import NavAuth from "@/components/BulkStrikeNavAuth";
 
 // ─── PALETTE (matches homepage) ───────────────────────────────────────────────
@@ -171,16 +171,19 @@ export default function ProductPage() {
   const [chatOpen, setChatOpen] = useState(false);
 
   // ── stato data-driven (default = demo SEED; /prodotto senza id resta la demo)
-  // id già presente nell'URL: lo calcoliamo sincronicamente per partire "in
-  // caricamento" ed evitare il flash del prodotto demo (Acido tartarico).
-  const initId = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("id") : null;
+  // loading parte SEMPRE true: durante l'SSR window non esiste e non possiamo
+  // leggere ?id=, quindi il server renderizzava il demo (Acido tartarico) e il
+  // browser lo mostrava per un istante prima dell'hydration. Partendo dal
+  // loader, il demo non viene mai dipinto; l'effect spegne subito il loader
+  // se l'URL non ha alcun id.
   const [product, setProduct] = useState(SEED_PRODUCT);
   const [suppliers, setSuppliers] = useState(SEED_SUPPLIERS);
   const [pool, setPool] = useState(SEED_POOL);
   const [qa, setQa] = useState(SEED_QA);
   const [productId, setProductId] = useState(null);
   const [priceRef, setPriceRef] = useState(null);
-  const [loading, setLoading] = useState(!!initId);
+  const [loading, setLoading] = useState(true);
+  const [crumb, setCrumb] = useState(null); // { macro, sector } reali del prodotto
   const [busy, setBusy] = useState(false);
   const [actionMsg, setActionMsg] = useState("");
   const [searchQ, setSearchQ] = useState("");
@@ -190,21 +193,23 @@ export default function ProductPage() {
   // carica il prodotto reale da ?id=
   useEffect(() => {
     const id = new URLSearchParams(window.location.search).get("id");
-    if (!id) return;                    // nessun id → resta la demo
+    if (!id) { setLoading(false); return; }   // nessun id → resta la demo
     setProductId(id);
     setLoading(true);
     (async () => {
       try {
-        const [p, op, ref] = await Promise.all([
+        const [p, op, ref, bc] = await Promise.all([
           getProduct(id),
           getOpenPoolForProduct(id).catch(() => null),
           getPriceReference(id).catch(() => null),
+          getProductBreadcrumb(id).catch(() => null),
         ]);
         if (p) {
           setProduct(mapDbProduct(p));
           setSuppliers((p.suppliers || []).map(mapDbSupplier));
           setPriceRef(ref != null ? Number(ref) : null);
           setPool(mapDbPool(op));
+          setCrumb(bc || null);
           setSelectedId(null);
           // le FAQ SEED sono specifiche dell'acido tartarico: mostrale solo per quel prodotto
           setQa(id === "ba475798-09b8-4471-91d4-f7555e4b0c9b" ? SEED_QA : []);
@@ -397,11 +402,12 @@ export default function ProductPage() {
 
       <div style={{ maxWidth:1200, margin:"0 auto", padding:"20px 20px 60px" }}>
 
-        {/* BREADCRUMB */}
+        {/* BREADCRUMB — macro-area e settore reali del prodotto (da product_sectors) */}
         <div style={{ display:"flex", alignItems:"center", gap:8, fontSize:13, color:C.muted, marginBottom:20, flexWrap:"wrap" }}>
           <span onClick={() => { window.location.href = "/"; }} style={{ cursor:"pointer" }}>Home</span><ChevronRight size={13}/>
-          <span style={{ cursor:"pointer" }}>Enologia</span><ChevronRight size={13}/>
-          <span style={{ cursor:"pointer" }}>Acidificanti</span><ChevronRight size={13}/>
+          {crumb?.macro && (<><span onClick={() => { window.location.href = "/catalogo"; }} style={{ cursor:"pointer" }}>{crumb.macro}</span><ChevronRight size={13}/></>)}
+          {crumb?.sector && (<><span onClick={() => { window.location.href = "/catalogo"; }} style={{ cursor:"pointer" }}>{crumb.sector}</span><ChevronRight size={13}/></>)}
+          {!crumb?.macro && !crumb?.sector && (<><span onClick={() => { window.location.href = "/catalogo"; }} style={{ cursor:"pointer" }}>Catalogo</span><ChevronRight size={13}/></>)}
           <span style={{ color:C.text, fontWeight:600 }}>{product.name}</span>
         </div>
 
