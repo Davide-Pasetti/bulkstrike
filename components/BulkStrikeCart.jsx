@@ -6,7 +6,7 @@
 // dopo che il cliente ha scelto l'indirizzo di spedizione (preview_checkout).
 import { useState, useEffect, useMemo } from "react";
 import { ShoppingCart, Trash2, ArrowRight, AlertTriangle, Package, ShieldCheck, ChevronRight } from "lucide-react";
-import { getCart, upsertCartItem, removeCartItem, clearCart, getSession, poolErrorMessage } from "@/lib/api";
+import { getCart, upsertCartItem, removeCartItem, clearCart, getSession, poolErrorMessage, previewCheckout } from "@/lib/api";
 import NavAuth from "@/components/BulkStrikeNavAuth";
 
 const C = { blue: "#0EA5E9", dark: "#0284C7", text: "#0F172A", muted: "#64748B", border: "#E2E8F0", bg: "#F8FAFE", green: "#059669", red: "#DC2626", amber: "#D97706" };
@@ -36,11 +36,19 @@ export default function CartPage() {
   const [needLogin, setNeedLogin] = useState(false);
   const [busyKey, setBusyKey] = useState(null); // `${product}|${supplier}` in aggiornamento
   const [err, setErr] = useState("");
+  const [preview, setPreview] = useState(null);       // { goods_subtotal, shipping_amount, by_supplier, ... } da preview_checkout
+  const [previewLoading, setPreviewLoading] = useState(false);
 
   const keyOf = (it) => `${it.product_id}|${it.supplier_company_id}`;
 
   async function reload() {
-    try { setItems(await getCart()); } catch (e) { setErr(poolErrorMessage(e)); }
+    try {
+      const cart = await getCart();
+      setItems(cart);
+      if (cart.length === 0) { setPreview(null); return; }
+      setPreviewLoading(true);
+      try { setPreview(await previewCheckout()); } catch (e) {} finally { setPreviewLoading(false); }
+    } catch (e) { setErr(poolErrorMessage(e)); }
   }
 
   useEffect(() => {
@@ -191,7 +199,7 @@ export default function CartPage() {
                 );
               })}
               <button onClick={emptyAll} style={{ background: "transparent", border: "none", color: C.muted, fontSize: 12.5, cursor: "pointer", textDecoration: "underline", fontFamily: "Inter,system-ui", padding: "4px 0" }}>Svuota carrello</button>
-              <div style={{ fontSize: 11.5, color: C.muted, marginTop: 10 }}>* IVA e spese di spedizione escluse — le calcoli al passo successivo (Pagamento), una volta scelto l'indirizzo di consegna.</div>
+              <div style={{ fontSize: 11.5, color: C.muted, marginTop: 10 }}>* Prezzo unitario e totale riga: IVA esclusa (spedizione consolidata nel riepilogo qui a fianco)</div>
             </div>
 
             {/* RIEPILOGO */}
@@ -206,11 +214,27 @@ export default function CartPage() {
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13.5, marginBottom: 8 }}>
                 <span style={{ color: C.muted }}>Commissioni BulkStrike</span><span className="ct-num" style={{ fontWeight: 700, color: C.green }}>€0,00</span>
               </div>
-              <div style={{ borderTop: `1px solid ${C.border}`, margin: "12px 0 6px", paddingTop: 12, display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-                <span style={{ fontSize: 14, fontWeight: 700 }}>Subtotale merce</span>
-                <span className="ct-num" style={{ fontSize: 22, fontWeight: 800, color: C.blue }}>{eur(subtotal)}</span>
+
+              <div style={{ borderTop: `1px solid ${C.border}`, marginTop: 4, paddingTop: 10 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13.5, marginBottom: 8 }}>
+                  <span style={{ color: C.muted }}>Materia prima</span>
+                  <span className="ct-num" style={{ fontWeight: 600 }}>{eur(preview?.goods_subtotal ?? subtotal)}</span>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13.5, marginBottom: 8 }}>
+                  <span style={{ color: C.muted }}>Spedizione {previewLoading && "…"}</span>
+                  <span className="ct-num" style={{ fontWeight: 600 }}>{previewLoading ? "…" : eur(preview?.shipping_amount)}</span>
+                </div>
+                {(preview?.by_supplier || []).filter(s => s.product_count > 1).map(s => (
+                  <div key={s.supplier_company_id} style={{ fontSize: 11, color: C.green, fontWeight: 600, marginBottom: 4, display: "flex", justifyContent: "space-between" }}>
+                    <span>↳ {s.supplier_name}: {s.product_count} prodotti, spedizione unica</span>
+                  </div>
+                ))}
               </div>
-              <div style={{ fontSize: 11.5, color: C.muted, marginBottom: 12 }}>* IVA esclusa · spedizione esclusa</div>
+              <div style={{ borderTop: `1px solid ${C.border}`, margin: "8px 0 6px", paddingTop: 12, display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                <span style={{ fontSize: 14, fontWeight: 700 }}>Totale <span style={{ fontWeight: 500, color: C.muted }}>(IVA esclusa)</span></span>
+                <span className="ct-num" style={{ fontSize: 22, fontWeight: 800, color: C.blue }}>{previewLoading ? "…" : eur((preview?.goods_subtotal ?? subtotal) + (preview?.shipping_amount ?? 0))}</span>
+              </div>
+              <div style={{ fontSize: 11.5, color: C.muted, marginBottom: 12 }}>* IVA esclusa — la vedi al checkout, dopo l'indirizzo</div>
               {issues.length > 0 && (
                 <div style={{ display: "flex", gap: 7, alignItems: "flex-start", fontSize: 12, color: "#9A3412", background: "#FFF7ED", border: "1px solid #FED7AA", borderRadius: 9, padding: "9px 11px", marginBottom: 12 }}>
                   <AlertTriangle size={13} style={{ marginTop: 1, flexShrink: 0 }} />

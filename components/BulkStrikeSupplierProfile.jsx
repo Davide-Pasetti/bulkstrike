@@ -4,7 +4,7 @@
 // Da qui si può ordinare direttamente ogni prodotto del listino (Acquisto Rapido).
 import { useState, useEffect, useMemo, useRef } from "react";
 import { Search, Star, ShieldCheck, MapPin, Phone, Globe, Mail, User, FileText, Package, Layers, Award, Clock, ChevronRight, ArrowRight, Flame, Building2, Truck, ExternalLink, Check, X, MessageSquare, Send, ShoppingCart } from "lucide-react";
-import { getSupplierProfile, getSession, upsertCartItem, poolErrorMessage, getSupplierReviews, getReviewableOrders, submitReview } from "@/lib/api";
+import { getSupplierProfile, getSession, upsertCartItem, poolErrorMessage, getSupplierReviews, getReviewableOrders, submitReview, getCart } from "@/lib/api";
 import NavAuth from "@/components/BulkStrikeNavAuth";
 
 const C = { blue:"#0EA5E9", dark:"#0284C7", text:"#0F172A", muted:"#64748B", border:"#E2E8F0", bg:"#F8FAFE", green:"#059669", red:"#DC2626", amber:"#D97706", purple:"#7C3AED" };
@@ -13,6 +13,14 @@ const FLAG = { "Italia":"🇮🇹","Cina":"🇨🇳","Argentina":"🇦🇷","Pol
 const flagFor = (c) => FLAG[c] || "🏳️";
 const TYPE_LABEL = { producer:"Produttore", distributor:"Distributore", trader:"Trader" };
 const eurKg = (n) => n == null ? "—" : "€" + Number(n).toLocaleString("it-IT", { minimumFractionDigits:2, maximumFractionDigits:2 });
+const eur = (n) => n == null ? "—" : "€" + Number(n).toLocaleString("it-IT", { minimumFractionDigits:2, maximumFractionDigits:2 });
+// stima spedizione per paese fornitore — stessa logica di BulkStrikeProduct.jsx
+function shipFor(country) {
+  if (country === "Italia") return { shipBase:80, shipKg:0.05 };
+  const eu = ["Francia","Germania","Spagna","Polonia","Paesi Bassi","Portogallo","Belgio","Austria"];
+  if (eu.includes(country)) return { shipBase:100, shipKg:0.06 };
+  return { shipBase:180, shipKg:0.12 }; // extra-UE
+}
 
 function BSIcon({ size = 36, uid = "a" }) {
   return (
@@ -69,6 +77,7 @@ export default function SupplierPage() {
   const [reviewHoverRating, setReviewHoverRating] = useState(0);
   const [reviewComment, setReviewComment] = useState("");
   const [reviewState, setReviewState] = useState({}); // { busy, ok, err }
+  const [alreadyInCart, setAlreadyInCart] = useState(false); // hai già prodotti di QUESTO fornitore nel carrello → spedizione si consolida
   const reviewsRef = useRef(null);
 
   useEffect(() => {
@@ -81,7 +90,10 @@ export default function SupplierPage() {
           setProfile(p);
           getSupplierReviews(id).then(setReviews).catch(() => {});
           getSession().then(s => {
-            if (s) getReviewableOrders(id).then(rows => { setReviewableOrders(rows); if (rows[0]) setReviewOrderId(rows[0].order_id); }).catch(() => {});
+            if (s) {
+              getReviewableOrders(id).then(rows => { setReviewableOrders(rows); if (rows[0]) setReviewOrderId(rows[0].order_id); }).catch(() => {});
+              getCart().then(items => setAlreadyInCart((items || []).some(it => it.supplier_company_id === id))).catch(() => {});
+            }
           });
         } else setNotFound(true);
       } catch (e) { setNotFound(true); }
@@ -342,7 +354,7 @@ export default function SupplierPage() {
               <div className="sup-prow" style={{ background:C.bg, fontSize:11, fontWeight:800, textTransform:"uppercase", letterSpacing:"0.04em", color:C.muted }}>
                 <span>Prodotto</span><span>Grado / cert.</span><span>MOQ</span><span>Lead time</span><span style={{ textAlign:"right" }}>Prezzo & ordine *</span>
               </div>
-              <div style={{ fontSize:10.5, color:C.muted, textAlign:"right", padding:"6px 20px 0" }}>* IVA e spese di spedizione escluse — calcolate al checkout, dopo l'indirizzo</div>
+              <div style={{ fontSize:10.5, color:C.muted, textAlign:"right", padding:"6px 20px 0" }}>* IVA esclusa — la vedi al checkout, dopo l'indirizzo. Spedizione stimata, inclusa nel totale.</div>
 
               <div style={{ maxHeight:560, overflowY:"auto" }}>
                 {filteredProducts.map(p => {
@@ -363,7 +375,19 @@ export default function SupplierPage() {
                       <div className="sup-num" style={{ fontSize:12.5 }}>{p.min_order_kg != null ? `${p.min_order_kg} kg` : "—"}</div>
                       <div className="sup-num" style={{ fontSize:12.5 }}>{p.lead_time_days != null ? `${p.lead_time_days} gg` : "—"}</div>
                       <div style={{ textAlign:"right" }}>
-                        <div className="sup-num" style={{ fontSize:16, fontWeight:800, color:C.blue, marginBottom:6 }}>{eurKg(p.best_price)}<span style={{ fontSize:11, fontWeight:400, color:C.muted }}>/kg</span></div>
+                        <div className="sup-num" style={{ fontSize:16, fontWeight:800, color:C.blue, marginBottom:2 }}>{eurKg(p.best_price)}<span style={{ fontSize:11, fontWeight:400, color:C.muted }}>/kg</span></div>
+                        {p.best_price != null && (() => {
+                          const kg = qtyFor(p);
+                          const ship = shipFor(profile.country);
+                          const shipping = ship.shipBase + ship.shipKg * kg;
+                          const goods = p.best_price * kg;
+                          return (
+                            <div style={{ fontSize:10.5, color:C.muted, marginBottom:6 }}>
+                              + spedizione {eur(shipping)} · tot. {eur(goods + shipping)} <span style={{ fontWeight:400 }}>IVA escl.</span>
+                              {alreadyInCart && <div style={{ color:C.green, fontWeight:700 }}>✓ si consolida col carrello</div>}
+                            </div>
+                          );
+                        })()}
                         {st.cart ? (
                           <div style={{ display:"inline-flex", alignItems:"center", gap:5, fontSize:12, fontWeight:700, color:C.green }}>
                             <Check size={13}/> Nel carrello · <span onClick={() => { window.location.href = "/carrello"; }} style={{ cursor:"pointer", textDecoration:"underline" }}>vai al carrello</span>

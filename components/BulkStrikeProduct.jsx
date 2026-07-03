@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { Search, Bot, ArrowRight, Check, Clock, ChevronDown, ChevronRight, ChevronUp, Star, Shield, Truck, FileText, Download, Plus, Minus, X, Beaker, TrendingDown, Users, Gavel, Info, ShoppingCart } from "lucide-react";
-import { getProduct, getOpenPoolForProduct, getPriceReference, getProductBreadcrumb, getSession, openPool, upsertCartItem, poolErrorMessage, searchProducts } from "@/lib/api";
+import { getProduct, getOpenPoolForProduct, getPriceReference, getProductBreadcrumb, getSession, openPool, upsertCartItem, poolErrorMessage, searchProducts, getCart } from "@/lib/api";
 import NavAuth from "@/components/BulkStrikeNavAuth";
 
 // ─── PALETTE (matches homepage) ───────────────────────────────────────────────
@@ -78,9 +78,10 @@ function compute(supplier, qty) {
   const unit = priceForQty(supplier, qty);
   const product = unit * qty;
   const shipping = supplier.shipBase + supplier.shipKg * qty;
-  const vat = (product + shipping) * VAT;
-  const total = product + shipping + vat;
-  return { unit, product, shipping, vat, total, allInKg: total / qty };
+  const preVat = product + shipping; // materia prima + spedizione, IVA esclusa — il costo comparabile tra fornitori/paesi
+  const vat = preVat * VAT;
+  const total = preVat + vat;
+  return { unit, product, shipping, preVat, preVatKg: preVat / qty, vat, total, allInKg: total / qty };
 }
 const eur = (n) => n.toLocaleString("it-IT", { style:"currency", currency:"EUR", maximumFractionDigits:0 });
 const eurKg = (n) => "€" + n.toLocaleString("it-IT", { minimumFractionDigits:2, maximumFractionDigits:2 });
@@ -190,6 +191,21 @@ export default function ProductPage() {
   const [searchQ, setSearchQ] = useState("");
   const [searchResults, setSearchResults] = useState([]);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [cartSupplierIds, setCartSupplierIds] = useState(new Set()); // fornitori già presenti nel tuo carrello → spedizione si consolida
+
+  // se sei loggato, sappiamo da quali fornitori hai già roba nel carrello: la spedizione
+  // di un nuovo prodotto dello stesso fornitore si unisce a quella già "pagata" da quei prodotti
+  useEffect(() => {
+    (async () => {
+      const session = await getSession().catch(() => null);
+      if (!session) return;
+      try {
+        const items = await getCart();
+        setCartSupplierIds(new Set((items || []).map(it => it.supplier_company_id)));
+      } catch (e) {}
+    })();
+  }, []);
+  const consolidatedWith = (companyId) => companyId && cartSupplierIds.has(companyId);
 
   // carica il prodotto reale da ?id=
   useEffect(() => {
@@ -239,7 +255,7 @@ export default function ProductPage() {
     searchProducts(q).then(rows => { setSearchResults(rows); setSearchOpen(true); }).catch(() => {});
   }
   const ranked = useMemo(() => {
-    return suppliers.map(s => ({ ...s, calc: compute(s, qty) })).sort((a,b) => a.calc.unit - b.calc.unit);
+    return suppliers.map(s => ({ ...s, calc: compute(s, qty) })).sort((a,b) => a.calc.preVatKg - b.calc.preVatKg);
   }, [suppliers, qty]);
 
   const featured = (selectedId ? ranked.find(s => s.id === selectedId) : ranked[0]) || null;
@@ -442,10 +458,10 @@ export default function ProductPage() {
             <p style={{ fontSize:14, color:C.muted }}>{product.form} · Purezza {product.purityRange} · CAS {product.cas}</p>
           </div>
           <div style={{ textAlign:"right" }}>
-            <div style={{ fontSize:12, color:C.muted }}>Prezzo indicativo da <span title="IVA e spese di spedizione escluse, calcolate al checkout">*</span></div>
-            <div className="bs-num" style={{ fontSize:28, fontWeight:800, color:C.blue }}>{eurKg(ranked[0].calc.unit)}<span style={{ fontSize:14, fontWeight:400, color:C.muted }}>/kg</span></div>
+            <div style={{ fontSize:12, color:C.muted }}>Prezzo indicativo da <span title="Materia prima + spedizione, IVA esclusa">*</span></div>
+            <div className="bs-num" style={{ fontSize:28, fontWeight:800, color:C.blue }}>{eurKg(ranked[0].calc.preVatKg)}<span style={{ fontSize:14, fontWeight:400, color:C.muted }}>/kg</span></div>
             <div style={{ display:"flex", alignItems:"center", gap:4, justifyContent:"flex-end", fontSize:12, color:C.green }}><TrendingDown size={12}/> -15,6% da gennaio</div>
-            <div style={{ fontSize:10.5, color:C.muted, marginTop:2 }}>* IVA esclusa</div>
+            <div style={{ fontSize:10.5, color:C.muted, marginTop:2 }}>* Spedizione inclusa, IVA esclusa</div>
           </div>
         </div>
 
@@ -562,7 +578,7 @@ export default function ProductPage() {
             <div style={{ fontSize:12, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.08em", color:C.blue, marginBottom:10 }}>In evidenza</div>
             <div style={{ border:`2px solid ${C.blue}`, borderRadius:16, padding:24, marginBottom:24, position:"relative", boxShadow:"0 8px 30px rgba(14,165,233,0.10)" }}>
               <div style={{ position:"absolute", top:-12, left:20, display:"flex", gap:8 }}>
-                {featured.id===cheapestId && <span style={{ background:C.green, color:"#fff", borderRadius:100, padding:"4px 12px", fontSize:12, fontWeight:700 }}>★ Miglior prezzo</span>}
+                {featured.id===cheapestId && <span style={{ background:C.green, color:"#fff", borderRadius:100, padding:"4px 12px", fontSize:12, fontWeight:700 }}>★ Più conveniente</span>}
                 {featured.id!==cheapestId && <span style={{ background:C.blue, color:"#fff", borderRadius:100, padding:"4px 12px", fontSize:12, fontWeight:700 }}>Selezionato da te</span>}
               </div>
 
@@ -581,23 +597,27 @@ export default function ProductPage() {
                 </div>
               </div>
 
-              {/* PREZZO NETTO — IVA e spedizione si calcolano al checkout, dopo l'indirizzo */}
+              {/* MATERIA PRIMA + SPEDIZIONE, sempre visibili — IVA esclusa (quella si calcola al checkout) */}
               <div style={{ display:"grid", gridTemplateColumns:"1.4fr 1fr", gap:16, alignItems:"center" }}>
                 <div style={{ background:C.bg, borderRadius:12, padding:"16px 18px" }}>
-                  <div style={{ fontSize:12, color:C.muted, marginBottom:10, fontWeight:600 }}>Subtotale merce · {(qty/1000)}t</div>
+                  <div style={{ fontSize:12, color:C.muted, marginBottom:10, fontWeight:600 }}>Materia prima + spedizione · {(qty/1000)}t</div>
                   <div style={{ display:"flex", flexDirection:"column", gap:7 }}>
                     <Row label={`Prodotto (${eurKg(featured.calc.unit)}/kg)`} val={eur(featured.calc.product)} />
+                    <Row label="Spedizione alla tua sede" val={eur(featured.calc.shipping)} />
+                    {consolidatedWith(featured.company_id) && (
+                      <div style={{ fontSize:11, color:C.green, fontWeight:700, display:"flex", alignItems:"center", gap:4 }}><Check size={11}/> Si unisce alla spedizione di ciò che hai già nel carrello da questo fornitore</div>
+                    )}
                     <div style={{ borderTop:`1px solid ${C.border}`, marginTop:4, paddingTop:9, display:"flex", justifyContent:"space-between", alignItems:"baseline" }}>
-                      <span style={{ fontSize:14, fontWeight:700 }}>Subtotale</span>
-                      <span className="bs-num" style={{ fontSize:24, fontWeight:800, color:C.text }}>{eur(featured.calc.product)}</span>
+                      <span style={{ fontSize:14, fontWeight:700 }}>Totale <span style={{ fontWeight:500, color:C.muted }}>(IVA esclusa)</span></span>
+                      <span className="bs-num" style={{ fontSize:24, fontWeight:800, color:C.text }}>{eur(featured.calc.preVat)}</span>
                     </div>
                   </div>
-                  <div style={{ fontSize:11, color:C.muted, marginTop:8 }}>* IVA e spedizione escluse — le vedi nel riepilogo al checkout, dopo aver scelto l'indirizzo.</div>
+                  <div style={{ fontSize:11, color:C.muted, marginTop:8 }}>* IVA esclusa — la vedi nel riepilogo al checkout, dopo aver scelto l'indirizzo.</div>
                 </div>
                 <div style={{ textAlign:"center" }}>
-                  <div style={{ fontSize:12, color:C.muted }}>Prezzo</div>
-                  <div className="bs-num" style={{ fontSize:40, fontWeight:800, color:C.blue, lineHeight:1.1 }}>{eurKg(featured.calc.unit)}</div>
-                  <div style={{ fontSize:13, color:C.muted, marginBottom:14 }}>/kg · IVA esclusa</div>
+                  <div style={{ fontSize:12, color:C.muted }}>Costo</div>
+                  <div className="bs-num" style={{ fontSize:40, fontWeight:800, color:C.blue, lineHeight:1.1 }}>{eurKg(featured.calc.preVatKg)}</div>
+                  <div style={{ fontSize:13, color:C.muted, marginBottom:14 }}>/kg · spedizione inclusa, IVA esclusa</div>
                   <button className="bs-btn" onClick={handleBuyNow} disabled={busy || !featured} style={{ width:"100%", fontSize:16, padding:"14px", opacity:(busy||!featured)?0.6:1, cursor:(busy||!featured)?"default":"pointer" }}>Acquista ora <ArrowRight size={18}/></button>
                   <button onClick={handleAddToCart} disabled={busy || !featured} style={{ width:"100%", marginTop:8, background:"transparent", color:C.blue, border:`1.5px solid ${C.blue}`, borderRadius:10, padding:"12px", fontSize:14.5, fontWeight:700, cursor:(busy||!featured)?"default":"pointer", opacity:(busy||!featured)?0.6:1, display:"flex", alignItems:"center", justifyContent:"center", gap:8, fontFamily:"Inter,system-ui" }}><ShoppingCart size={16}/> Aggiungi al carrello</button>
                   {cartOk && <div style={{ marginTop:8, fontSize:12.5, color:C.green, fontWeight:700, display:"flex", alignItems:"center", gap:5 }}><Check size={13}/> Aggiunto! <span onClick={() => { window.location.href = "/carrello"; }} style={{ cursor:"pointer", textDecoration:"underline" }}>Vai al carrello</span></div>}
@@ -622,7 +642,7 @@ export default function ProductPage() {
             {/* OTHER SUPPLIERS */}
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12, flexWrap:"wrap", gap:8 }}>
               <div style={{ fontSize:12, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.08em", color:C.muted }}>Altri {others.length} fornitori per {(qty/1000)}t</div>
-              <span style={{ fontSize:12, color:C.muted }}>Ordinati per prezzo · IVA esclusa</span>
+              <span style={{ fontSize:12, color:C.muted }}>Ordinati per costo (merce + spedizione) · IVA esclusa</span>
             </div>
             <div style={{ display:"flex", flexDirection:"column", gap:10, marginBottom:28 }}>
               {others.map(s => (
@@ -645,12 +665,13 @@ export default function ProductPage() {
                     <div style={{ fontSize:13, fontWeight:600 }}>{s.delivery}</div>
                   </div>
                   <div style={{ textAlign:"center" }}>
-                    <div style={{ fontSize:11, color:C.muted }}>Prezzo/kg *</div>
-                    <div className="bs-num" style={{ fontSize:18, fontWeight:800, color:C.blue }}>{eurKg(s.calc.unit)}</div>
+                    <div style={{ fontSize:11, color:C.muted }}>Costo/kg *</div>
+                    <div className="bs-num" style={{ fontSize:18, fontWeight:800, color:C.blue }}>{eurKg(s.calc.preVatKg)}</div>
                   </div>
                   <div className="bs-col-hide" style={{ textAlign:"center" }}>
-                    <div style={{ fontSize:11, color:C.muted }}>Subtotale merce</div>
-                    <div className="bs-num" style={{ fontSize:14, fontWeight:600 }}>{eur(s.calc.product)}</div>
+                    <div style={{ fontSize:11, color:C.muted }}>Merce + spedizione</div>
+                    <div className="bs-num" style={{ fontSize:13, fontWeight:600 }}>{eur(s.calc.product)} + {eur(s.calc.shipping)}</div>
+                    {consolidatedWith(s.company_id) && <div style={{ fontSize:10, color:C.green, fontWeight:700, marginTop:2 }}>spedizione consolidabile</div>}
                   </div>
                   <button className="bs-btn-ghost" onClick={() => { setSelectedId(s.id); window.scrollTo({top:0,behavior:"smooth"}); }}>Seleziona</button>
                 </div>

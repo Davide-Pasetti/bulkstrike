@@ -273,18 +273,30 @@ export default function CheckoutPage() {
                     <div style={{ fontSize: 12.5, color: C.red, padding: "6px 0 4px" }}>{previewErr}</div>
                   ) : (
                     <>
-                      {/* costo di spedizione per ogni riga (fornitore) — sempre visibile, non aggregato e basta */}
+                      {/* materia prima per prodotto */}
                       <div style={{ borderTop: `1px solid ${C.border}`, marginTop: 4, paddingTop: 10 }}>
-                        {items.map(it => {
-                          const line = (preview?.lines || []).find(l => l.product_id === it.product_id && l.supplier_company_id === it.supplier_company_id);
-                          return (
-                            <div key={`${it.product_id}|${it.supplier_company_id}`} style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, marginBottom: 6, gap: 10 }}>
-                              <span style={{ color: C.muted }}>{it.product_name} <span style={{ color: "#94A3B8" }}>· {it.supplier_name}</span></span>
-                              <span className="co-num" style={{ whiteSpace: "nowrap" }}>{eur(line?.goods_subtotal)} + sped. {eur(line?.shipping_amount)}</span>
-                            </div>
-                          );
-                        })}
+                        {items.map(it => (
+                          <div key={`${it.product_id}|${it.supplier_company_id}`} style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, marginBottom: 6, gap: 10 }}>
+                            <span style={{ color: C.muted }}>{it.product_name} <span style={{ color: "#94A3B8" }}>· {it.supplier_name}</span></span>
+                            <span className="co-num" style={{ whiteSpace: "nowrap" }}>{it.unit_price != null ? eur(Number(it.unit_price) * Number(it.quantity_kg)) : "—"}</span>
+                          </div>
+                        ))}
                       </div>
+
+                      {/* spedizione consolidata per fornitore — un fornitore con più prodotti nel carrello paga una spedizione sola */}
+                      {(preview?.by_supplier || []).length > 0 && (
+                        <div style={{ borderTop: `1px solid ${C.border}`, marginTop: 10, paddingTop: 10 }}>
+                          <div style={{ fontSize: 10.5, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 7 }}>Spedizione per fornitore</div>
+                          {preview.by_supplier.map(s => (
+                            <div key={s.supplier_company_id} style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, marginBottom: 6, gap: 10 }}>
+                              <span style={{ color: C.muted }}>
+                                {s.supplier_name} <span style={{ color: "#94A3B8" }}>({s.product_count} {s.product_count === 1 ? "prodotto" : "prodotti"} · {Number(s.total_qty).toLocaleString("it-IT")} kg{s.product_count > 1 ? " · spedizione unica" : ""})</span>
+                              </span>
+                              <span className="co-num" style={{ whiteSpace: "nowrap" }}>{eur(s.shipping_amount)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
 
                       <div style={{ borderTop: `1px solid ${C.border}`, margin: "10px 0 0", paddingTop: 12 }}>
                         {/* Subtotale merce+spedizione, IVA esclusa: il numero che conta per il confronto costi
