@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { registerCompany } from "@/lib/api";
-import { ShoppingCart, Factory, Check, ArrowRight, ArrowLeft, Mail, Lock, Building2, Globe, Phone, User, MapPin, Award, Boxes, Shield, X, Bell, Search, Plus, TrendingDown, Zap } from "lucide-react";
+import { ShoppingCart, Factory, Truck, Check, ArrowRight, ArrowLeft, Mail, Lock, Building2, Globe, Phone, User, MapPin, Award, Boxes, Shield, X, Bell, Search, Plus, TrendingDown, Zap } from "lucide-react";
 
 const C = { blue:"#0EA5E9", dark:"#0284C7", text:"#0F172A", muted:"#64748B", border:"#E2E8F0", bg:"#F8FAFE", green:"#059669", amber:"#D97706", purple:"#7C3AED" };
 
@@ -198,7 +198,7 @@ export default function RegisterPage() {
   const set = (k,v) => setF(s => ({ ...s, [k]:v }));
   const toggle = (k,v) => setF(s => ({ ...s, [k]: s[k].includes(v) ? s[k].filter(x=>x!==v) : [...s[k], v] }));
 
-  const steps = ["Account","Azienda", type==="supplier"?"Catalogo":"Esigenze"];
+  const steps = ["Account","Azienda", type==="supplier"?"Catalogo":type==="carrier"?"Pagamenti":"Esigenze"];
   const canConsent = f.terms && f.privacy && f.ai;
 
   const [submitting, setSubmitting] = useState(false);
@@ -223,7 +223,7 @@ export default function RegisterPage() {
   const filled = (v) => !!(v && v.trim());
   const step1Valid = !!type && emailOk(f.email) && f.pass.length >= 8 && f.pass === f.pass2;
   const step2Valid = filled(f.company) && filled(f.vat) && filled(f.country) && filled(f.city) && filled(f.address) && filled(f.phone) && filled(f.contact);
-  const step3Valid = type === "supplier"
+  const step3Valid = type === "supplier" || type === "carrier"
     ? emailOk(f.emailMgmt) && emailOk(f.emailAdmin) && filled(f.ibanHolder) && filled(f.iban) && canConsent
     : emailOk(f.emailMgmt) && emailOk(f.emailAdmin) && canConsent;
   const canProceed = step === 1 ? step1Valid : step === 2 ? step2Valid : step3Valid;
@@ -267,10 +267,14 @@ export default function RegisterPage() {
             <p style={{ fontSize:15, color:C.muted, lineHeight:1.6, marginBottom:8, maxWidth:440, marginLeft:"auto", marginRight:"auto" }}>
               {type==="supplier"
                 ? "Grazie. Il team verifica la tua azienda (controllo P.IVA, sanzioni e certificazioni) entro 1-2 giorni lavorativi. Ti avviseremo via email quando il profilo sarà attivo."
+                : type==="carrier"
+                ? "Grazie. Il team verifica la tua azienda entro 1-2 giorni lavorativi. Nel frattempo puoi già configurare le aree che servi e le tue tariffe."
                 : "Grazie. Riceverai un'email di conferma per attivare l'account e iniziare ad acquistare subito."}
             </p>
             <p style={{ fontSize:12, color:C.muted, marginBottom:24 }}>Per assistenza umana: davide@bulkstrike.com</p>
-            <button className="bs-btn-out" onClick={() => { setDone(false); setStep(1); setType(null); }}>Torna all'inizio</button>
+            {type==="carrier"
+              ? <button className="bs-btn" onClick={() => { window.location.href = "/corriere"; }}>Configura aree e tariffe <ArrowRight size={16}/></button>
+              : <button className="bs-btn-out" onClick={() => { setDone(false); setStep(1); setType(null); }}>Torna all'inizio</button>}
           </div>
         ) : (
         <>
@@ -302,10 +306,11 @@ export default function RegisterPage() {
             {step===1 && (
               <>
                 <div style={{ fontSize:15, fontWeight:700, marginBottom:14 }}>Che tipo di account vuoi aprire?</div>
-                <div className="bs-typecards" style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:24 }}>
+                <div className="bs-typecards" style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12, marginBottom:24 }}>
                   {[
                     { id:"buyer", icon:<ShoppingCart size={22}/>, title:"Acquirente", desc:"Compro materie prime al miglior prezzo, da solo o in pool" },
                     { id:"supplier", icon:<Factory size={22}/>, title:"Fornitore", desc:"Vendo materie prime sfuse e ricevo richieste qualificate" },
+                    { id:"carrier", icon:<Truck size={22}/>, title:"Corriere", desc:"Offro spedizioni per gli ordini della piattaforma, imposto le mie tariffe" },
                   ].map(c => (
                     <button key={c.id} type="button" onClick={() => setType(c.id)}
                       style={{ textAlign:"left", padding:18, borderRadius:14, cursor:"pointer", background:type===c.id?"#EFF6FF":"#fff", border:`2px solid ${type===c.id?C.blue:C.border}`, fontFamily:"Inter,system-ui", transition:"all 0.15s" }}>
@@ -478,7 +483,55 @@ export default function RegisterPage() {
               </>
             )}
 
-            {error && <div style={{ color:"#DC2626", fontSize:13, marginBottom:10, textAlign:"center" }}>{error}</div>}
+            {step===3 && type==="carrier" && (
+              <>
+                <div style={{ background:"#EFF6FF", border:"1px solid #BFDBFE", borderRadius:10, padding:"12px 14px", marginBottom:20, fontSize:12.5, color:"#1D4ED8", display:"flex", gap:9 }}>
+                  <Truck size={18} color={C.blue} style={{ flexShrink:0 }}/>
+                  <span>Le aree che servi e le tue tariffe di spedizione si impostano dopo, nella pagina <b>Corrieri</b> — qui servono solo i dati per fatturazione e incassi.</span>
+                </div>
+
+                <div style={{ fontSize:15, fontWeight:700, margin:"4px 0 4px" }}>Contatti e fatturazione</div>
+                <div style={{ fontSize:12.5, color:C.muted, marginBottom:16 }}>Dove ricevi comunicazioni operative e documenti fiscali</div>
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"0 16px" }} className="bs-grid2">
+                  <Field icon={<Mail size={14} color={C.muted}/>} label="Email gestione spedizioni" required half>
+                    <input style={inputStyle} type="email" placeholder="spedizioni@azienda.it" value={f.emailMgmt} onChange={e=>set("emailMgmt",e.target.value)}/>
+                  </Field>
+                  <Field icon={<Mail size={14} color={C.muted}/>} label="Email amministrazione (documenti)" required half>
+                    <input style={inputStyle} type="email" placeholder="amministrazione@azienda.it" value={f.emailAdmin} onChange={e=>set("emailAdmin",e.target.value)}/>
+                  </Field>
+                  <Field icon={<Shield size={14} color={C.muted}/>} label="PEC" half>
+                    <input style={inputStyle} type="email" placeholder="azienda@pec.it" value={f.pec} onChange={e=>set("pec",e.target.value)}/>
+                  </Field>
+                  <Field icon={<Building2 size={14} color={C.muted}/>} label="Codice Destinatario (SDI)" half>
+                    <input style={inputStyle} placeholder="Es. USAL8PV" maxLength={7} value={f.sdi} onChange={e=>set("sdi",e.target.value.toUpperCase())}/>
+                  </Field>
+                </div>
+
+                <div style={{ fontSize:15, fontWeight:700, margin:"20px 0 4px" }}>Coordinate bancarie (per gli incassi)</div>
+                <div style={{ fontSize:12.5, color:C.muted, marginBottom:16 }}>Su queste coordinate ricevi i pagamenti per le spedizioni effettuate</div>
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"0 16px" }} className="bs-grid2">
+                  <Field icon={<User size={14} color={C.muted}/>} label="Intestatario del conto" required>
+                    <input style={inputStyle} placeholder="Ragione sociale intestataria" value={f.ibanHolder} onChange={e=>set("ibanHolder",e.target.value)}/>
+                  </Field>
+                  <Field icon={<Building2 size={14} color={C.muted}/>} label="IBAN" required half>
+                    <input style={inputStyle} placeholder="IT.. .. .... .... .... .... ...." value={f.iban} onChange={e=>set("iban",e.target.value.toUpperCase())}/>
+                  </Field>
+                  <Field icon={<Globe size={14} color={C.muted}/>} label="BIC / SWIFT (per incassi esteri)" half>
+                    <input style={inputStyle} placeholder="Es. BCITITMM" value={f.bic} onChange={e=>set("bic",e.target.value.toUpperCase())}/>
+                  </Field>
+                </div>
+                <div style={{ background:"#ECFDF5", border:`1px solid ${C.green}44`, borderRadius:9, padding:"10px 12px", marginBottom:20, fontSize:12, color:"#065F46", display:"flex", gap:8 }}>
+                  <Shield size={16} color={C.green} style={{ flexShrink:0 }}/>
+                  <span>Le coordinate viaggiano cifrate. La verifica finale e i pagamenti avvengono tramite il nostro <b>provider di pagamenti certificato</b> (conti segregati): BulkStrike non trattiene i tuoi fondi.</span>
+                </div>
+
+                <div style={{ background:"#FFF7ED", border:`1px solid ${C.amber}44`, borderRadius:10, padding:"12px 14px", marginBottom:16, fontSize:12.5, color:"#7C2D12", display:"flex", gap:9 }}>
+                  <Shield size={26} color={C.amber} style={{ flexShrink:0 }}/>
+                  <span>Dopo l'invio, il team verifica la tua azienda (P.IVA, screening sanzioni/AML) prima di renderti visibile ai clienti nei preventivi di spedizione.</span>
+                </div>
+                <Consents f={f} set={set} supplier/>
+              </>
+            )}
             {/* NAV BUTTONS */}
             <div style={{ display:"flex", justifyContent:"space-between", marginTop:24, gap:12 }}>
               {step>1
