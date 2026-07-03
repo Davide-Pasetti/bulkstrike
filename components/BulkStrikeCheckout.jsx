@@ -8,8 +8,8 @@
 // il carrello → pagina "Pagamento eseguito".
 // Il pagamento chiude il checkout: non è più un passo separato successivo.
 import { useState, useEffect, useMemo } from "react";
-import { ShieldCheck, ArrowRight, ArrowLeft, Check, ChevronRight, Package, FileText, AlertTriangle, MapPin, Mail, CreditCard, Truck } from "lucide-react";
-import { getCart, checkoutCart, previewCheckout, getMyCompanyAddress, getSession, poolErrorMessage } from "@/lib/api";
+import { ShieldCheck, ArrowRight, ArrowLeft, Check, ChevronRight, Package, FileText, AlertTriangle, MapPin, Mail, CreditCard, Truck, Zap, Clock3, PauseCircle } from "lucide-react";
+import { getCart, checkoutCart, previewCheckout, getMyCompanyAddress, getSession, poolErrorMessage, getShippingQuotes } from "@/lib/api";
 import NavAuth from "@/components/BulkStrikeNavAuth";
 
 const C = { blue: "#0EA5E9", dark: "#0284C7", text: "#0F172A", muted: "#64748B", border: "#E2E8F0", bg: "#F8FAFE", green: "#059669", red: "#DC2626", amber: "#D97706" };
@@ -73,6 +73,10 @@ export default function CheckoutPage() {
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewErr, setPreviewErr] = useState("");
 
+  // Preventivi corriere per fornitore: { [supplierId]: { quotes:[...], cheapest_id, fastest_id } | "loading" | "none" }
+  const [quotesBySupplier, setQuotesBySupplier] = useState({});
+  const [selectedCarrier, setSelectedCarrier] = useState({}); // { [supplierId]: carrierId }
+
   useEffect(() => {
     (async () => {
       const session = await getSession().catch(() => null);
@@ -87,26 +91,71 @@ export default function CheckoutPage() {
     })();
   }, []);
 
-  // Quando si entra nello step 2 (Pagamento), chiediamo al server spedizione + IVA reali.
+  // fornitori distinti nel carrello, con kg totali — un preventivo di spedizione è per fornitore, non per prodotto
+  const suppliers = useMemo(() => {
+    const m = new Map();
+    for (const it of items) {
+      const cur = m.get(it.supplier_company_id) || { id: it.supplier_company_id, name: it.supplier_name, country: it.supplier_country, qty: 0 };
+      cur.qty += Number(it.quantity_kg);
+      m.set(it.supplier_company_id, cur);
+    }
+    return [...m.values()];
+  }, [items]);
+
+  // Quando si entra nello step 2 (Pagamento): preventivi corriere per ogni fornitore, poi il
+  // riepilogo economico (che dipende dalle selezioni, quindi si ricalcola quando cambiano).
+  useEffect(() => {
+    if (step !== 2 || suppliers.length === 0) return;
+    let cancelled = false;
+    (async () => {
+      const entries = await Promise.all(suppliers.map(async (s) => {
+        try {
+          const res = await getShippingQuotes(s.id, s.qty);
+          return [s.id, (res?.quotes?.length ? res : "none")];
+        } catch (e) { return [s.id, "none"]; }
+      }));
+      if (cancelled) return;
+      const map = Object.fromEntries(entries);
+      setQuotesBySupplier(map);
+      // default: il corriere più economico per ciascun fornitore, il cliente può cambiarlo
+      setSelectedCarrier(prev => {
+        const next = { ...prev };
+        for (const [supplierId, q] of entries) {
+          if (q !== "none" && !next[supplierId]) next[supplierId] = q.cheapest_id;
+        }
+        return next;
+      });
+    })();
+    return () => { cancelled = true; };
+  }, [step, suppliers]);
+
+  // Riepilogo economico: dipende dalle selezioni corriere, si ricalcola quando cambiano.
   useEffect(() => {
     if (step !== 2) return;
     let cancelled = false;
     setPreview(null); setPreviewErr(""); setPreviewLoading(true);
-    previewCheckout(address)
+    previewCheckout(address, selectedCarrier)
       .then((res) => { if (!cancelled) setPreview(res); })
       .catch((e) => { if (!cancelled) setPreviewErr(poolErrorMessage(e)); })
       .finally(() => { if (!cancelled) setPreviewLoading(false); });
     return () => { cancelled = true; };
-  }, [step]);
+  }, [step, address, selectedCarrier]);
 
   const subtotal = useMemo(() => items.reduce((a, it) => a + (it.unit_price != null ? Number(it.unit_price) * Number(it.quantity_kg) : 0), 0), [items]);
   const hasIssues = useMemo(() => items.some(it => !it.offer_active || it.unit_price == null || (it.min_order_kg != null && Number(it.quantity_kg) < Number(it.min_order_kg))), [items]);
 
+  // pronti a pagare solo quando: i preventivi sono tutti arrivati, e ogni fornitore CHE HA
+  // corrieri disponibili ha una selezione fatta (i fornitori senza corrieri vanno in attesa da soli).
+  const quotesReady = suppliers.length > 0 && suppliers.every(s => quotesBySupplier[s.id] !== undefined);
+  const selectionsComplete = suppliers.every(s => {
+    const q = quotesBySupplier[s.id];
+    return q === "none" || !q || !!selectedCarrier[s.id];
+  });
   const goodsForDisplay = preview?.goods_subtotal ?? subtotal;
   const shippingForDisplay = preview?.shipping_amount ?? null;
   const vatForDisplay = preview?.vat_amount ?? null;
   const totalForDisplay = preview?.total ?? null;
-  const payReady = !previewLoading && !previewErr && preview != null;
+  const payReady = quotesReady && selectionsComplete && !previewLoading && !previewErr && preview != null;
 
   function goToPayment() {
     setErr("");
@@ -117,7 +166,7 @@ export default function CheckoutPage() {
   async function confirmPayment() {
     setSubmitting(true); setErr("");
     try {
-      const res = await checkoutCart(address, notes);
+      const res = await checkoutCart(address, notes, selectedCarrier);
       setDone(res);
     } catch (e) {
       setErr(poolErrorMessage(e));
@@ -165,11 +214,13 @@ export default function CheckoutPage() {
             <div style={{ width: 64, height: 64, borderRadius: "50%", background: "#ECFDF5", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" }}>
               <Check size={30} color={C.green} />
             </div>
-            <h1 style={{ fontSize: 26, fontWeight: 800, marginBottom: 8 }}>Pagamento eseguito</h1>
+            <h1 style={{ fontSize: 26, fontWeight: 800, marginBottom: 8 }}>{(done.orders || []).length > 0 ? "Pagamento eseguito" : "Ordine registrato"}</h1>
             <p style={{ fontSize: 14.5, color: C.muted, maxWidth: 520, margin: "0 auto 6px", lineHeight: 1.6 }}>
-              {done.count === 1 ? "Il tuo ordine è" : `I tuoi ${done.count} ordini sono`} stati pagati e {done.count === 1 ? "il fornitore è stato" : "i fornitori sono stati"} avvisato{done.count === 1 ? "" : "i"}: la merce partirà a breve.
+              {(done.orders || []).length > 0
+                ? <>{done.count === 1 ? "Il tuo ordine è" : `I tuoi ${done.count} ordini sono`} stati pagati e {done.count === 1 ? "il fornitore è stato" : "i fornitori sono stati"} avvisato{done.count === 1 ? "" : "i"}: la merce partirà a breve.</>
+                : "Il tuo ordine è registrato, in attesa del costo di spedizione."}
             </p>
-            {done.total_paid != null && (
+            {done.total_paid != null && done.total_paid > 0 && (
               <p style={{ fontSize: 13.5, color: C.muted, marginBottom: 6 }}>Totale pagato (IVA e spedizione incluse): <b style={{ color: C.text }}>{eur(done.total_paid)}</b></p>
             )}
             <p style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, fontSize: 13, color: C.muted, marginBottom: 26 }}>
@@ -184,7 +235,21 @@ export default function CheckoutPage() {
                   <span style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12.5, fontWeight: 700, color: C.blue }}>Segui spedizione <ArrowRight size={13} /></span>
                 </div>
               ))}
+              {(done.held_orders || []).map((id, i) => (
+                <div key={id} onClick={() => { window.location.href = `/ordine?id=${id}`; }}
+                  style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, border: "1px solid #FED7AA", background: "#FFF7ED", borderRadius: 10, padding: "12px 16px", cursor: "pointer" }}>
+                  <span style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13.5, fontWeight: 600, color: "#9A3412" }}><PauseCircle size={15} /> Ordine in attesa di corriere <span className="co-num" style={{ fontSize: 11, color: "#9A3412" }}>{id.slice(0, 8)}…</span></span>
+                  <span style={{ fontSize: 12, color: "#9A3412" }}>Dettagli</span>
+                </div>
+              ))}
             </div>
+
+            {(done.held_orders || []).length > 0 && (
+              <div style={{ display: "flex", gap: 8, alignItems: "flex-start", fontSize: 12.5, color: "#9A3412", background: "#FFF7ED", border: "1px solid #FED7AA", borderRadius: 10, padding: "12px 16px", maxWidth: 520, margin: "0 auto 20px", textAlign: "left", lineHeight: 1.6 }}>
+                <PauseCircle size={15} color={C.amber} style={{ marginTop: 1, flexShrink: 0 }} />
+                <span>Per {(done.held_orders || []).length === 1 ? "un ordine" : `${(done.held_orders || []).length} ordini`} non abbiamo ancora un corriere attivo sulla tratta scelta. Restano in attesa: il nostro team logistico ti farà avere il costo di spedizione a breve, e completerai il pagamento solo a quel punto.</span>
+              </div>
+            )}
 
             <div style={{ display: "flex", gap: 8, alignItems: "flex-start", fontSize: 12.5, color: C.muted, background: C.bg, borderRadius: 10, padding: "12px 16px", maxWidth: 520, margin: "0 auto 26px", textAlign: "left", lineHeight: 1.6 }}>
               <Truck size={15} color={C.blue} style={{ marginTop: 1, flexShrink: 0 }} />
@@ -261,6 +326,70 @@ export default function CheckoutPage() {
               </>
             ) : (
               <>
+                {/* CORRIERE — un preventivo per fornitore. "La più economica" e "La più rapida" sempre
+                    per prime, poi le altre opzioni ordinate per punteggio prezzo/velocità (70/30). */}
+                {suppliers.map(s => {
+                  const q = quotesBySupplier[s.id];
+                  if (q === undefined) {
+                    return (
+                      <div key={s.id} className="cp-quote-card" style={{ border: `1px solid ${C.border}`, borderRadius: 14, padding: 18, marginBottom: 14, fontSize: 13, color: C.muted }}>
+                        Calcolo corrieri disponibili per {s.name}…
+                      </div>
+                    );
+                  }
+                  if (q === "none") {
+                    return (
+                      <div key={s.id} style={{ border: `1px solid #FED7AA`, background: "#FFF7ED", borderRadius: 14, padding: 18, marginBottom: 14 }}>
+                        <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+                          <PauseCircle size={18} color={C.amber} style={{ marginTop: 1, flexShrink: 0 }} />
+                          <div>
+                            <div style={{ fontSize: 13.5, fontWeight: 700, color: "#9A3412", marginBottom: 4 }}>{s.name} — nessun corriere su questa tratta</div>
+                            <div style={{ fontSize: 12.5, color: "#9A3412", lineHeight: 1.6 }}>
+                              Il tuo ordine non può essere processato perché per questa spedizione non abbiamo ancora un corriere attivo sulla tratta {s.country || "—"} → {address || "—"}. Lo mettiamo in attesa: il nostro team logistico ti farà avere il costo di spedizione a breve, e completerai il pagamento solo a quel punto.
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  }
+                  const sorted = [...q.quotes].sort((a, b) => {
+                    if (a.carrier_id === q.cheapest_id) return -1; if (b.carrier_id === q.cheapest_id) return 1;
+                    if (a.carrier_id === q.fastest_id) return -1; if (b.carrier_id === q.fastest_id) return 1;
+                    return b.score - a.score;
+                  });
+                  return (
+                    <div key={s.id} style={{ border: `1px solid ${C.border}`, borderRadius: 14, padding: 18, marginBottom: 14 }}>
+                      <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 12, display: "flex", alignItems: "center", gap: 6 }}><Truck size={14} color={C.blue} /> Corriere per {s.name} <span style={{ fontWeight: 400, color: C.muted }}>({s.qty.toLocaleString("it-IT")} kg)</span></div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                        {sorted.map(carrier => {
+                          const isCheapest = carrier.carrier_id === q.cheapest_id;
+                          const isFastest = carrier.carrier_id === q.fastest_id;
+                          const selected = selectedCarrier[s.id] === carrier.carrier_id;
+                          return (
+                            <div key={carrier.carrier_id} onClick={() => setSelectedCarrier(prev => ({ ...prev, [s.id]: carrier.carrier_id }))}
+                              style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, cursor: "pointer", border: `1.5px solid ${selected ? C.blue : C.border}`, background: selected ? "#EFF6FF" : "#fff", borderRadius: 10, padding: "10px 14px" }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                                <div style={{ width: 17, height: 17, borderRadius: "50%", border: `2px solid ${selected ? C.blue : C.border}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                                  {selected && <div style={{ width: 8, height: 8, borderRadius: "50%", background: C.blue }} />}
+                                </div>
+                                <div>
+                                  <div style={{ fontSize: 13, fontWeight: 700 }}>
+                                    {carrier.carrier_name}
+                                    {isCheapest && <span style={{ marginLeft: 8, fontSize: 10.5, fontWeight: 800, color: C.green, background: "#ECFDF5", borderRadius: 100, padding: "2px 8px" }}>La più economica</span>}
+                                    {isFastest && !isCheapest && <span style={{ marginLeft: 8, fontSize: 10.5, fontWeight: 800, color: C.blue, background: "#EFF6FF", borderRadius: 100, padding: "2px 8px" }}>La più rapida</span>}
+                                  </div>
+                                  <div style={{ fontSize: 11.5, color: C.muted, display: "flex", alignItems: "center", gap: 5 }}><Clock3 size={11} /> {carrier.lead_time_days != null ? `${carrier.lead_time_days} giorni` : "tempi variabili"}</div>
+                                </div>
+                              </div>
+                              <span className="co-num" style={{ fontSize: 15, fontWeight: 800, color: C.text }}>{eur(carrier.price)}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+
                 <div style={{ border: `1px solid ${C.border}`, borderRadius: 14, padding: 20, marginBottom: 18 }}>
                   <div style={{ fontSize: 13, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: C.muted, marginBottom: 14 }}>Riepilogo</div>
                   <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13.5, marginBottom: 8 }}><span style={{ color: C.muted }}>Righe</span><span className="co-num" style={{ fontWeight: 600 }}>{items.length}</span></div>
