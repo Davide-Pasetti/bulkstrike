@@ -176,6 +176,13 @@ export default function Dashboard() {
   const [wResponded, setWResponded] = useState(false);
   const [wPrice, setWPrice] = useState("");
 
+  // Apertura diretta di una sezione via querystring (es. /dashboard?section=pools,
+  // usato dal pulsante "Visualizza i tuoi pool" dopo l'adesione a un'asta).
+  useEffect(() => {
+    const s = new URLSearchParams(window.location.search).get("section");
+    if (s) setSection(s);
+  }, []);
+
   const cur = mats[role];
   const curNotifs = notifs[role];
   const defs = ALERT_DEFS[role];
@@ -423,7 +430,7 @@ export default function Dashboard() {
                 {query && (
                   <div style={{ display:"flex", flexWrap:"wrap", gap:8 }}>
                     {searchHits.map(m=>{ const on=!!cur[m]; return <button key={m} onClick={()=>toggleMat(m)} style={chipStyle(on)}>{on&&<Check size={13}/>}{m}</button>; })}
-                    {!exact && <button onClick={()=>{ addMat(q.trim()); setQ(""); }} style={{ padding:"7px 13px", borderRadius:100, border:`1.5px dashed ${C.blue}`, background:"#fff", color:C.blue, fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:"Inter,system-ui", display:"flex", alignItems:"center", gap:5 }}><Plus size={14}/> Aggiungi “{q.trim()}”</button>}
+                    {!exact && <button onClick={()=>{ addMat(q.trim()); setQ(""); }} style={{ padding:"7px 13px", borderRadius:100, border:`1.5px dashed ${C.blue}`, background:"#fff", color:C.blue, fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:"Inter,system-ui", display:"flex", alignItems:"center", gap:5 }}><Plus size={14}/> Aggiungi "{q.trim()}"</button>}
                   </div>
                 )}
               </div>
@@ -556,7 +563,7 @@ export default function Dashboard() {
                       <div><div style={{ fontSize:11, color:C.muted }}>Aziende aggregate</div><div className="bs-num" style={{ fontSize:18, fontWeight:800 }}>{p.companies}</div></div>
                       <div><div style={{ fontSize:11, color:C.muted }}>Fornitori in gara</div><div className="bs-num" style={{ fontSize:18, fontWeight:800 }}>{p.suppliers}</div></div>
                     </div>
-                    <button style={{ background:C.purple, color:"#fff", border:"none", borderRadius:9, padding:"10px 18px", fontSize:14, fontWeight:700, cursor:"pointer", fontFamily:"Inter,system-ui", display:"inline-flex", alignItems:"center", gap:7 }}>
+                    <button onClick={() => { window.location.href = p.id ? `/pool?id=${p.id}` : "/pool"; }} style={{ background:C.purple, color:"#fff", border:"none", borderRadius:9, padding:"10px 18px", fontSize:14, fontWeight:700, cursor:"pointer", fontFamily:"Inter,system-ui", display:"inline-flex", alignItems:"center", gap:7 }}>
                       {role==="buyer" ? <>Vai al pool <ChevronRight size={15}/></> : <><Zap size={15}/> Rilancia offerta</>}
                     </button>
                   </div>

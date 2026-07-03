@@ -89,6 +89,7 @@ export default function PoolAuctionPage() {
   const [chatOpen, setChatOpen] = useState(false);
   const [acceptTerms, setAcceptTerms] = useState(false);
   const [secs, setSecs] = useState(pool.secondsLeft);
+  const [joined, setJoined] = useState(false);
 
   useEffect(() => {
     const t = setInterval(() => setSecs(s => s>0 ? s-1 : 0), 1000);
@@ -133,6 +134,7 @@ export default function PoolAuctionPage() {
     try {
       await joinPool(poolId, userQty, true);
       setJoinMsg("✓ Adesione registrata: sei nell'asta.");
+      setJoined(true);
       loadPool(poolId);
     } catch (e) {
       setJoinMsg(poolErrorMessage(e));
@@ -339,56 +341,73 @@ export default function PoolAuctionPage() {
 
           {/* RIGHT: join */}
           <div style={{ background:"#fff", border:`1px solid ${C.border}`, borderRadius:14, padding:20 }}>
-            <div style={{ fontSize:15, fontWeight:700, marginBottom:4 }}>Aderisci all'asta</div>
-            <div style={{ fontSize:13, color:C.muted, marginBottom:14 }}>La tua quantità entra subito nel volume aggregato</div>
+            {joined ? (
+              <>
+                <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:6 }}>
+                  <div style={{ width:34, height:34, borderRadius:"50%", background:"#DCFCE7", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}><Check size={18} color={C.green}/></div>
+                  <div style={{ fontSize:15, fontWeight:700 }}>Ti sei aggiunto al pool!</div>
+                </div>
+                <div style={{ fontSize:13, color:C.muted, marginBottom:16, lineHeight:1.5 }}>La tua quantità è entrata nel volume aggregato. Segui l'andamento dell'asta dal tuo profilo.</div>
+                <button onClick={() => { window.location.href = "/dashboard?section=pools"; }} className="bs-btn" style={{ width:"100%" }}>Visualizza i tuoi pool <ArrowRight size={18}/></button>
+                <div style={{ display:"flex", alignItems:"center", gap:6, marginTop:12, fontSize:12, color:C.muted }}>
+                  <Shield size={20} color={C.green} style={{ flexShrink:0 }}/>
+                  <span>Pagamento in escrow al prezzo di chiusura. Mai più dell'Acquisto Rapido.</span>
+                </div>
+              </>
+            ) : (
+              <>
+                <div style={{ fontSize:15, fontWeight:700, marginBottom:4 }}>Aderisci all'asta</div>
+                <div style={{ fontSize:13, color:C.muted, marginBottom:14 }}>La tua quantità entra subito nel volume aggregato</div>
 
-            <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:12 }}>
-              <button className="bs-qty-btn" onClick={() => setQtySafe(userQty-500)}><Minus size={16}/></button>
-              <div style={{ flex:1, display:"flex", alignItems:"baseline", justifyContent:"center", gap:6, background:C.bg, border:`1px solid ${belowMin?C.amber:C.border}`, borderRadius:8, padding:"9px 12px" }}>
-                <input className="bs-num" style={{ width:80, border:"none", outline:"none", background:"transparent", fontSize:20, fontWeight:700, textAlign:"center", color:C.text }} value={userQty} onChange={e => setQtySafe(parseInt(e.target.value.replace(/\D/g,"")||"0"))}/>
-                <span style={{ fontSize:14, color:C.muted }}>kg</span>
-              </div>
-              <button className="bs-qty-btn" onClick={() => setQtySafe(userQty+500)}><Plus size={16}/></button>
-            </div>
+                <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:12 }}>
+                  <button className="bs-qty-btn" onClick={() => setQtySafe(userQty-500)}><Minus size={16}/></button>
+                  <div style={{ flex:1, display:"flex", alignItems:"baseline", justifyContent:"center", gap:6, background:C.bg, border:`1px solid ${belowMin?C.amber:C.border}`, borderRadius:8, padding:"9px 12px" }}>
+                    <input className="bs-num" style={{ width:80, border:"none", outline:"none", background:"transparent", fontSize:20, fontWeight:700, textAlign:"center", color:C.text }} value={userQty} onChange={e => setQtySafe(parseInt(e.target.value.replace(/\D/g,"")||"0"))}/>
+                    <span style={{ fontSize:14, color:C.muted }}>kg</span>
+                  </div>
+                  <button className="bs-qty-btn" onClick={() => setUserQty(userQty+500)}><Plus size={16}/></button>
+                </div>
 
-            <div style={{ display:"flex", gap:6, marginBottom:14 }}>
-              {[PALLET_KG,2000,5000].map(q => (
-                <button key={q} onClick={() => setUserQty(q)} style={{ flex:1, padding:"7px", borderRadius:7, border:`1px solid ${userQty===q?C.purple:C.border}`, background:userQty===q?"#FBF7FF":"#fff", color:userQty===q?C.purple:C.muted, fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:"Inter,system-ui" }}>{q===PALLET_KG?"1 pallet":`${q/1000}t`}</button>
-              ))}
-            </div>
+                <div style={{ display:"flex", gap:6, marginBottom:14 }}>
+                  {[PALLET_KG,2000,5000].map(q => (
+                    <button key={q} onClick={() => setUserQty(q)} style={{ flex:1, padding:"7px", borderRadius:7, border:`1px solid ${userQty===q?C.purple:C.border}`, background:userQty===q?"#FBF7FF":"#fff", color:userQty===q?C.purple:C.muted, fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:"Inter,system-ui" }}>{q===PALLET_KG?"1 pallet":`${q/1000}t`}</button>
+                  ))}
+                </div>
 
-            {belowMin && (
-              <div style={{ background:"#FFFBEB", border:`1px solid ${C.amber}55`, borderRadius:9, padding:"10px 12px", marginBottom:14, fontSize:12, color:"#92400E", display:"flex", gap:8 }}>
-                <Info size={26} color={C.amber} style={{ flexShrink:0 }}/>
-                <span>Sotto i <b>{kg(MIN_OPEN)} kg (1 pallet di questo prodotto)</b> non puoi aprire un pool, ma puoi aggiungerti a questo già attivo oppure fare l'<b>Acquisto Rapido</b>.</span>
-              </div>
+                {belowMin && (
+                  <div style={{ background:"#FFFBEB", border:`1px solid ${C.amber}55`, borderRadius:9, padding:"10px 12px", marginBottom:14, fontSize:12, color:"#92400E", display:"flex", gap:8 }}>
+                    <Info size={26} color={C.amber} style={{ flexShrink:0 }}/>
+                    <span>Sotto i <b>{kg(MIN_OPEN)} kg (1 pallet di questo prodotto)</b> non puoi aprire un pool, ma puoi aggiungerti a questo già attivo oppure fare l'<b>Acquisto Rapido</b>.</span>
+                  </div>
+                )}
+
+                <div style={{ background:C.bg, borderRadius:10, padding:"14px 16px", marginBottom:14 }}>
+                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", marginBottom:8 }}>
+                    <span style={{ fontSize:13, color:C.muted }}>Prezzo stimato (live)</span>
+                    <span className="bs-num" style={{ fontSize:24, fontWeight:800, color:C.purple }}>{eurKg(effectiveNow)}<span style={{ fontSize:13, fontWeight:400, color:C.muted }}>/kg</span></span>
+                  </div>
+                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", paddingTop:8, borderTop:`1px solid ${C.border}` }}>
+                    <span style={{ fontSize:13, color:C.muted }}>Risparmio vs Acquisto Rapido</span>
+                    <span className="bs-num" style={{ fontSize:18, fontWeight:800, color:C.green }}>{eur(savings)}</span>
+                  </div>
+                  <div style={{ fontSize:11, color:C.muted, marginTop:4 }}>Il prezzo finale può solo scendere fino alla chiusura.</div>
+                </div>
+
+                <label style={{ display:"flex", gap:10, alignItems:"flex-start", background:"#FFF7ED", border:`1px solid ${C.amber}44`, borderRadius:9, padding:"11px 12px", marginBottom:14, cursor:"pointer" }}>
+                  <input type="checkbox" checked={acceptTerms} onChange={e => setAcceptTerms(e.target.checked)} style={{ marginTop:2, width:16, height:16, accentColor:C.purple, flexShrink:0 }}/>
+                  <span style={{ fontSize:12, color:"#7C2D12", lineHeight:1.5 }}>
+                    Aderendo accetto il <b>fornitore che offrirà il prezzo più basso</b> tra quelli certificati allo standard sopra indicato. Per scegliere un fornitore specifico devo usare l'Acquisto Rapido.
+                  </span>
+                </label>
+
+                <button onClick={joinTheAuction} className="bs-btn" style={{ width:"100%" }} disabled={!acceptTerms || joining}>{joining ? "Adesione in corso…" : <>Aderisci all'asta <ArrowRight size={18}/></>}</button>
+                {joinMsg && <div style={{ marginTop:10, fontSize:13, textAlign:"center", color: joinMsg.startsWith("✓") ? C.green : C.red }}>{joinMsg}</div>}
+                <div style={{ display:"flex", alignItems:"center", gap:6, marginTop:12, fontSize:12, color:C.muted }}>
+                  <Shield size={20} color={C.green} style={{ flexShrink:0 }}/>
+                  <span>Pagamento in escrow al prezzo di chiusura. Mai più dell'Acquisto Rapido.</span>
+                </div>
+              </>
             )}
-
-            <div style={{ background:C.bg, borderRadius:10, padding:"14px 16px", marginBottom:14 }}>
-              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", marginBottom:8 }}>
-                <span style={{ fontSize:13, color:C.muted }}>Prezzo stimato (live)</span>
-                <span className="bs-num" style={{ fontSize:24, fontWeight:800, color:C.purple }}>{eurKg(effectiveNow)}<span style={{ fontSize:13, fontWeight:400, color:C.muted }}>/kg</span></span>
-              </div>
-              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", paddingTop:8, borderTop:`1px solid ${C.border}` }}>
-                <span style={{ fontSize:13, color:C.muted }}>Risparmio vs Acquisto Rapido</span>
-                <span className="bs-num" style={{ fontSize:18, fontWeight:800, color:C.green }}>{eur(savings)}</span>
-              </div>
-              <div style={{ fontSize:11, color:C.muted, marginTop:4 }}>Il prezzo finale può solo scendere fino alla chiusura.</div>
-            </div>
-
-            <label style={{ display:"flex", gap:10, alignItems:"flex-start", background:"#FFF7ED", border:`1px solid ${C.amber}44`, borderRadius:9, padding:"11px 12px", marginBottom:14, cursor:"pointer" }}>
-              <input type="checkbox" checked={acceptTerms} onChange={e => setAcceptTerms(e.target.checked)} style={{ marginTop:2, width:16, height:16, accentColor:C.purple, flexShrink:0 }}/>
-              <span style={{ fontSize:12, color:"#7C2D12", lineHeight:1.5 }}>
-                Aderendo accetto il <b>fornitore che offrirà il prezzo più basso</b> tra quelli certificati allo standard sopra indicato. Per scegliere un fornitore specifico devo usare l'Acquisto Rapido.
-              </span>
-            </label>
-
-            <button onClick={joinTheAuction} className="bs-btn" style={{ width:"100%" }} disabled={!acceptTerms || joining}>{joining ? "Adesione in corso…" : <>Aderisci all'asta <ArrowRight size={18}/></>}</button>
-            {joinMsg && <div style={{ marginTop:10, fontSize:13, textAlign:"center", color: joinMsg.startsWith("✓") ? C.green : C.red }}>{joinMsg}</div>}
-            <div style={{ display:"flex", alignItems:"center", gap:6, marginTop:12, fontSize:12, color:C.muted }}>
-              <Shield size={20} color={C.green} style={{ flexShrink:0 }}/>
-              <span>Pagamento in escrow al prezzo di chiusura. Mai più dell'Acquisto Rapido.</span>
-            </div>
           </div>
         </div>
 
@@ -396,7 +415,7 @@ export default function PoolAuctionPage() {
         <div style={{ background:"#07111E", borderRadius:14, padding:"18px 24px", marginBottom:28, display:"flex", gap:14, alignItems:"center", flexWrap:"wrap" }}>
           <Shield size={22} color="#22D3EE" style={{ flexShrink:0 }}/>
           <div style={{ flex:1, minWidth:220 }}>
-            <div style={{ fontSize:14, fontWeight:700, color:"#F0F6FF" }}>Il pool si chiude sempre — a rischio zero</div>
+            <div style={{ fontSize:14, fontWeight:700, color:"#F0F6FF" }}>Il pool si chiude sempre · a rischio zero</div>
             <div style={{ fontSize:13, color:"#6B94B8", lineHeight:1.5 }}>Anche se l'asta resta deserta e sei l'unico partecipante, alla scadenza acquisti comunque la tua quantità al prezzo del tuo volume. Non paghi mai più dell'Acquisto Rapido: l'unico costo è l'attesa.</div>
           </div>
         </div>
@@ -535,7 +554,7 @@ export default function PoolAuctionPage() {
               <div style={{ padding:"6px 12px 0", fontSize:10, color:C.muted, textAlign:"center" }}>Risposte generate da intelligenza artificiale</div>
               <div style={{ padding:10, display:"flex", gap:8 }}>
                 <input placeholder="Scrivi un messaggio..." style={{ flex:1, border:`1px solid ${C.border}`, borderRadius:8, padding:"8px 12px", fontSize:13, outline:"none", fontFamily:"Inter,system-ui" }}/>
-                <button style={{ background:C.purple, border:"none", borderRadius:8, width:34, cursor:"pointer", color:"#fff", fontWeight:700 }}>↑</button>
+                <button style={{ background:C.purple, border:"none", borderRadius:8, width:34, cursor:"pointer", color:"#fff", fontWeight:700 }}>→</button>
               </div>
             </div>
           </div>

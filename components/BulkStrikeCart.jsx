@@ -2,11 +2,12 @@
 // BulkStrikeCart — carrello acquisti (/carrello). DB-backed (tabella cart_items):
 // il carrello segue l'account su qualsiasi dispositivo. Prezzi sempre ricalcolati
 // server-side dai tier correnti (get_cart) — il client non decide mai un prezzo.
-// I prezzi qui sono IVA e spedizione ESCLUSE: vengono calcolate al checkout,
-// dopo che il cliente ha scelto l'indirizzo di spedizione (preview_checkout).
+// I prezzi qui sono IVA e spedizione ESCLUSE: la spedizione viene stimata subito
+// (indirizzo aziendale, provvisoria) e ricalcolata definitivamente al checkout
+// dopo che il cliente ha scelto/confermato l'indirizzo di spedizione.
 import { useState, useEffect, useMemo } from "react";
 import { ShoppingCart, Trash2, ArrowRight, AlertTriangle, Package, ShieldCheck, ChevronRight } from "lucide-react";
-import { getCart, upsertCartItem, removeCartItem, clearCart, getSession, poolErrorMessage, previewCheckout } from "@/lib/api";
+import { getCart, upsertCartItem, removeCartItem, clearCart, getSession, poolErrorMessage, previewCheckout, getMyCompanyAddress } from "@/lib/api";
 import NavAuth from "@/components/BulkStrikeNavAuth";
 
 const C = { blue: "#0EA5E9", dark: "#0284C7", text: "#0F172A", muted: "#64748B", border: "#E2E8F0", bg: "#F8FAFE", green: "#059669", red: "#DC2626", amber: "#D97706" };
@@ -47,7 +48,14 @@ export default function CartPage() {
       setItems(cart);
       if (cart.length === 0) { setPreview(null); return; }
       setPreviewLoading(true);
-      try { setPreview(await previewCheckout()); } catch (e) {} finally { setPreviewLoading(false); }
+      try {
+        // Stima provvisoria: usiamo l'indirizzo registrato dell'azienda finché il
+        // cliente non ne sceglie uno diverso al checkout — evita lo "Spedizione €0,00".
+        const addr = await getMyCompanyAddress().catch(() => null);
+        const shippingAddress = addr ? [addr.address, addr.city, addr.country].filter(Boolean).join(", ") : null;
+        setPreview(await previewCheckout(shippingAddress));
+      } catch (e) {}
+      finally { setPreviewLoading(false); }
     } catch (e) { setErr(poolErrorMessage(e)); }
   }
 
@@ -199,7 +207,7 @@ export default function CartPage() {
                 );
               })}
               <button onClick={emptyAll} style={{ background: "transparent", border: "none", color: C.muted, fontSize: 12.5, cursor: "pointer", textDecoration: "underline", fontFamily: "Inter,system-ui", padding: "4px 0" }}>Svuota carrello</button>
-              <div style={{ fontSize: 11.5, color: C.muted, marginTop: 10 }}>* Prezzo unitario e totale riga: IVA esclusa (spedizione consolidata nel riepilogo qui a fianco)</div>
+              <div style={{ fontSize: 11.5, color: C.muted, marginTop: 10 }}>* Prezzo unitario e totale riga: IVA esclusa (spedizione stimata sull'indirizzo aziendale nel riepilogo qui a fianco)</div>
             </div>
 
             {/* RIEPILOGO */}
@@ -221,12 +229,12 @@ export default function CartPage() {
                   <span className="ct-num" style={{ fontWeight: 600 }}>{eur(preview?.goods_subtotal ?? subtotal)}</span>
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13.5, marginBottom: 8 }}>
-                  <span style={{ color: C.muted }}>Spedizione {previewLoading && "…"}</span>
+                  <span style={{ color: C.muted }}>Spedizione (stima) {previewLoading && "…"}</span>
                   <span className="ct-num" style={{ fontWeight: 600 }}>{previewLoading ? "…" : eur(preview?.shipping_amount)}</span>
                 </div>
                 {(preview?.by_supplier || []).filter(s => s.product_count > 1).map(s => (
                   <div key={s.supplier_company_id} style={{ fontSize: 11, color: C.green, fontWeight: 600, marginBottom: 4, display: "flex", justifyContent: "space-between" }}>
-                    <span>↳ {s.supplier_name}: {s.product_count} prodotti, spedizione unica</span>
+                    <span>⊳ {s.supplier_name}: {s.product_count} prodotti, spedizione unica</span>
                   </div>
                 ))}
               </div>
@@ -234,7 +242,7 @@ export default function CartPage() {
                 <span style={{ fontSize: 14, fontWeight: 700 }}>Totale <span style={{ fontWeight: 500, color: C.muted }}>(IVA esclusa)</span></span>
                 <span className="ct-num" style={{ fontSize: 22, fontWeight: 800, color: C.blue }}>{previewLoading ? "…" : eur((preview?.goods_subtotal ?? subtotal) + (preview?.shipping_amount ?? 0))}</span>
               </div>
-              <div style={{ fontSize: 11.5, color: C.muted, marginBottom: 12 }}>* IVA esclusa — la vedi al checkout, dopo l'indirizzo</div>
+              <div style={{ fontSize: 11.5, color: C.muted, marginBottom: 12 }}>* Spedizione stimata sull'indirizzo della tua azienda — potrà cambiare se al checkout scegli un altro indirizzo. IVA esclusa.</div>
               {issues.length > 0 && (
                 <div style={{ display: "flex", gap: 7, alignItems: "flex-start", fontSize: 12, color: "#9A3412", background: "#FFF7ED", border: "1px solid #FED7AA", borderRadius: 9, padding: "9px 11px", marginBottom: 12 }}>
                   <AlertTriangle size={13} style={{ marginTop: 1, flexShrink: 0 }} />
@@ -243,7 +251,7 @@ export default function CartPage() {
               )}
               <button onClick={() => { window.location.href = "/checkout"; }} disabled={issues.length > 0 || items.length === 0}
                 style={{ width: "100%", justifyContent: "center", background: C.blue, color: "#fff", border: "none", borderRadius: 10, padding: "13px", fontSize: 14.5, fontWeight: 700, cursor: issues.length > 0 ? "default" : "pointer", opacity: issues.length > 0 ? 0.5 : 1, display: "flex", alignItems: "center", gap: 8, fontFamily: "Inter,system-ui" }}>
-                Procedi al checkout <ArrowRight size={16} />
+                Verifica costi di spedizione <ArrowRight size={16} />
               </button>
               <div style={{ display: "flex", gap: 7, alignItems: "flex-start", fontSize: 11.5, color: C.muted, marginTop: 12, lineHeight: 1.5 }}>
                 <ShieldCheck size={13} color={C.green} style={{ marginTop: 1, flexShrink: 0 }} />

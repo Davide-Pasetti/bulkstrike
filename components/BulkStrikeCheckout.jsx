@@ -1,15 +1,16 @@
 "use client";
 // BulkStrikeCheckout — checkout in 2 step (/checkout):
-// 1) Spedizione — conferma indirizzo (precompilato dai dati aziendali) + note,
-// riepilogo di ogni riga (fornitore, quantità, lead time), prezzi IVA/spedizione esclusi.
+// 1) Spedizione — indirizzo scelto da una rubrica salvata (o aggiunto al volo e
+// salvato per i prossimi ordini) + note, riepilogo di ogni riga (fornitore,
+// quantità, lead time), prezzi IVA/spedizione esclusi.
 // 2) Pagamento — riepilogo economico REALE (preview_checkout: spedizione stimata +
 // IVA 22% calcolate server-side ora che l'indirizzo è noto), conferma → checkout_cart
 // crea gli ordini GIÀ PAGATI (DEMO) con spedizione+IVA salvate sull'ordine, e svuota
 // il carrello → pagina "Pagamento eseguito".
 // Il pagamento chiude il checkout: non è più un passo separato successivo.
 import { useState, useEffect, useMemo } from "react";
-import { ShieldCheck, ArrowRight, ArrowLeft, Check, ChevronRight, Package, FileText, AlertTriangle, MapPin, Mail, CreditCard, Truck, Zap, Clock3, PauseCircle } from "lucide-react";
-import { getCart, checkoutCart, previewCheckout, getMyCompanyAddress, getSession, poolErrorMessage, getShippingQuotes } from "@/lib/api";
+import { ShieldCheck, ArrowRight, ArrowLeft, Check, ChevronRight, Package, FileText, AlertTriangle, MapPin, Mail, CreditCard, Truck, Zap, Clock3, PauseCircle, Plus, X } from "lucide-react";
+import { getCart, checkoutCart, previewCheckout, getMyCompanyAddress, getShippingAddresses, addShippingAddress, getSession, poolErrorMessage, getShippingQuotes } from "@/lib/api";
 import NavAuth from "@/components/BulkStrikeNavAuth";
 
 const C = { blue: "#0EA5E9", dark: "#0284C7", text: "#0F172A", muted: "#64748B", border: "#E2E8F0", bg: "#F8FAFE", green: "#059669", red: "#DC2626", amber: "#D97706" };
@@ -68,6 +69,14 @@ export default function CheckoutPage() {
   const [done, setDone] = useState(null);
   const [buyerEmail, setBuyerEmail] = useState("");
 
+  // Rubrica indirizzi di spedizione salvati dal cliente + form per aggiungerne uno nuovo.
+  const [addresses, setAddresses] = useState([]);
+  const [selectedAddressId, setSelectedAddressId] = useState("");
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [newAddrText, setNewAddrText] = useState("");
+  const [newAddrLabel, setNewAddrLabel] = useState("");
+  const [savingAddress, setSavingAddress] = useState(false);
+
   // Riepilogo reale (spedizione + IVA) — calcolato server-side una volta noto l'indirizzo.
   const [preview, setPreview] = useState(null);
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -83,13 +92,50 @@ export default function CheckoutPage() {
       if (!session) { setNeedLogin(true); setLoading(false); return; }
       setBuyerEmail(session.user?.email || "");
       try {
-        const [cart, addr] = await Promise.all([getCart(), getMyCompanyAddress().catch(() => null)]);
+        const [cart, savedAddrs, companyAddr] = await Promise.all([
+          getCart(),
+          getShippingAddresses().catch(() => []),
+          getMyCompanyAddress().catch(() => null),
+        ]);
         setItems(cart);
-        if (addr) setAddress([addr.address, addr.city, addr.country].filter(Boolean).join(", "));
+        setAddresses(savedAddrs || []);
+        if (savedAddrs && savedAddrs.length > 0) {
+          const def = savedAddrs.find(a => a.is_default) || savedAddrs[0];
+          setSelectedAddressId(def.id);
+          setAddress(def.address);
+        } else {
+          // nessun indirizzo salvato ancora: precompiliamo il form "nuovo indirizzo"
+          // con l'indirizzo aziendale, cosi' basta un click per salvarlo come primo.
+          setShowAddForm(true);
+          if (companyAddr) setNewAddrText([companyAddr.address, companyAddr.city, companyAddr.country].filter(Boolean).join(", "));
+        }
       } catch (e) { setErr(poolErrorMessage(e)); }
       setLoading(false);
     })();
   }, []);
+
+  function selectAddress(id) {
+    if (id === "__new__") { setShowAddForm(true); return; }
+    setSelectedAddressId(id);
+    setShowAddForm(false);
+    const found = addresses.find(a => a.id === id);
+    if (found) setAddress(found.address);
+  }
+
+  async function saveNewAddress() {
+    setErr("");
+    if (!newAddrText.trim()) { setErr("Inserisci l'indirizzo da salvare."); return; }
+    setSavingAddress(true);
+    try {
+      const row = await addShippingAddress(newAddrText.trim(), newAddrLabel.trim() || null);
+      setAddresses(prev => [...prev, row]);
+      setSelectedAddressId(row.id);
+      setAddress(row.address);
+      setShowAddForm(false);
+      setNewAddrText(""); setNewAddrLabel("");
+    } catch (e) { setErr(poolErrorMessage(e)); }
+    finally { setSavingAddress(false); }
+  }
 
   // fornitori distinti nel carrello, con kg totali — un preventivo di spedizione è per fornitore, non per prodotto
   const suppliers = useMemo(() => {
@@ -159,7 +205,7 @@ export default function CheckoutPage() {
 
   function goToPayment() {
     setErr("");
-    if (!address.trim()) { setErr("Inserisci l'indirizzo di spedizione."); return; }
+    if (!address.trim()) { setErr("Seleziona o aggiungi l'indirizzo di spedizione."); return; }
     setStep(2);
   }
 
@@ -182,7 +228,7 @@ export default function CheckoutPage() {
         * { box-sizing:border-box; }
         .co-num { font-family:'JetBrains Mono',monospace; }
         .co-row { display:grid; grid-template-columns:2fr 1fr 1fr 1fr; gap:12px; padding:13px 16px; border-bottom:1px solid ${C.border}; font-size:13.5px; align-items:center; }
-        .co-input { width:100%; padding:11px 13px; border:1.5px solid ${C.border}; border-radius:9px; font-size:14px; outline:none; font-family:'Inter',system-ui; }
+        .co-input { width:100%; padding:11px 13px; border:1.5px solid ${C.border}; border-radius:9px; font-size:14px; outline:none; font-family:'Inter',system-ui; background:#fff; }
         .co-input:focus { border-color:${C.blue}; }
         @media (max-width:760px) { .co-row { grid-template-columns:1fr 1fr !important; } }
       `}</style>
@@ -217,7 +263,7 @@ export default function CheckoutPage() {
             <h1 style={{ fontSize: 26, fontWeight: 800, marginBottom: 8 }}>{(done.orders || []).length > 0 ? "Pagamento eseguito" : "Ordine registrato"}</h1>
             <p style={{ fontSize: 14.5, color: C.muted, maxWidth: 520, margin: "0 auto 6px", lineHeight: 1.6 }}>
               {(done.orders || []).length > 0
-                ? <>{done.count === 1 ? "Il tuo ordine è" : `I tuoi ${done.count} ordini sono`} stati pagati e {done.count === 1 ? "il fornitore è stato" : "i fornitori sono stati"} avvisato{done.count === 1 ? "" : "i"}: la merce partirà a breve.</>
+                ? <>{done.count === 1 ? "Il tuo ordine è" : `I tuoi ${done.count} ordini sono`} stati pagati e {done.count === 1 ? "il fornitore è stato" : "i fornitori sono stati"} avvisat{done.count === 1 ? "" : "i"}: la merce partirà a breve.</>
                 : "Il tuo ordine è registrato, in attesa del costo di spedizione."}
             </p>
             {done.total_paid != null && done.total_paid > 0 && (
@@ -291,11 +337,42 @@ export default function CheckoutPage() {
               <>
                 <div style={{ border: `1px solid ${C.border}`, borderRadius: 14, padding: 20, marginBottom: 18 }}>
                   <div style={{ fontSize: 13, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: C.muted, marginBottom: 14, display: "flex", alignItems: "center", gap: 7 }}><MapPin size={15} /> Indirizzo di consegna</div>
-                  <label style={{ fontSize: 12.5, fontWeight: 600, color: C.muted, display: "block", marginBottom: 6 }}>Indirizzo *</label>
-                  <input className="co-input" value={address} onChange={e => setAddress(e.target.value)} placeholder="Via, civico, CAP, città, paese" style={{ marginBottom: 14 }} />
+
+                  {addresses.length > 0 && (
+                    <>
+                      <label style={{ fontSize: 12.5, fontWeight: 600, color: C.muted, display: "block", marginBottom: 6 }}>Indirizzo salvato *</label>
+                      <select className="co-input" value={showAddForm ? "__new__" : selectedAddressId} onChange={e => selectAddress(e.target.value)} style={{ marginBottom: showAddForm ? 14 : 14 }}>
+                        {addresses.map(a => (
+                          <option key={a.id} value={a.id}>{a.label ? `${a.label} — ` : ""}{a.address}</option>
+                        ))}
+                        <option value="__new__">+ Aggiungi un altro indirizzo di spedizione</option>
+                      </select>
+                    </>
+                  )}
+
+                  {(addresses.length === 0 || showAddForm) && (
+                    <div style={{ border: `1px solid ${C.border}`, borderRadius: 10, padding: 14, marginBottom: 14, background: C.bg }}>
+                      <label style={{ fontSize: 12.5, fontWeight: 600, color: C.muted, display: "block", marginBottom: 6 }}>Nuovo indirizzo di spedizione *</label>
+                      <input className="co-input" value={newAddrText} onChange={e => setNewAddrText(e.target.value)} placeholder="Via, civico, CAP, città, paese" style={{ marginBottom: 10 }} />
+                      <label style={{ fontSize: 12.5, fontWeight: 600, color: C.muted, display: "block", marginBottom: 6 }}>Etichetta (facoltativo)</label>
+                      <input className="co-input" value={newAddrLabel} onChange={e => setNewAddrLabel(e.target.value)} placeholder="Es. Sede legale, Magazzino Nord" style={{ marginBottom: 12 }} />
+                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                        <button onClick={saveNewAddress} disabled={savingAddress}
+                          style={{ background: C.blue, color: "#fff", border: "none", borderRadius: 9, padding: "10px 18px", fontSize: 13.5, fontWeight: 700, cursor: savingAddress ? "default" : "pointer", opacity: savingAddress ? 0.6 : 1, fontFamily: "Inter,system-ui", display: "inline-flex", alignItems: "center", gap: 6 }}>
+                          <Plus size={14} /> {savingAddress ? "Salvataggio…" : "Salva indirizzo"}
+                        </button>
+                        {addresses.length > 0 && (
+                          <button onClick={() => setShowAddForm(false)} style={{ background: "transparent", color: C.muted, border: `1px solid ${C.border}`, borderRadius: 9, padding: "10px 16px", fontSize: 13.5, fontWeight: 600, cursor: "pointer", fontFamily: "Inter,system-ui", display: "inline-flex", alignItems: "center", gap: 6 }}>
+                            <X size={14} /> Annulla
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
                   <label style={{ fontSize: 12.5, fontWeight: 600, color: C.muted, display: "block", marginBottom: 6 }}>Note per la consegna (facoltativo)</label>
                   <textarea className="co-input" value={notes} onChange={e => setNotes(e.target.value)} rows={2} placeholder="Es. accesso automezzi, orari di ricevimento merce, magazzino di destinazione…" style={{ resize: "vertical" }} />
-                  <div style={{ fontSize: 11.5, color: C.muted, marginTop: 8 }}>Precompilato con l'indirizzo della tua azienda — modificalo se la consegna va altrove.</div>
+                  <div style={{ fontSize: 11.5, color: C.muted, marginTop: 8 }}>L'indirizzo selezionato viene salvato tra quelli della tua azienda per i prossimi ordini.</div>
                 </div>
 
                 <div style={{ border: `1px solid ${C.border}`, borderRadius: 14, overflow: "hidden", marginBottom: 10 }}>
