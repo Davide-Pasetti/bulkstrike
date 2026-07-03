@@ -2,28 +2,30 @@
 // BulkStrikeCart — carrello acquisti (/carrello). DB-backed (tabella cart_items):
 // il carrello segue l'account su qualsiasi dispositivo. Prezzi sempre ricalcolati
 // server-side dai tier correnti (get_cart) — il client non decide mai un prezzo.
+// I prezzi qui sono IVA e spedizione ESCLUSE: vengono calcolate al checkout,
+// dopo che il cliente ha scelto l'indirizzo di spedizione (preview_checkout).
 import { useState, useEffect, useMemo } from "react";
 import { ShoppingCart, Trash2, ArrowRight, AlertTriangle, Package, ShieldCheck, ChevronRight } from "lucide-react";
 import { getCart, upsertCartItem, removeCartItem, clearCart, getSession, poolErrorMessage } from "@/lib/api";
 import NavAuth from "@/components/BulkStrikeNavAuth";
 
-const C = { blue:"#0EA5E9", dark:"#0284C7", text:"#0F172A", muted:"#64748B", border:"#E2E8F0", bg:"#F8FAFE", green:"#059669", red:"#DC2626", amber:"#D97706" };
-const eur = (n) => n == null ? "—" : "€" + Number(n).toLocaleString("it-IT", { minimumFractionDigits:2, maximumFractionDigits:2 });
+const C = { blue: "#0EA5E9", dark: "#0284C7", text: "#0F172A", muted: "#64748B", border: "#E2E8F0", bg: "#F8FAFE", green: "#059669", red: "#DC2626", amber: "#D97706" };
+const eur = (n) => n == null ? "—" : "€" + Number(n).toLocaleString("it-IT", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 function BSIcon({ size = 36, uid = "a" }) {
   return (
     <svg width={size} height={size} viewBox="0 0 56 56" fill="none">
       <defs>
-        <linearGradient id={`bg${uid}`} x1="0" y1="0" x2="56" y2="56" gradientUnits="userSpaceOnUse"><stop offset="0%" stopColor="#0D2137"/><stop offset="100%" stopColor="#0C4A6E"/></linearGradient>
-        <linearGradient id={`ar${uid}`} x1="42" y1="12" x2="42" y2="40" gradientUnits="userSpaceOnUse"><stop offset="0%" stopColor="#38BDF8"/><stop offset="100%" stopColor="#22D3EE"/></linearGradient>
+        <linearGradient id={`bg${uid}`} x1="0" y1="0" x2="56" y2="56" gradientUnits="userSpaceOnUse"><stop offset="0%" stopColor="#0D2137" /><stop offset="100%" stopColor="#0C4A6E" /></linearGradient>
+        <linearGradient id={`ar${uid}`} x1="42" y1="12" x2="42" y2="40" gradientUnits="userSpaceOnUse"><stop offset="0%" stopColor="#38BDF8" /><stop offset="100%" stopColor="#22D3EE" /></linearGradient>
       </defs>
-      <rect width="56" height="56" rx="13" fill={`url(#bg${uid})`}/>
-      <rect x="10" y="14" width="22" height="5.5" rx="2.75" fill="white"/>
-      <rect x="10" y="23" width="16" height="5.5" rx="2.75" fill="white" fillOpacity="0.65"/>
-      <rect x="10" y="32" width="10" height="5.5" rx="2.75" fill="white" fillOpacity="0.35"/>
-      <rect x="36" y="12" width="1" height="32" fill="white" fillOpacity="0.07"/>
-      <path d="M42 12 L42 34" stroke={`url(#ar${uid})`} strokeWidth="3.5" strokeLinecap="round"/>
-      <path d="M35.5 28.5 L42 38 L48.5 28.5" stroke={`url(#ar${uid})`} strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+      <rect width="56" height="56" rx="13" fill={`url(#bg${uid})`} />
+      <rect x="10" y="14" width="22" height="5.5" rx="2.75" fill="white" />
+      <rect x="10" y="23" width="16" height="5.5" rx="2.75" fill="white" fillOpacity="0.65" />
+      <rect x="10" y="32" width="10" height="5.5" rx="2.75" fill="white" fillOpacity="0.35" />
+      <rect x="36" y="12" width="1" height="32" fill="white" fillOpacity="0.07" />
+      <path d="M42 12 L42 34" stroke={`url(#ar${uid})`} strokeWidth="3.5" strokeLinecap="round" />
+      <path d="M35.5 28.5 L42 38 L48.5 28.5" stroke={`url(#ar${uid})`} strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
     </svg>
   );
 }
@@ -83,7 +85,7 @@ export default function CartPage() {
   const totalKg = useMemo(() => items.reduce((a, it) => a + Number(it.quantity_kg), 0), [items]);
 
   return (
-    <div style={{ background:"#fff", color:C.text, fontFamily:"'Inter',system-ui,sans-serif", minHeight:"100vh", colorScheme:"light" }}>
+    <div style={{ background: "#fff", color: C.text, fontFamily: "'Inter',system-ui,sans-serif", minHeight: "100vh", colorScheme: "light" }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap');
         * { box-sizing:border-box; }
@@ -100,125 +102,127 @@ export default function CartPage() {
       `}</style>
 
       {/* NAVBAR */}
-      <nav style={{ position:"sticky", top:0, zIndex:50, background:"rgba(255,255,255,0.96)", backdropFilter:"blur(12px)", borderBottom:`1px solid ${C.border}` }}>
-        <div style={{ maxWidth:1200, margin:"0 auto", padding:"0 20px", height:64, display:"flex", alignItems:"center", justifyContent:"space-between", gap:16 }}>
-          <div onClick={() => { window.location.href = "/"; }} style={{ display:"flex", alignItems:"center", gap:10, cursor:"pointer" }}>
+      <nav style={{ position: "sticky", top: 0, zIndex: 50, background: "rgba(255,255,255,0.96)", backdropFilter: "blur(12px)", borderBottom: `1px solid ${C.border}` }}>
+        <div style={{ maxWidth: 1200, margin: "0 auto", padding: "0 20px", height: 64, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
+          <div onClick={() => { window.location.href = "/"; }} style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}>
             <BSIcon size={34} uid="nav" />
-            <div style={{ display:"flex", alignItems:"baseline" }}>
-              <span style={{ fontSize:19, fontWeight:900, letterSpacing:"-0.03em" }}>Bulk</span>
-              <span style={{ fontSize:19, fontWeight:900, letterSpacing:"-0.03em", background:"linear-gradient(90deg,#0EA5E9,#22D3EE)", WebkitBackgroundClip:"text", backgroundClip:"text", color:"transparent" }}>Strike</span>
+            <div style={{ display: "flex", alignItems: "baseline" }}>
+              <span style={{ fontSize: 19, fontWeight: 900, letterSpacing: "-0.03em" }}>Bulk</span>
+              <span style={{ fontSize: 19, fontWeight: 900, letterSpacing: "-0.03em", background: "linear-gradient(90deg,#0EA5E9,#22D3EE)", WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" }}>Strike</span>
             </div>
           </div>
-          <div style={{ display:"flex", alignItems:"center", gap:18 }}>
-            <div className="ct-nav-links" style={{ display:"flex", gap:18 }}>
-              {[["Catalogo","/catalogo"],["Fornitori","/fornitori"],["I miei ordini","/ordini"]].map(([l,href]) => <span key={l} onClick={() => { window.location.href = href; }} style={{ fontSize:14, color:C.muted, cursor:"pointer", fontWeight:500 }}>{l}</span>)}
+          <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
+            <div className="ct-nav-links" style={{ display: "flex", gap: 18 }}>
+              {[["Catalogo", "/catalogo"], ["Fornitori", "/fornitori"], ["I miei ordini", "/ordini"]].map(([l, href]) => <span key={l} onClick={() => { window.location.href = href; }} style={{ fontSize: 14, color: C.muted, cursor: "pointer", fontWeight: 500 }}>{l}</span>)}
             </div>
             <NavAuth />
           </div>
         </div>
       </nav>
 
-      <div style={{ maxWidth:1200, margin:"0 auto", padding:"22px 20px 60px" }}>
+      <div style={{ maxWidth: 1200, margin: "0 auto", padding: "22px 20px 60px" }}>
         {/* BREADCRUMB */}
-        <div style={{ display:"flex", alignItems:"center", gap:8, fontSize:13, color:C.muted, marginBottom:18 }}>
-          <span onClick={() => { window.location.href = "/"; }} style={{ cursor:"pointer" }}>Home</span><ChevronRight size={13}/>
-          <span style={{ color:C.text, fontWeight:600 }}>Carrello</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: C.muted, marginBottom: 18 }}>
+          <span onClick={() => { window.location.href = "/"; }} style={{ cursor: "pointer" }}>Home</span><ChevronRight size={13} />
+          <span style={{ color: C.text, fontWeight: 600 }}>Carrello</span>
         </div>
 
-        <h1 style={{ fontSize:28, fontWeight:800, letterSpacing:"-0.02em", marginBottom:20, display:"flex", alignItems:"center", gap:10 }}>
-          <ShoppingCart size={26} color={C.blue}/> Carrello {items.length > 0 && <span style={{ fontSize:15, fontWeight:600, color:C.muted }}>({items.length} {items.length === 1 ? "riga" : "righe"})</span>}
+        <h1 style={{ fontSize: 28, fontWeight: 800, letterSpacing: "-0.02em", marginBottom: 20, display: "flex", alignItems: "center", gap: 10 }}>
+          <ShoppingCart size={26} color={C.blue} /> Carrello {items.length > 0 && <span style={{ fontSize: 15, fontWeight: 600, color: C.muted }}>({items.length} {items.length === 1 ? "riga" : "righe"})</span>}
         </h1>
 
         {loading ? (
-          <div style={{ padding:"60px 0", textAlign:"center", color:C.muted }}>Caricamento carrello…</div>
+          <div style={{ padding: "60px 0", textAlign: "center", color: C.muted }}>Caricamento carrello…</div>
         ) : needLogin ? (
-          <div style={{ padding:"50px 20px", textAlign:"center", border:`1px solid ${C.border}`, borderRadius:14 }}>
-            <div style={{ fontSize:16, fontWeight:700, marginBottom:6 }}>Accedi per vedere il tuo carrello</div>
-            <div style={{ fontSize:14, color:C.muted, marginBottom:16 }}>Il carrello è legato al tuo account e ti segue su ogni dispositivo.</div>
-            <button onClick={() => { window.location.href = "/login"; }} style={{ background:C.blue, color:"#fff", border:"none", borderRadius:9, padding:"11px 24px", fontSize:14, fontWeight:700, cursor:"pointer", fontFamily:"Inter,system-ui" }}>Accedi</button>
+          <div style={{ padding: "50px 20px", textAlign: "center", border: `1px solid ${C.border}`, borderRadius: 14 }}>
+            <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 6 }}>Accedi per vedere il tuo carrello</div>
+            <div style={{ fontSize: 14, color: C.muted, marginBottom: 16 }}>Il carrello è legato al tuo account e ti segue su ogni dispositivo.</div>
+            <button onClick={() => { window.location.href = "/login"; }} style={{ background: C.blue, color: "#fff", border: "none", borderRadius: 9, padding: "11px 24px", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "Inter,system-ui" }}>Accedi</button>
           </div>
         ) : items.length === 0 ? (
-          <div style={{ padding:"50px 20px", textAlign:"center", border:`1px solid ${C.border}`, borderRadius:14 }}>
-            <Package size={32} color={C.border} style={{ marginBottom:10 }}/>
-            <div style={{ fontSize:16, fontWeight:700, marginBottom:6 }}>Il carrello è vuoto</div>
-            <div style={{ fontSize:14, color:C.muted, marginBottom:16 }}>Sfoglia il catalogo o i listini dei fornitori per aggiungere materie prime.</div>
-            <button onClick={() => { window.location.href = "/catalogo"; }} style={{ background:C.blue, color:"#fff", border:"none", borderRadius:9, padding:"11px 24px", fontSize:14, fontWeight:700, cursor:"pointer", display:"inline-flex", alignItems:"center", gap:7, fontFamily:"Inter,system-ui" }}>Vai al catalogo <ArrowRight size={15}/></button>
+          <div style={{ padding: "50px 20px", textAlign: "center", border: `1px solid ${C.border}`, borderRadius: 14 }}>
+            <Package size={32} color={C.border} style={{ marginBottom: 10 }} />
+            <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 6 }}>Il carrello è vuoto</div>
+            <div style={{ fontSize: 14, color: C.muted, marginBottom: 16 }}>Sfoglia il catalogo o i listini dei fornitori per aggiungere materie prime.</div>
+            <button onClick={() => { window.location.href = "/catalogo"; }} style={{ background: C.blue, color: "#fff", border: "none", borderRadius: 9, padding: "11px 24px", fontSize: 14, fontWeight: 700, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 7, fontFamily: "Inter,system-ui" }}>Vai al catalogo <ArrowRight size={15} /></button>
           </div>
         ) : (
           <div className="ct-layout">
             {/* RIGHE */}
             <div>
-              {err && <div style={{ marginBottom:12, padding:"10px 14px", background:"#FEF2F2", border:"1px solid #FECACA", borderRadius:9, fontSize:13, color:C.red }}>{err}</div>}
+              {err && <div style={{ marginBottom: 12, padding: "10px 14px", background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 9, fontSize: 13, color: C.red }}>{err}</div>}
               {items.map(it => {
                 const issue = lineIssue(it);
                 const busy = busyKey === keyOf(it);
                 return (
                   <div key={keyOf(it)} className="ct-row" style={{ opacity: busy ? 0.6 : 1, borderColor: issue ? "#FCA5A5" : C.border }}>
                     <div>
-                      <div className="ct-link" onClick={() => { window.location.href = `/prodotto?id=${it.product_id}`; }} style={{ fontSize:15 }}>{it.product_name}</div>
-                      <div style={{ fontSize:12, color:C.muted, marginTop:3 }}>
-                        Fornitore: <span className="ct-link" onClick={() => { window.location.href = `/fornitore?id=${it.supplier_company_id}`; }} style={{ fontWeight:600, fontSize:12 }}>{it.supplier_name}</span>
+                      <div className="ct-link" onClick={() => { window.location.href = `/prodotto?id=${it.product_id}`; }} style={{ fontSize: 15 }}>{it.product_name}</div>
+                      <div style={{ fontSize: 12, color: C.muted, marginTop: 3 }}>
+                        Fornitore: <span className="ct-link" onClick={() => { window.location.href = `/fornitore?id=${it.supplier_company_id}`; }} style={{ fontWeight: 600, fontSize: 12 }}>{it.supplier_name}</span>
                         {it.lead_time_days != null && <> · lead time {it.lead_time_days} gg</>}
                       </div>
-                      {issue && <div style={{ display:"flex", alignItems:"center", gap:5, fontSize:11.5, color:C.red, marginTop:5 }}><AlertTriangle size={12}/> {issue}</div>}
+                      {issue && <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11.5, color: C.red, marginTop: 5 }}><AlertTriangle size={12} /> {issue}</div>}
                     </div>
                     <div>
-                      <div style={{ fontSize:11, color:C.muted, marginBottom:3 }}>Quantità</div>
-                      <div style={{ display:"flex", alignItems:"center", gap:5 }}>
+                      <div style={{ fontSize: 11, color: C.muted, marginBottom: 3 }}>Quantità</div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
                         <input type="number" className="ct-num" min={1} defaultValue={it.quantity_kg} key={`${keyOf(it)}-${it.quantity_kg}`}
-                               onBlur={e => { const v = Number(e.target.value); if (v > 0 && v !== Number(it.quantity_kg)) changeQty(it, v); }}
-                               onKeyDown={e => { if (e.key === "Enter") e.target.blur(); }}
-                               style={{ width:96, padding:"8px 9px", border:`1.5px solid ${C.border}`, borderRadius:8, fontSize:13, outline:"none", textAlign:"right" }}/>
-                        <span style={{ fontSize:12, color:C.muted }}>kg</span>
+                          onBlur={e => { const v = Number(e.target.value); if (v > 0 && v !== Number(it.quantity_kg)) changeQty(it, v); }}
+                          onKeyDown={e => { if (e.key === "Enter") e.target.blur(); }}
+                          style={{ width: 96, padding: "8px 9px", border: `1.5px solid ${C.border}`, borderRadius: 8, fontSize: 13, outline: "none", textAlign: "right" }} />
+                        <span style={{ fontSize: 12, color: C.muted }}>kg</span>
                       </div>
-                      {it.min_order_kg != null && <div style={{ fontSize:10.5, color:C.muted, marginTop:3 }}>MOQ {it.min_order_kg} kg</div>}
+                      {it.min_order_kg != null && <div style={{ fontSize: 10.5, color: C.muted, marginTop: 3 }}>MOQ {it.min_order_kg} kg</div>}
                     </div>
                     <div>
-                      <div style={{ fontSize:11, color:C.muted, marginBottom:3 }}>Prezzo unitario</div>
-                      <div className="ct-num" style={{ fontSize:15, fontWeight:700, color:it.unit_price != null ? C.text : C.red }}>{it.unit_price != null ? `${eur(it.unit_price)}/kg` : "—"}</div>
+                      <div style={{ fontSize: 11, color: C.muted, marginBottom: 3 }}>Prezzo unitario <span style={{ fontWeight: 400 }}>*</span></div>
+                      <div className="ct-num" style={{ fontSize: 15, fontWeight: 700, color: it.unit_price != null ? C.text : C.red }}>{it.unit_price != null ? `${eur(it.unit_price)}/kg` : "—"}</div>
                     </div>
                     <div>
-                      <div style={{ fontSize:11, color:C.muted, marginBottom:3 }}>Totale riga</div>
-                      <div className="ct-num" style={{ fontSize:16, fontWeight:800, color:C.blue }}>{it.unit_price != null ? eur(Number(it.unit_price) * Number(it.quantity_kg)) : "—"}</div>
+                      <div style={{ fontSize: 11, color: C.muted, marginBottom: 3 }}>Totale riga <span style={{ fontWeight: 400 }}>*</span></div>
+                      <div className="ct-num" style={{ fontSize: 16, fontWeight: 800, color: C.blue }}>{it.unit_price != null ? eur(Number(it.unit_price) * Number(it.quantity_kg)) : "—"}</div>
                     </div>
                     <button onClick={() => removeLine(it)} disabled={busy} title="Rimuovi"
-                            style={{ background:"transparent", border:`1px solid ${C.border}`, borderRadius:8, width:36, height:36, display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer", color:C.muted }}>
-                      <Trash2 size={15}/>
+                      style={{ background: "transparent", border: `1px solid ${C.border}`, borderRadius: 8, width: 36, height: 36, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: C.muted }}>
+                      <Trash2 size={15} />
                     </button>
                   </div>
                 );
               })}
-              <button onClick={emptyAll} style={{ background:"transparent", border:"none", color:C.muted, fontSize:12.5, cursor:"pointer", textDecoration:"underline", fontFamily:"Inter,system-ui", padding:"4px 0" }}>Svuota carrello</button>
+              <button onClick={emptyAll} style={{ background: "transparent", border: "none", color: C.muted, fontSize: 12.5, cursor: "pointer", textDecoration: "underline", fontFamily: "Inter,system-ui", padding: "4px 0" }}>Svuota carrello</button>
+              <div style={{ fontSize: 11.5, color: C.muted, marginTop: 10 }}>* IVA e spese di spedizione escluse — le calcoli al passo successivo (Pagamento), una volta scelto l'indirizzo di consegna.</div>
             </div>
 
             {/* RIEPILOGO */}
-            <div style={{ border:`1px solid ${C.border}`, borderRadius:14, padding:20, position:"sticky", top:84 }}>
-              <div style={{ fontSize:13, fontWeight:800, textTransform:"uppercase", letterSpacing:"0.05em", color:C.muted, marginBottom:14 }}>Riepilogo</div>
-              <div style={{ display:"flex", justifyContent:"space-between", fontSize:13.5, marginBottom:8 }}>
-                <span style={{ color:C.muted }}>Righe</span><span className="ct-num" style={{ fontWeight:600 }}>{items.length}</span>
+            <div style={{ border: `1px solid ${C.border}`, borderRadius: 14, padding: 20, position: "sticky", top: 84 }}>
+              <div style={{ fontSize: 13, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: C.muted, marginBottom: 14 }}>Riepilogo</div>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13.5, marginBottom: 8 }}>
+                <span style={{ color: C.muted }}>Righe</span><span className="ct-num" style={{ fontWeight: 600 }}>{items.length}</span>
               </div>
-              <div style={{ display:"flex", justifyContent:"space-between", fontSize:13.5, marginBottom:8 }}>
-                <span style={{ color:C.muted }}>Volume totale</span><span className="ct-num" style={{ fontWeight:600 }}>{totalKg.toLocaleString("it-IT")} kg</span>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13.5, marginBottom: 8 }}>
+                <span style={{ color: C.muted }}>Volume totale</span><span className="ct-num" style={{ fontWeight: 600 }}>{totalKg.toLocaleString("it-IT")} kg</span>
               </div>
-              <div style={{ display:"flex", justifyContent:"space-between", fontSize:13.5, marginBottom:8 }}>
-                <span style={{ color:C.muted }}>Commissioni BulkStrike</span><span className="ct-num" style={{ fontWeight:700, color:C.green }}>€0,00</span>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13.5, marginBottom: 8 }}>
+                <span style={{ color: C.muted }}>Commissioni BulkStrike</span><span className="ct-num" style={{ fontWeight: 700, color: C.green }}>€0,00</span>
               </div>
-              <div style={{ borderTop:`1px solid ${C.border}`, margin:"12px 0", paddingTop:12, display:"flex", justifyContent:"space-between", alignItems:"baseline" }}>
-                <span style={{ fontSize:14, fontWeight:700 }}>Subtotale merce</span>
-                <span className="ct-num" style={{ fontSize:22, fontWeight:800, color:C.blue }}>{eur(subtotal)}</span>
+              <div style={{ borderTop: `1px solid ${C.border}`, margin: "12px 0 6px", paddingTop: 12, display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                <span style={{ fontSize: 14, fontWeight: 700 }}>Subtotale merce</span>
+                <span className="ct-num" style={{ fontSize: 22, fontWeight: 800, color: C.blue }}>{eur(subtotal)}</span>
               </div>
+              <div style={{ fontSize: 11.5, color: C.muted, marginBottom: 12 }}>* IVA esclusa · spedizione esclusa</div>
               {issues.length > 0 && (
-                <div style={{ display:"flex", gap:7, alignItems:"flex-start", fontSize:12, color:"#9A3412", background:"#FFF7ED", border:"1px solid #FED7AA", borderRadius:9, padding:"9px 11px", marginBottom:12 }}>
-                  <AlertTriangle size={13} style={{ marginTop:1, flexShrink:0 }}/>
+                <div style={{ display: "flex", gap: 7, alignItems: "flex-start", fontSize: 12, color: "#9A3412", background: "#FFF7ED", border: "1px solid #FED7AA", borderRadius: 9, padding: "9px 11px", marginBottom: 12 }}>
+                  <AlertTriangle size={13} style={{ marginTop: 1, flexShrink: 0 }} />
                   <span>Risolvi {issues.length === 1 ? "il problema segnalato" : `i ${issues.length} problemi segnalati`} prima di procedere.</span>
                 </div>
               )}
               <button onClick={() => { window.location.href = "/checkout"; }} disabled={issues.length > 0 || items.length === 0}
-                      style={{ width:"100%", justifyContent:"center", background:C.blue, color:"#fff", border:"none", borderRadius:10, padding:"13px", fontSize:14.5, fontWeight:700, cursor:issues.length>0?"default":"pointer", opacity:issues.length>0?0.5:1, display:"flex", alignItems:"center", gap:8, fontFamily:"Inter,system-ui" }}>
-                Procedi al checkout <ArrowRight size={16}/>
+                style={{ width: "100%", justifyContent: "center", background: C.blue, color: "#fff", border: "none", borderRadius: 10, padding: "13px", fontSize: 14.5, fontWeight: 700, cursor: issues.length > 0 ? "default" : "pointer", opacity: issues.length > 0 ? 0.5 : 1, display: "flex", alignItems: "center", gap: 8, fontFamily: "Inter,system-ui" }}>
+                Procedi al checkout <ArrowRight size={16} />
               </button>
-              <div style={{ display:"flex", gap:7, alignItems:"flex-start", fontSize:11.5, color:C.muted, marginTop:12, lineHeight:1.5 }}>
-                <ShieldCheck size={13} color={C.green} style={{ marginTop:1, flexShrink:0 }}/>
+              <div style={{ display: "flex", gap: 7, alignItems: "flex-start", fontSize: 11.5, color: C.muted, marginTop: 12, lineHeight: 1.5 }}>
+                <ShieldCheck size={13} color={C.green} style={{ marginTop: 1, flexShrink: 0 }} />
                 <span>Pagamento protetto in escrow: il fornitore incassa solo dopo la tua conferma di consegna.</span>
               </div>
             </div>

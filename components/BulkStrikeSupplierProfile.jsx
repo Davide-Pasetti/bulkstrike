@@ -4,7 +4,7 @@
 // Da qui si può ordinare direttamente ogni prodotto del listino (Acquisto Rapido).
 import { useState, useEffect, useMemo, useRef } from "react";
 import { Search, Star, ShieldCheck, MapPin, Phone, Globe, Mail, User, FileText, Package, Layers, Award, Clock, ChevronRight, ArrowRight, Flame, Building2, Truck, ExternalLink, Check, X, MessageSquare, Send, ShoppingCart } from "lucide-react";
-import { getSupplierProfile, getSession, createInstantOrder, upsertCartItem, poolErrorMessage, getSupplierReviews, getReviewableOrders, submitReview } from "@/lib/api";
+import { getSupplierProfile, getSession, upsertCartItem, poolErrorMessage, getSupplierReviews, getReviewableOrders, submitReview } from "@/lib/api";
 import NavAuth from "@/components/BulkStrikeNavAuth";
 
 const C = { blue:"#0EA5E9", dark:"#0284C7", text:"#0F172A", muted:"#64748B", border:"#E2E8F0", bg:"#F8FAFE", green:"#059669", red:"#DC2626", amber:"#D97706", purple:"#7C3AED" };
@@ -150,8 +150,8 @@ export default function SupplierPage() {
         setOrderState(prev => ({ ...prev, [p.product_id]: { err:`Minimo ${p.min_order_kg} kg per questo prodotto` } }));
         return;
       }
-      await createInstantOrder(p.product_id, kg, profile.id);
-      setOrderState(prev => ({ ...prev, [p.product_id]: { ok:true } }));
+      await upsertCartItem(p.product_id, profile.id, kg);
+      window.location.href = "/carrello";
     } catch (e) {
       setOrderState(prev => ({ ...prev, [p.product_id]: { err: poolErrorMessage(e) } }));
     }
@@ -340,8 +340,9 @@ export default function SupplierPage() {
 
               {/* intestazione tabella (solo desktop) */}
               <div className="sup-prow" style={{ background:C.bg, fontSize:11, fontWeight:800, textTransform:"uppercase", letterSpacing:"0.04em", color:C.muted }}>
-                <span>Prodotto</span><span>Grado / cert.</span><span>MOQ</span><span>Lead time</span><span style={{ textAlign:"right" }}>Prezzo & ordine</span>
+                <span>Prodotto</span><span>Grado / cert.</span><span>MOQ</span><span>Lead time</span><span style={{ textAlign:"right" }}>Prezzo & ordine *</span>
               </div>
+              <div style={{ fontSize:10.5, color:C.muted, textAlign:"right", padding:"6px 20px 0" }}>* IVA e spese di spedizione escluse — calcolate al checkout, dopo l'indirizzo</div>
 
               <div style={{ maxHeight:560, overflowY:"auto" }}>
                 {filteredProducts.map(p => {

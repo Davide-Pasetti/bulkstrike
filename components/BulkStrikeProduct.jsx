@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { Search, Bot, ArrowRight, Check, Clock, ChevronDown, ChevronRight, ChevronUp, Star, Shield, Truck, FileText, Download, Plus, Minus, X, Beaker, TrendingDown, Users, Gavel, Info, ShoppingCart } from "lucide-react";
-import { getProduct, getOpenPoolForProduct, getPriceReference, getProductBreadcrumb, getSession, openPool, createInstantOrder, upsertCartItem, poolErrorMessage, searchProducts } from "@/lib/api";
+import { getProduct, getOpenPoolForProduct, getPriceReference, getProductBreadcrumb, getSession, openPool, upsertCartItem, poolErrorMessage, searchProducts } from "@/lib/api";
 import NavAuth from "@/components/BulkStrikeNavAuth";
 
 // ─── PALETTE (matches homepage) ───────────────────────────────────────────────
@@ -165,7 +165,7 @@ function untilLabel(iso) {
 // ─── MAIN ─────────────────────────────────────────────────────────────────────
 export default function ProductPage() {
   const [qty, setQty] = useState(8000);
-  const [selectedId, setSelectedId] = useState(null);   // null = auto best all-in
+  const [selectedId, setSelectedId] = useState(null);   // null = auto best (prezzo netto piu basso)
   const [showSpecs, setShowSpecs] = useState(false);
   const [openQa, setOpenQa] = useState(null);
   const [chatOpen, setChatOpen] = useState(false);
@@ -239,7 +239,7 @@ export default function ProductPage() {
     searchProducts(q).then(rows => { setSearchResults(rows); setSearchOpen(true); }).catch(() => {});
   }
   const ranked = useMemo(() => {
-    return suppliers.map(s => ({ ...s, calc: compute(s, qty) })).sort((a,b) => a.calc.allInKg - b.calc.allInKg);
+    return suppliers.map(s => ({ ...s, calc: compute(s, qty) })).sort((a,b) => a.calc.unit - b.calc.unit);
   }, [suppliers, qty]);
 
   const featured = (selectedId ? ranked.find(s => s.id === selectedId) : ranked[0]) || null;
@@ -265,7 +265,7 @@ export default function ProductPage() {
 
   const setQtySafe = (v) => setQty(Math.max(1000, Math.min(200000, v)));
 
-  // ── azioni reali (openPool / createInstantOrder richiedono login → altrimenti /registrati)
+  // ── azioni reali (openPool / upsertCartItem richiedono login → altrimenti /registrati)
   async function requireAuth() {
     const session = await getSession();
     if (!session) { window.location.href = "/registrati"; return false; }
@@ -287,11 +287,11 @@ export default function ProductPage() {
   async function handleBuyNow() {
     if (!productId) { window.location.href = "/registrati"; return; }
     if (!(await requireAuth())) return;
+    if (!featured?.company_id) { setActionMsg("Nessun fornitore disponibile per questa quantità."); return; }
     setBusy(true); setActionMsg("");
     try {
-      const supplierId = featured?.company_id || null;
-      const orderId = await createInstantOrder(productId, qty, supplierId);
-      window.location.href = `/ordine?id=${orderId}`;
+      await upsertCartItem(productId, featured.company_id, qty);
+      window.location.href = "/carrello";
     } catch (e) {
       setActionMsg(poolErrorMessage(e));
     } finally { setBusy(false); }
@@ -442,9 +442,10 @@ export default function ProductPage() {
             <p style={{ fontSize:14, color:C.muted }}>{product.form} · Purezza {product.purityRange} · CAS {product.cas}</p>
           </div>
           <div style={{ textAlign:"right" }}>
-            <div style={{ fontSize:12, color:C.muted }}>Prezzo indicativo da</div>
-            <div className="bs-num" style={{ fontSize:28, fontWeight:800, color:C.blue }}>{eurKg(ranked[0].calc.allInKg)}<span style={{ fontSize:14, fontWeight:400, color:C.muted }}>/kg</span></div>
+            <div style={{ fontSize:12, color:C.muted }}>Prezzo indicativo da <span title="IVA e spese di spedizione escluse, calcolate al checkout">*</span></div>
+            <div className="bs-num" style={{ fontSize:28, fontWeight:800, color:C.blue }}>{eurKg(ranked[0].calc.unit)}<span style={{ fontSize:14, fontWeight:400, color:C.muted }}>/kg</span></div>
             <div style={{ display:"flex", alignItems:"center", gap:4, justifyContent:"flex-end", fontSize:12, color:C.green }}><TrendingDown size={12}/> -15,6% da gennaio</div>
+            <div style={{ fontSize:10.5, color:C.muted, marginTop:2 }}>* IVA esclusa</div>
           </div>
         </div>
 
@@ -561,7 +562,7 @@ export default function ProductPage() {
             <div style={{ fontSize:12, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.08em", color:C.blue, marginBottom:10 }}>In evidenza</div>
             <div style={{ border:`2px solid ${C.blue}`, borderRadius:16, padding:24, marginBottom:24, position:"relative", boxShadow:"0 8px 30px rgba(14,165,233,0.10)" }}>
               <div style={{ position:"absolute", top:-12, left:20, display:"flex", gap:8 }}>
-                {featured.id===cheapestId && <span style={{ background:C.green, color:"#fff", borderRadius:100, padding:"4px 12px", fontSize:12, fontWeight:700 }}>★ Miglior prezzo all-in</span>}
+                {featured.id===cheapestId && <span style={{ background:C.green, color:"#fff", borderRadius:100, padding:"4px 12px", fontSize:12, fontWeight:700 }}>★ Miglior prezzo</span>}
                 {featured.id!==cheapestId && <span style={{ background:C.blue, color:"#fff", borderRadius:100, padding:"4px 12px", fontSize:12, fontWeight:700 }}>Selezionato da te</span>}
               </div>
 
@@ -580,24 +581,23 @@ export default function ProductPage() {
                 </div>
               </div>
 
-              {/* ALL-IN BREAKDOWN */}
+              {/* PREZZO NETTO — IVA e spedizione si calcolano al checkout, dopo l'indirizzo */}
               <div style={{ display:"grid", gridTemplateColumns:"1.4fr 1fr", gap:16, alignItems:"center" }}>
                 <div style={{ background:C.bg, borderRadius:12, padding:"16px 18px" }}>
-                  <div style={{ fontSize:12, color:C.muted, marginBottom:10, fontWeight:600 }}>Prezzo finale tutto incluso · {(qty/1000)}t</div>
+                  <div style={{ fontSize:12, color:C.muted, marginBottom:10, fontWeight:600 }}>Subtotale merce · {(qty/1000)}t</div>
                   <div style={{ display:"flex", flexDirection:"column", gap:7 }}>
                     <Row label={`Prodotto (${eurKg(featured.calc.unit)}/kg)`} val={eur(featured.calc.product)} />
-                    <Row label="Spedizione alla tua sede" val={eur(featured.calc.shipping)} />
-                    <Row label="IVA 22%" val={eur(featured.calc.vat)} />
                     <div style={{ borderTop:`1px solid ${C.border}`, marginTop:4, paddingTop:9, display:"flex", justifyContent:"space-between", alignItems:"baseline" }}>
-                      <span style={{ fontSize:14, fontWeight:700 }}>Totale</span>
-                      <span className="bs-num" style={{ fontSize:24, fontWeight:800, color:C.text }}>{eur(featured.calc.total)}</span>
+                      <span style={{ fontSize:14, fontWeight:700 }}>Subtotale</span>
+                      <span className="bs-num" style={{ fontSize:24, fontWeight:800, color:C.text }}>{eur(featured.calc.product)}</span>
                     </div>
                   </div>
+                  <div style={{ fontSize:11, color:C.muted, marginTop:8 }}>* IVA e spedizione escluse — le vedi nel riepilogo al checkout, dopo aver scelto l'indirizzo.</div>
                 </div>
                 <div style={{ textAlign:"center" }}>
-                  <div style={{ fontSize:12, color:C.muted }}>Prezzo all-in</div>
-                  <div className="bs-num" style={{ fontSize:40, fontWeight:800, color:C.blue, lineHeight:1.1 }}>{eurKg(featured.calc.allInKg)}</div>
-                  <div style={{ fontSize:13, color:C.muted, marginBottom:14 }}>/kg · IVA e trasporto inclusi</div>
+                  <div style={{ fontSize:12, color:C.muted }}>Prezzo</div>
+                  <div className="bs-num" style={{ fontSize:40, fontWeight:800, color:C.blue, lineHeight:1.1 }}>{eurKg(featured.calc.unit)}</div>
+                  <div style={{ fontSize:13, color:C.muted, marginBottom:14 }}>/kg · IVA esclusa</div>
                   <button className="bs-btn" onClick={handleBuyNow} disabled={busy || !featured} style={{ width:"100%", fontSize:16, padding:"14px", opacity:(busy||!featured)?0.6:1, cursor:(busy||!featured)?"default":"pointer" }}>Acquista ora <ArrowRight size={18}/></button>
                   <button onClick={handleAddToCart} disabled={busy || !featured} style={{ width:"100%", marginTop:8, background:"transparent", color:C.blue, border:`1.5px solid ${C.blue}`, borderRadius:10, padding:"12px", fontSize:14.5, fontWeight:700, cursor:(busy||!featured)?"default":"pointer", opacity:(busy||!featured)?0.6:1, display:"flex", alignItems:"center", justifyContent:"center", gap:8, fontFamily:"Inter,system-ui" }}><ShoppingCart size={16}/> Aggiungi al carrello</button>
                   {cartOk && <div style={{ marginTop:8, fontSize:12.5, color:C.green, fontWeight:700, display:"flex", alignItems:"center", gap:5 }}><Check size={13}/> Aggiunto! <span onClick={() => { window.location.href = "/carrello"; }} style={{ cursor:"pointer", textDecoration:"underline" }}>Vai al carrello</span></div>}
@@ -622,7 +622,7 @@ export default function ProductPage() {
             {/* OTHER SUPPLIERS */}
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12, flexWrap:"wrap", gap:8 }}>
               <div style={{ fontSize:12, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.08em", color:C.muted }}>Altri {others.length} fornitori per {(qty/1000)}t</div>
-              <span style={{ fontSize:12, color:C.muted }}>Ordinati per prezzo all-in</span>
+              <span style={{ fontSize:12, color:C.muted }}>Ordinati per prezzo · IVA esclusa</span>
             </div>
             <div style={{ display:"flex", flexDirection:"column", gap:10, marginBottom:28 }}>
               {others.map(s => (
@@ -645,12 +645,12 @@ export default function ProductPage() {
                     <div style={{ fontSize:13, fontWeight:600 }}>{s.delivery}</div>
                   </div>
                   <div style={{ textAlign:"center" }}>
-                    <div style={{ fontSize:11, color:C.muted }}>All-in/kg</div>
-                    <div className="bs-num" style={{ fontSize:18, fontWeight:800, color:C.blue }}>{eurKg(s.calc.allInKg)}</div>
+                    <div style={{ fontSize:11, color:C.muted }}>Prezzo/kg *</div>
+                    <div className="bs-num" style={{ fontSize:18, fontWeight:800, color:C.blue }}>{eurKg(s.calc.unit)}</div>
                   </div>
                   <div className="bs-col-hide" style={{ textAlign:"center" }}>
-                    <div style={{ fontSize:11, color:C.muted }}>Totale</div>
-                    <div className="bs-num" style={{ fontSize:14, fontWeight:600 }}>{eur(s.calc.total)}</div>
+                    <div style={{ fontSize:11, color:C.muted }}>Subtotale merce</div>
+                    <div className="bs-num" style={{ fontSize:14, fontWeight:600 }}>{eur(s.calc.product)}</div>
                   </div>
                   <button className="bs-btn-ghost" onClick={() => { setSelectedId(s.id); window.scrollTo({top:0,behavior:"smooth"}); }}>Seleziona</button>
                 </div>
