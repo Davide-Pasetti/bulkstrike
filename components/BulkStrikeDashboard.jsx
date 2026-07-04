@@ -1,10 +1,10 @@
 import { useState, useEffect } from "react";
 import {
-  getMyCompany, updateCompany,
+  getMyCompany, updateCompany, signOut, requestAccountDeletionCode, confirmAccountDeletion,
   getWatchedMaterials, addWatchedMaterial, removeWatchedMaterial, updateMaterialAlert,
   getNotifications, markNotificationRead, markAllNotificationsRead, subscribeNotifications,
 } from "@/lib/api";
-import { Bell, Search, Plus, TrendingDown, Zap, Factory, Check, X, Gavel, LayoutGrid, Inbox, Clock, Boxes, ChevronRight, Users, Settings, Trophy, Send, Package } from "lucide-react";
+import { Bell, Search, Plus, TrendingDown, Zap, Factory, Check, X, Gavel, LayoutGrid, Inbox, Clock, Boxes, ChevronRight, Users, Settings, Trophy, Send, Package, Truck, LogOut, AlertTriangle } from "lucide-react";
 
 const C = { blue:"#0EA5E9", dark:"#0284C7", text:"#0F172A", muted:"#64748B", border:"#E2E8F0", bg:"#F8FAFE", green:"#059669", amber:"#D97706", red:"#DC2626", purple:"#7C3AED" };
 
@@ -102,7 +102,7 @@ function AField({ label, v, on, full }) {
   return (
     <div style={{ marginBottom:16, ...(full?{gridColumn:"1 / -1"}:{}) }}>
       <label style={{ display:"block", fontSize:13, fontWeight:600, marginBottom:6 }}>{label}</label>
-      <input value={v} onChange={e=>on(e.target.value)} style={{ width:"100%", border:`1px solid ${C.border}`, borderRadius:9, padding:"11px 13px", fontSize:14, outline:"none", fontFamily:"Inter,system-ui", color:C.text }}/>
+      <input value={v} onChange={e=>on(e.target.value)} style={{ width:"100%", border:`1px solid ${C.border}`, borderRadius:9, padding:"11px 13px", fontSize:14, outline:"none", fontFamily:"Inter,system-ui", background:"#fff", color:C.text }}/>
     </div>
   );
 }
@@ -155,6 +155,11 @@ export default function Dashboard() {
   const [q, setQ] = useState("");
   const [company, setCompany] = useState(null);
   const [acctSaved, setAcctSaved] = useState(false);
+  const [delStep, setDelStep] = useState("idle"); // idle | code
+  const [delEmail, setDelEmail] = useState("");
+  const [delCode, setDelCode] = useState("");
+  const [delBusy, setDelBusy] = useState(false);
+  const [delErr, setDelErr] = useState("");
 
   // account form (demo, example values — non dati reali)
   const [acct, setAcct] = useState({
@@ -221,7 +226,7 @@ export default function Dashboard() {
     getMyCompany().then(c => {
       if (!c) return;
       setCompany(c);
-      setRole(c.is_supplier ? "supplier" : "buyer");
+      setRole(!c.is_buyer && c.is_supplier ? "supplier" : "buyer");
       setAcct(a => ({
         ...a,
         company:c.legal_name||"", vat:c.vat||"", country:c.country||"", city:c.city||"",
@@ -270,6 +275,31 @@ export default function Dashboard() {
     setTimeout(() => setAcctSaved(false), 2500);
   }
 
+  async function handleLogout() {
+    try { await signOut(); } catch (e) {}
+    window.location.href = "/";
+  }
+
+  async function handleRequestDeletion() {
+    setDelErr(""); setDelBusy(true);
+    try {
+      const email = await requestAccountDeletionCode();
+      setDelEmail(email);
+      setDelStep("code");
+    } catch (e) { setDelErr("Non è stato possibile inviare il codice. Riprova."); }
+    finally { setDelBusy(false); }
+  }
+
+  async function handleConfirmDeletion() {
+    if (!delCode.trim()) { setDelErr("Inserisci il codice ricevuto per email."); return; }
+    setDelErr(""); setDelBusy(true);
+    try {
+      await confirmAccountDeletion(delEmail, delCode.trim());
+      window.location.href = "/";
+    } catch (e) { setDelErr("Codice non valido o scaduto. Richiedine uno nuovo."); }
+    finally { setDelBusy(false); }
+  }
+
   const query = q.trim().toLowerCase();
   const searchHits = query ? ALL_MATERIALS.filter(m=>m.toLowerCase().includes(query)) : [];
   const exact = query && ALL_MATERIALS.some(m=>m.toLowerCase()===query);
@@ -304,8 +334,8 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* role toggle (demo only — hidden once the real company loads) */}
-          {!company ? (
+          {/* role toggle: visibile in demo (nessun account reale) oppure per un account che è davvero sia cliente sia fornitore */}
+          {(!company || (company.is_buyer && company.is_supplier)) ? (
             <div style={{ marginLeft:"auto", display:"flex", background:C.bg, border:`1px solid ${C.border}`, borderRadius:9, padding:3 }}>
               {[["buyer","Acquirente"],["supplier","Fornitore"]].map(([id,lab])=>(
                 <button key={id} onClick={()=>setRole(id)} style={{ padding:"6px 14px", borderRadius:7, border:"none", cursor:"pointer", fontSize:13, fontWeight:700, fontFamily:"Inter,system-ui", background:role===id?"#fff":"transparent", color:role===id?C.blue:C.muted, boxShadow:role===id?"0 1px 3px rgba(0,0,0,0.08)":"none" }}>{lab}</button>
@@ -340,6 +370,9 @@ export default function Dashboard() {
           })}
           {role==="supplier" && (
             <div className="bs-nav" onClick={() => { window.location.href = "/i-miei-prodotti"; }} style={{ background:"transparent", color:C.muted }}><Package size={18}/><span>I miei prodotti</span></div>
+          )}
+          {company?.is_carrier && (
+            <div className="bs-nav" onClick={() => { window.location.href = "/corriere"; }} style={{ background:"transparent", color:C.muted }}><Truck size={18}/><span>Corriere</span></div>
           )}
           <div className="bs-nav" onClick={()=>setSection("account")} style={{ background:section==="account"?"#EFF6FF":"transparent", color:section==="account"?C.blue:C.muted }}><Settings size={18}/><span>Account</span></div>
         </aside>
@@ -649,6 +682,39 @@ export default function Dashboard() {
                 <button onClick={saveAccount} style={{ background:C.blue, color:"#fff", border:"none", borderRadius:10, padding:"12px 22px", fontSize:15, fontWeight:700, cursor:"pointer", fontFamily:"Inter,system-ui" }}>Salva modifiche</button>
                 <button style={{ background:"#fff", color:C.muted, border:`1px solid ${C.border}`, borderRadius:10, padding:"12px 20px", fontSize:15, fontWeight:600, cursor:"pointer", fontFamily:"Inter,system-ui" }}>Annulla</button>
                 {acctSaved && <span style={{ color:C.green, fontSize:14, fontWeight:600, display:"flex", alignItems:"center", gap:5 }}><Check size={16}/> Salvato</span>}
+              </div>
+
+              <div style={{ margin:"28px 0", borderTop:`1px solid ${C.border}` }}/>
+
+              <button onClick={handleLogout} style={{ background:"#fff", color:C.text, border:`1px solid ${C.border}`, borderRadius:10, padding:"12px 20px", fontSize:14.5, fontWeight:600, cursor:"pointer", fontFamily:"Inter,system-ui", display:"inline-flex", alignItems:"center", gap:8 }}>
+                <LogOut size={16}/> Disconnetti
+              </button>
+
+              <div className="bs-card" style={{ marginTop:20, borderColor:`${C.red}44`, background:"#FFF5F5" }}>
+                <div style={{ fontSize:15, fontWeight:800, color:C.red, display:"flex", alignItems:"center", gap:8, marginBottom:6 }}>
+                  <AlertTriangle size={17}/> Elimina definitivamente l'account
+                </div>
+                <p style={{ fontSize:13, color:"#7F1D1D", lineHeight:1.6, marginBottom:14, maxWidth:560 }}>
+                  Azione irreversibile: i dati aziendali e di contatto verranno rimossi e non potrai più accedere con questo account. Per sicurezza, richiede la conferma di un codice inviato alla tua email.
+                </p>
+
+                {delStep === "idle" ? (
+                  <button onClick={handleRequestDeletion} disabled={delBusy} style={{ background:C.red, color:"#fff", border:"none", borderRadius:9, padding:"11px 20px", fontSize:14, fontWeight:700, cursor:delBusy?"default":"pointer", opacity:delBusy?0.6:1, fontFamily:"Inter,system-ui" }}>
+                    {delBusy ? "Invio codice…" : "Elimina il mio account"}
+                  </button>
+                ) : (
+                  <div style={{ maxWidth:420 }}>
+                    <div style={{ fontSize:13, color:"#7F1D1D", marginBottom:10 }}>Codice di conferma inviato a <b>{delEmail}</b>. Inseriscilo qui sotto per confermare l'eliminazione.</div>
+                    <input value={delCode} onChange={e=>setDelCode(e.target.value)} placeholder="Codice a 6 cifre" style={{ width:"100%", border:`1px solid ${C.red}66`, borderRadius:9, padding:"11px 13px", fontSize:15, outline:"none", fontFamily:"'JetBrains Mono',monospace", background:"#fff", color:C.text, marginBottom:10 }}/>
+                    <div style={{ display:"flex", gap:10, flexWrap:"wrap" }}>
+                      <button onClick={handleConfirmDeletion} disabled={delBusy} style={{ background:C.red, color:"#fff", border:"none", borderRadius:9, padding:"11px 20px", fontSize:14, fontWeight:700, cursor:delBusy?"default":"pointer", opacity:delBusy?0.6:1, fontFamily:"Inter,system-ui" }}>
+                        {delBusy ? "Verifica…" : "Conferma ed elimina per sempre"}
+                      </button>
+                      <button onClick={() => { setDelStep("idle"); setDelCode(""); setDelErr(""); }} style={{ background:"transparent", color:C.muted, border:`1px solid ${C.border}`, borderRadius:9, padding:"11px 16px", fontSize:14, fontWeight:600, cursor:"pointer", fontFamily:"Inter,system-ui" }}>Annulla</button>
+                    </div>
+                  </div>
+                )}
+                {delErr && <div style={{ marginTop:10, fontSize:13, color:C.red, fontWeight:600 }}>{delErr}</div>}
               </div>
             </>
           )}
