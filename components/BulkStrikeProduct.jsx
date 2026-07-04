@@ -50,20 +50,16 @@ const SEED_QA = [
 
 // ─── LOGO ─────────────────────────────────────────────────────────────────────
 function BSIcon({ size = 36, uid = "a" }) {
-  // Logo: 3 parti (clienti, fornitori, corrieri) che convergono su un unico punto — l'incontro su BulkStrike.
+  // Nuovo logo: 3 linee convergono su un punto (arancio) che "scende" in una base verde — clienti, fornitori e corrieri che si incontrano su BulkStrike.
   return (
-    <svg width={size} height={size} viewBox="0 0 56 56" fill="none">
-      <defs>
-        <linearGradient id={`bg${uid}`} x1="0" y1="0" x2="56" y2="56" gradientUnits="userSpaceOnUse"><stop offset="0%" stopColor="#0D2137" /><stop offset="100%" stopColor="#0C4A6E" /></linearGradient>
-      </defs>
-      <rect width="56" height="56" rx="13" fill={`url(#bg${uid})`} />
-      <line x1="28" y1="33" x2="28" y2="14" stroke="white" strokeWidth="3" strokeLinecap="round" />
-      <line x1="28" y1="33" x2="14" y2="45" stroke="white" strokeWidth="3" strokeLinecap="round" strokeOpacity="0.85" />
-      <line x1="28" y1="33" x2="42" y2="45" stroke="white" strokeWidth="3" strokeLinecap="round" strokeOpacity="0.85" />
-      <circle cx="28" cy="14" r="4.2" fill="white" />
-      <circle cx="14" cy="45" r="4.2" fill="white" fillOpacity="0.85" />
-      <circle cx="42" cy="45" r="4.2" fill="white" fillOpacity="0.85" />
-      <circle cx="28" cy="33" r="5.5" fill="white" />
+    <svg width={size} height={size} viewBox="0 0 120 120">
+      <rect x="0" y="0" width="120" height="120" fill="#0D1F35"/>
+      <line x1="26" y1="18" x2="60" y2="78" stroke="#6B94B8" strokeWidth="7" strokeLinecap="round"/>
+      <line x1="60" y1="10" x2="60" y2="78" stroke="#6B94B8" strokeWidth="7" strokeLinecap="round"/>
+      <line x1="94" y1="18" x2="60" y2="78" stroke="#6B94B8" strokeWidth="7" strokeLinecap="round"/>
+      <line x1="60" y1="78" x2="60" y2="98" stroke="#34D399" strokeWidth="7" strokeLinecap="round"/>
+      <line x1="40" y1="100" x2="80" y2="100" stroke="#34D399" strokeWidth="8" strokeLinecap="round"/>
+      <circle cx="60" cy="78" r="8" fill="#F5A623"/>
     </svg>
   );
 }
