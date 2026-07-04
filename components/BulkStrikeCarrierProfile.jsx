@@ -98,7 +98,7 @@ export default function CarrierProfilePage() {
   const [rateForm, setRateForm] = useState(emptyRate);
   const [rateBusy, setRateBusy] = useState(false);
 
-  const [serviceForm, setServiceForm] = useState({ id: null, serviceName: "", fee: "", isAutomatic: false });
+  const [serviceForm, setServiceForm] = useState({ id: null, selectedOption: "", customName: "", fee: "" });
   const [serviceBusy, setServiceBusy] = useState(false);
 
   const [pdfBusy, setPdfBusy] = useState(false);
@@ -167,15 +167,17 @@ export default function CarrierProfilePage() {
     try { await deleteCarrierRate(id); await reload(); } catch (e) { setErr(poolErrorMessage(e)); }
   }
 
-  async function addServiceFee(preset = null) {
-    const name = preset?.name ?? serviceForm.serviceName;
-    const fee = preset ? 0 : (serviceForm.fee === "" ? 0 : Number(serviceForm.fee));
-    const isAutomatic = preset ? preset.isAutomatic : serviceForm.isAutomatic;
-    if (!name.trim()) { setErr("Inserisci il nome del servizio."); return; }
+  async function addServiceFee() {
+    const isCustom = serviceForm.selectedOption === "__custom__";
+    const name = isCustom ? serviceForm.customName.trim() : serviceForm.selectedOption;
+    if (!name) { setErr("Seleziona o inserisci il nome del servizio."); return; }
+    const preset = SUGGESTED_SERVICES.find(s => s.name === serviceForm.selectedOption);
+    const isAutomatic = preset ? preset.isAutomatic : /collettame/i.test(name);
+    const fee = serviceForm.fee === "" ? 0 : Number(serviceForm.fee);
     setServiceBusy(true); setErr("");
     try {
-      await upsertCarrierServiceFee({ id: serviceForm.id, serviceName: name.trim(), fee, isAutomatic });
-      setServiceForm({ id: null, serviceName: "", fee: "", isAutomatic: false });
+      await upsertCarrierServiceFee({ id: serviceForm.id, serviceName: name, fee, isAutomatic });
+      setServiceForm({ id: null, selectedOption: "", customName: "", fee: "" });
       await reload();
     } catch (e) { setErr(poolErrorMessage(e)); }
     finally { setServiceBusy(false); }
@@ -396,39 +398,41 @@ export default function CarrierProfilePage() {
                 </div>
               )}
 
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(130px,1fr))", gap: 10, background: C.bg, borderRadius: 10, padding: 14 }}>
-                <div>
+              <div style={{ overflowX: "auto" }}>
+              <div style={{ display: "flex", gap: 10, background: C.bg, borderRadius: 10, padding: 14, minWidth: "max-content" }}>
+                <div style={{ flexShrink: 0, width: 120 }}>
                   <span style={labelStyle}>Nazione</span>
                   <select value={rateForm.zoneArea} onChange={e => setRateForm({ ...rateForm, zoneArea: e.target.value })} style={inputStyle}>
                     {COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
                 </div>
-                <div>
+                <div style={{ flexShrink: 0, width: 150 }}>
                   <span style={labelStyle}>Regione (facoltativa)</span>
                   <RegionPicker value={rateForm.regions} onChange={v => setRateForm({ ...rateForm, regions: v })} />
                 </div>
-                <div><span style={labelStyle}>Giorni di spedizione</span><input type="number" min={1} value={rateForm.leadTimeDays} onChange={e => setRateForm({ ...rateForm, leadTimeDays: e.target.value })} style={inputStyle} placeholder="gg" /></div>
+                <div style={{ flexShrink: 0, width: 100 }}><span style={labelStyle}>Giorni di spedizione</span><input type="number" min={1} value={rateForm.leadTimeDays} onChange={e => setRateForm({ ...rateForm, leadTimeDays: e.target.value })} style={inputStyle} placeholder="gg" /></div>
                 {pricingMode === "distance" && (
                   <>
-                    <div><span style={labelStyle}>Km da</span><input type="number" value={rateForm.distanceMinKm} onChange={e => setRateForm({ ...rateForm, distanceMinKm: e.target.value })} style={inputStyle} placeholder="0" /></div>
-                    <div><span style={labelStyle}>Km a</span><input type="number" value={rateForm.distanceMaxKm} onChange={e => setRateForm({ ...rateForm, distanceMaxKm: e.target.value })} style={inputStyle} placeholder="illimitato" /></div>
+                    <div style={{ flexShrink: 0, width: 90 }}><span style={labelStyle}>Km da</span><input type="number" value={rateForm.distanceMinKm} onChange={e => setRateForm({ ...rateForm, distanceMinKm: e.target.value })} style={inputStyle} placeholder="0" /></div>
+                    <div style={{ flexShrink: 0, width: 100 }}><span style={labelStyle}>Km a</span><input type="number" value={rateForm.distanceMaxKm} onChange={e => setRateForm({ ...rateForm, distanceMaxKm: e.target.value })} style={inputStyle} placeholder="illimitato" /></div>
                   </>
                 )}
-                <div><span style={labelStyle}>Kg da</span><input type="number" value={rateForm.weightMinKg} onChange={e => setRateForm({ ...rateForm, weightMinKg: e.target.value })} style={inputStyle} /></div>
-                <div><span style={labelStyle}>Kg a</span><input type="number" value={rateForm.weightMaxKg} onChange={e => setRateForm({ ...rateForm, weightMaxKg: e.target.value })} style={inputStyle} placeholder="illimitato" /></div>
-                <div><span style={labelStyle}>Tariffa base €</span><input type="number" value={rateForm.baseFee} onChange={e => setRateForm({ ...rateForm, baseFee: e.target.value })} style={inputStyle} /></div>
-                {pricingMode === "distance" && <div><span style={labelStyle}>€/km</span><input type="number" step="0.01" value={rateForm.perKmFee} onChange={e => setRateForm({ ...rateForm, perKmFee: e.target.value })} style={inputStyle} /></div>}
-                <div><span style={labelStyle}>Tariffa aggiuntiva €/kg</span><input type="number" step="0.01" value={rateForm.perKgFee} onChange={e => setRateForm({ ...rateForm, perKgFee: e.target.value })} style={inputStyle} /></div>
-                <div style={{ display: "flex", alignItems: "flex-end" }}>
+                <div style={{ flexShrink: 0, width: 80 }}><span style={labelStyle}>Kg da</span><input type="number" value={rateForm.weightMinKg} onChange={e => setRateForm({ ...rateForm, weightMinKg: e.target.value })} style={inputStyle} /></div>
+                <div style={{ flexShrink: 0, width: 100 }}><span style={labelStyle}>Kg a</span><input type="number" value={rateForm.weightMaxKg} onChange={e => setRateForm({ ...rateForm, weightMaxKg: e.target.value })} style={inputStyle} placeholder="illimitato" /></div>
+                <div style={{ flexShrink: 0, width: 100 }}><span style={labelStyle}>Tariffa base €</span><input type="number" value={rateForm.baseFee} onChange={e => setRateForm({ ...rateForm, baseFee: e.target.value })} style={inputStyle} /></div>
+                {pricingMode === "distance" && <div style={{ flexShrink: 0, width: 90 }}><span style={labelStyle}>€/km</span><input type="number" step="0.01" value={rateForm.perKmFee} onChange={e => setRateForm({ ...rateForm, perKmFee: e.target.value })} style={inputStyle} /></div>}
+                <div style={{ flexShrink: 0, width: 130 }}><span style={labelStyle}>Tariffa aggiuntiva €/kg</span><input type="number" step="0.01" value={rateForm.perKgFee} onChange={e => setRateForm({ ...rateForm, perKgFee: e.target.value })} style={inputStyle} /></div>
+                <div style={{ flexShrink: 0, width: 150, display: "flex", alignItems: "flex-end" }}>
                   <button onClick={addRate} disabled={rateBusy} style={{ width: "100%", background: C.blue, color: "#fff", border: "none", borderRadius: 8, padding: "9px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 5, fontSize: 13, fontWeight: 700, fontFamily: "Inter,system-ui" }}><Plus size={14} /> {rateForm.id ? "Salva modifica" : "Aggiungi tariffa"}</button>
                 </div>
+              </div>
               </div>
             </div>
 
             {/* SERVIZI ACCESSORI — voce di costo separata da distanza/regione, legata al servizio richiesto */}
             <div className="cp-card">
               <div style={{ fontSize: 13, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: C.muted, marginBottom: 4 }}><Package size={13} style={{ verticalAlign: -2, marginRight: 5 }} />Servizi accessori</div>
-              <div style={{ fontSize: 12, color: C.muted, marginBottom: 14 }}>Costi legati al servizio richiesto, non alla distanza o alla regione — es. collettame, contrassegno, servizio al piano. Quelli "automatici" si applicano da soli quando la condizione si verifica, gli altri li seleziona il cliente in checkout.</div>
+              <div style={{ fontSize: 12, color: C.muted, marginBottom: 14, lineHeight: 1.6 }}>Il servizio di collettame si applica automaticamente quando è necessario sbancalare la pedana per spedire separatamente a più clienti: va impostato obbligatoriamente per poter partecipare alle aste. Gli altri servizi accessori vengono invece selezionati dal cliente in checkout.</div>
 
               {(profile.service_fees || []).length > 0 && (
                 <div style={{ marginBottom: 14 }}>
@@ -444,20 +448,28 @@ export default function CarrierProfilePage() {
                 </div>
               )}
 
-              <div style={{ fontSize: 11.5, fontWeight: 600, color: C.muted, marginBottom: 8 }}>Servizi comuni — un click per aggiungerli, poi modifica il prezzo:</div>
-              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 16 }}>
-                {SUGGESTED_SERVICES.filter(s => !(profile.service_fees || []).some(x => x.service_name === s.name)).map(s => (
-                  <button key={s.name} title={s.hint} onClick={() => addServiceFee(s)} style={{ padding: "6px 12px", borderRadius: 100, border: `1px solid ${C.border}`, background: "#fff", color: C.text, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "Inter,system-ui", display: "inline-flex", alignItems: "center", gap: 5 }}><Plus size={11} /> {s.name}</button>
-                ))}
-              </div>
-
-              <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr auto auto", gap: 10, alignItems: "end", background: C.bg, borderRadius: 10, padding: 14 }}>
-                <div><span style={labelStyle}>Nome servizio</span><input value={serviceForm.serviceName} onChange={e => setServiceForm({ ...serviceForm, serviceName: e.target.value })} style={inputStyle} placeholder="Es. Imballaggio rinforzato" /></div>
-                <div><span style={labelStyle}>Costo €</span><input type="number" step="0.01" value={serviceForm.fee} onChange={e => setServiceForm({ ...serviceForm, fee: e.target.value })} style={inputStyle} /></div>
-                <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: C.muted, paddingBottom: 9 }}>
-                  <input type="checkbox" checked={serviceForm.isAutomatic} onChange={e => setServiceForm({ ...serviceForm, isAutomatic: e.target.checked })} /> Automatico
-                </label>
-                <button onClick={() => addServiceFee()} disabled={serviceBusy} style={{ background: C.blue, color: "#fff", border: "none", borderRadius: 8, padding: "9px 16px", cursor: "pointer", display: "flex", alignItems: "center", gap: 5, fontSize: 13, fontWeight: 700, fontFamily: "Inter,system-ui" }}><Plus size={14} /> Aggiungi</button>
+              <div style={{ display: "flex", gap: 10, alignItems: "end", background: C.bg, borderRadius: 10, padding: 14, flexWrap: "wrap" }}>
+                <div style={{ flex: "1 1 220px" }}>
+                  <span style={labelStyle}>Servizio</span>
+                  <select value={serviceForm.selectedOption} onChange={e => setServiceForm({ ...serviceForm, selectedOption: e.target.value })} style={inputStyle}>
+                    <option value="">— seleziona —</option>
+                    {SUGGESTED_SERVICES.filter(s => !(profile.service_fees || []).some(x => x.service_name === s.name)).map(s => (
+                      <option key={s.name} value={s.name}>{s.name}</option>
+                    ))}
+                    <option value="__custom__">Altro (personalizzato)</option>
+                  </select>
+                </div>
+                {serviceForm.selectedOption === "__custom__" && (
+                  <div style={{ flex: "1 1 200px" }}>
+                    <span style={labelStyle}>Nome servizio</span>
+                    <input value={serviceForm.customName} onChange={e => setServiceForm({ ...serviceForm, customName: e.target.value })} style={inputStyle} placeholder="Es. Imballaggio rinforzato" />
+                  </div>
+                )}
+                <div style={{ width: 120 }}>
+                  <span style={labelStyle}>Costo €</span>
+                  <input type="number" step="0.01" value={serviceForm.fee} onChange={e => setServiceForm({ ...serviceForm, fee: e.target.value })} style={inputStyle} />
+                </div>
+                <button onClick={() => addServiceFee()} disabled={serviceBusy || !serviceForm.selectedOption} style={{ background: C.blue, color: "#fff", border: "none", borderRadius: 8, padding: "9px 16px", cursor: "pointer", display: "flex", alignItems: "center", gap: 5, fontSize: 13, fontWeight: 700, fontFamily: "Inter,system-ui", opacity: !serviceForm.selectedOption ? 0.5 : 1 }}><Plus size={14} /> Aggiungi</button>
               </div>
             </div>
 
