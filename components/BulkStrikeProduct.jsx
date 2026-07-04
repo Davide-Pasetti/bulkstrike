@@ -171,6 +171,7 @@ function untilLabel(iso) {
 export default function ProductPage() {
   const [qty, setQty] = useState(8000);
   const [selectedId, setSelectedId] = useState(null);   // null = auto best (prezzo netto piu basso)
+  const [variantFilters, setVariantFilters] = useState({}); // { granulometria: "fine", ... } — un fornitore senza questa esatta variante non compare
   const [selectedFormatIdx, setSelectedFormatIdx] = useState(0); // indice del formato scelto tra quelli del fornitore in evidenza
   const [showSpecs, setShowSpecs] = useState(false);
   const [openQa, setOpenQa] = useState(null);
@@ -260,9 +261,27 @@ export default function ProductPage() {
     if (q.length < 2) return;
     searchProducts(q).then(rows => { setSearchResults(rows); setSearchOpen(true); }).catch(() => {});
   }
+  // Attributi di variante disponibili tra i fornitori (solo quelli verificati arrivano
+  // già popolati da getProduct). Un fornitore senza la variante selezionata sparisce.
+  const variantOptions = useMemo(() => {
+    const opts = {};
+    for (const s of suppliers) {
+      for (const [k, v] of Object.entries(s.variantAttributes || {})) {
+        if (!opts[k]) opts[k] = new Set();
+        opts[k].add(v);
+      }
+    }
+    return Object.fromEntries(Object.entries(opts).map(([k, v]) => [k, [...v]]));
+  }, [suppliers]);
+  const filteredSuppliers = useMemo(() => {
+    const keys = Object.keys(variantFilters).filter(k => variantFilters[k]);
+    if (keys.length === 0) return suppliers;
+    return suppliers.filter(s => keys.every(k => (s.variantAttributes || {})[k] === variantFilters[k]));
+  }, [suppliers, variantFilters]);
+
   const ranked = useMemo(() => {
-    return suppliers.map(s => ({ ...s, calc: compute(s, qty) })).sort((a,b) => a.calc.preVatKg - b.calc.preVatKg);
-  }, [suppliers, qty]);
+    return filteredSuppliers.map(s => ({ ...s, calc: compute(s, qty) })).sort((a,b) => a.calc.preVatKg - b.calc.preVatKg);
+  }, [filteredSuppliers, qty]);
 
   const featured = (selectedId ? ranked.find(s => s.id === selectedId) : ranked[0]) || null;
   const others = featured ? ranked.filter(s => s.id !== featured.id) : [];
@@ -639,6 +658,24 @@ export default function ProductPage() {
             )}
 
             {/* FEATURED SUPPLIER */}
+            {Object.keys(variantOptions).length > 0 && (
+              <div style={{ border:`1px solid ${C.border}`, borderRadius:14, padding:16, marginBottom:20, background:"#fff" }}>
+                <div style={{ fontSize:12.5, fontWeight:700, color:C.text, marginBottom:2 }}>Filtra per variante</div>
+                <div style={{ fontSize:11.5, color:C.muted, marginBottom:10 }}>Selezionando una variante, i fornitori che non la offrono spariscono dal confronto.</div>
+                <div style={{ display:"flex", gap:10, flexWrap:"wrap" }}>
+                  {Object.entries(variantOptions).map(([key, values]) => (
+                    <div key={key}>
+                      <label style={{ fontSize:11, color:C.muted, display:"block", marginBottom:4, textTransform:"capitalize" }}>{key}</label>
+                      <select value={variantFilters[key] || ""} onChange={e => { setVariantFilters(prev => ({ ...prev, [key]: e.target.value || undefined })); setSelectedId(null); }} style={{ border:`1px solid ${C.border}`, borderRadius:8, padding:"7px 10px", fontSize:13, fontFamily:"Inter,system-ui", background:"#fff", color:C.text }}>
+                        <option value="">Qualsiasi</option>
+                        {values.map(v => <option key={v} value={v}>{v}</option>)}
+                      </select>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {featured ? (<>
             <div style={{ fontSize:12, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.08em", color:C.blue, marginBottom:10 }}>In evidenza</div>
             <div style={{ border:`2px solid ${C.blue}`, borderRadius:16, padding:24, marginBottom:24, position:"relative", boxShadow:"0 8px 30px rgba(14,165,233,0.10)" }}>
