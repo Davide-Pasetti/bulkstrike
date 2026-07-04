@@ -414,7 +414,7 @@ export default function PoolAuctionPage() {
               </>
             ) : (
               <>
-                <div style={{ fontSize:15, fontWeight:700, marginBottom:4 }}>Aderisci all'asta</div>
+                <div style={{ fontSize:15, fontWeight:700, marginBottom:4 }}>{poolId ? "Aderisci all'asta" : "Apri un'asta"}</div>
                 <div style={{ fontSize:13, color:C.muted, marginBottom:14 }}>La tua quantità entra subito nel volume aggregato</div>
 
                 <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:12 }}>
@@ -470,13 +470,13 @@ export default function PoolAuctionPage() {
                   </div>
                 )}
 
-                <button onClick={joinTheAuction} className="bs-btn" style={{ width:"100%", marginBottom:8 }} disabled={!acceptTerms || joining}>{joining ? "Adesione in corso…" : <>Aderisci all'asta a ribasso all'attuale prezzo <ArrowRight size={18}/></>}</button>
+                <button onClick={joinTheAuction} className="bs-btn" style={{ width:"100%", marginBottom:8 }} disabled={!acceptTerms || joining}>{joining ? "Adesione in corso…" : <>{poolId ? "Aderisci all'asta a ribasso all'attuale prezzo" : "Apri un'asta a ribasso all'attuale prezzo"} <ArrowRight size={18}/></>}</button>
                 <button
                   onClick={() => { if (showTargetInput) joinAtTarget(); else setShowTargetInput(true); }}
                   style={{ width:"100%", background:"transparent", color:C.purple, border:`1.5px solid ${C.purple}`, borderRadius:10, padding:"12px", fontSize:14, fontWeight:700, cursor:(!acceptTerms||joining)?"default":"pointer", opacity:(!acceptTerms||joining)?0.5:1, fontFamily:"Inter,system-ui", display:"flex", alignItems:"center", justifyContent:"center", gap:6, textAlign:"center" }}
                   disabled={!acceptTerms || joining}
                 >
-                  {joining ? "Attivazione in corso…" : showTargetInput ? "Conferma soglia e attiva adesione" : "Aderisci all'asta a ribasso quando il prezzo raggiunge una cifra stabilita"}
+                  {joining ? "Attivazione in corso…" : showTargetInput ? "Conferma soglia e attiva adesione" : (poolId ? "Aderisci all'asta a ribasso quando il prezzo raggiunge una cifra stabilita" : "Apri un'asta a ribasso quando il prezzo raggiunge una cifra stabilita")}
                 </button>
                 {joinMsg && <div style={{ marginTop:10, fontSize:13, textAlign:"center", color: joinMsg.startsWith("✓") ? C.green : C.red }}>{joinMsg}</div>}
                 <div style={{ display:"flex", alignItems:"center", gap:6, marginTop:12, fontSize:12, color:C.muted }}>
@@ -504,7 +504,7 @@ export default function PoolAuctionPage() {
           <div>
             <div className="bs-card" style={{ marginBottom:20 }}>
               <div style={{ fontSize:16, fontWeight:700, marginBottom:4 }}>Scaglioni di volume (prezzo tetto)</div>
-              <div style={{ fontSize:13, color:C.muted, marginBottom:14 }}>È il prezzo massimo per fascia di volume. I fornitori possono ribassare sotto questi valori in asta.</div>
+              <div style={{ fontSize:13, color:C.muted, marginBottom:14 }}>Prezzo massimo automatico garantito per fascia di volume. N.B. I fornitori possono comunque ribassare sotto questi valori in asta.</div>
               <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
                 {TIERS.map((t,i) => {
                   const reached = pool.current >= (i===0?0:TIERS[i-1].max);
