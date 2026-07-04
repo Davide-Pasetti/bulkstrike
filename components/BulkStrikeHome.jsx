@@ -179,6 +179,7 @@ export default function BulkStrikeLight() {
         .bs-cats::-webkit-scrollbar { display:none; }
         .bs-cat { display:flex; flex-direction:column; align-items:center; gap:8px; cursor:pointer; flex-shrink:0; width:76px; transition:transform 0.15s; }
         .bs-cat:hover { transform:translateY(-2px); }
+        .bs-cat-label { text-align:center; line-height:1.25; }
         .bs-cat-icon { width:56px; height:56px; border-radius:14px; display:flex; align-items:center; justify-content:center; font-size:26px; border:1.5px solid; transition:all 0.15s; }
         .bs-cat.active .bs-cat-icon { outline:2px solid #0EA5E9; outline-offset:2px; }
         .bs-section { max-width:1280px; margin:0 auto; padding:64px 24px; }
@@ -225,11 +226,15 @@ export default function BulkStrikeLight() {
           .bs-cta-btns { flex-direction:column !important; }
           .bs-hero-grid { grid-template-columns:1fr !important; gap:32px !important; }
           .bs-hamburger-btn { display:flex !important; align-items:center; justify-content:center; }
+          .bs-logo-wrap { flex:1 !important; display:flex !important; justify-content:center !important; }
           .bs-search-desktop { display:none !important; }
           .bs-search-mobile-row { display:block !important; padding:10px 16px 14px; border-top:1px solid ${C.border}; }
           .bs-mobile-menu-panel { display:block !important; border-top:1px solid ${C.border}; background:#fff; }
-          .bs-cats { flex-wrap:wrap !important; overflow:hidden !important; max-height:152px; padding-bottom:8px !important; }
+          .bs-cats { flex-wrap:wrap !important; overflow:hidden !important; max-height:140px; gap:8px !important; padding:16px 16px 0 16px !important; }
           .bs-cats.expanded { max-height:none !important; }
+          .bs-cat { width:calc((100% - 24px) / 4) !important; }
+          .bs-cat-icon { width:100% !important; height:auto !important; aspect-ratio:1/1; font-size:22px !important; border-radius:12px !important; }
+          .bs-cat-label { font-size:10.5px !important; display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden; }
           .bs-cats-expand-btn { display:flex !important; align-items:center; justify-content:center; width:100%; background:none; border:none; border-top:1px solid ${C.border}; padding:8px 0; cursor:pointer; }
         }
       `}</style>
@@ -242,12 +247,14 @@ export default function BulkStrikeLight() {
             {mobileMenuOpen ? <X size={22} color={C.text}/> : <Menu size={22} color={C.text}/>}
           </button>
 
-          {/* Logo */}
-          <div onClick={() => { window.location.href = "/"; }} style={{ display:"flex", alignItems:"center", gap:10, flexShrink:0, cursor:"pointer" }}>
-            <BSIcon size={36} uid="nav" />
-            <div style={{ display:"flex", alignItems:"baseline", fontFamily:"Inter,system-ui,sans-serif" }}>
-              <span style={{ fontSize:20, fontWeight:900, color:C.text, letterSpacing:"-0.03em" }}>Bulk</span>
-              <span style={{ fontSize:20, fontWeight:900, letterSpacing:"-0.03em", background:"linear-gradient(90deg,#0EA5E9,#22D3EE)", WebkitBackgroundClip:"text", backgroundClip:"text", color:"transparent" }}>Strike</span>
+          {/* Logo — su mobile il wrapper prende lo spazio centrale tra menu e carrello/profilo, così è bilanciato */}
+          <div className="bs-logo-wrap" style={{ flexShrink:0 }}>
+            <div onClick={() => { window.location.href = "/"; }} style={{ display:"flex", alignItems:"center", gap:10, cursor:"pointer" }}>
+              <BSIcon size={36} uid="nav" />
+              <div style={{ display:"flex", alignItems:"baseline", fontFamily:"Inter,system-ui,sans-serif" }}>
+                <span style={{ fontSize:20, fontWeight:900, color:C.text, letterSpacing:"-0.03em" }}>Bulk</span>
+                <span style={{ fontSize:20, fontWeight:900, letterSpacing:"-0.03em", background:"linear-gradient(90deg,#0EA5E9,#22D3EE)", WebkitBackgroundClip:"text", backgroundClip:"text", color:"transparent" }}>Strike</span>
+              </div>
             </div>
           </div>
 
@@ -354,7 +361,7 @@ export default function BulkStrikeLight() {
                   <div className="bs-cat-icon" style={{ background:on?"#EFF6FF":"#F1F5F9", borderColor:on?"#0EA5E9":"#E2E8F0" }}>
                     {m.icon || "📦"}
                   </div>
-                  <span style={{ fontSize:11, color:on?"#0EA5E9":C.muted, textAlign:"center", lineHeight:1.2, fontWeight:on?700:400 }}>
+                  <span className="bs-cat-label" style={{ fontSize:11, color:on?"#0EA5E9":C.muted, textAlign:"center", lineHeight:1.2, fontWeight:on?700:400 }}>
                     {m.name}
                   </span>
                 </div>
