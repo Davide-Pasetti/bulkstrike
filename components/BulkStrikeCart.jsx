@@ -192,7 +192,7 @@ export default function CartPage() {
                       <div className="ct-link" onClick={() => { window.location.href = `/prodotto?id=${it.product_id}`; }} style={{ fontSize: 15 }}>{it.product_name}</div>
                       <div style={{ fontSize: 12, color: C.muted, marginTop: 3 }}>
                         Fornitore: <span className="ct-link" onClick={() => { window.location.href = `/fornitore?id=${it.supplier_company_id}`; }} style={{ fontWeight: 600, fontSize: 12 }}>{it.supplier_name}</span>
-                        {it.lead_time_days != null && <> · lead time {it.lead_time_days} gg</>}
+                        {it.lead_time_days != null && <> · preparazione ordine {it.lead_time_days} gg</>}
                       </div>
                       {issue && <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11.5, color: C.red, marginTop: 5 }}><AlertTriangle size={12} /> {issue}</div>}
                     </div>

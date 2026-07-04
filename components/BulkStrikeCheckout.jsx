@@ -69,9 +69,11 @@ export default function CheckoutPage() {
   const [done, setDone] = useState(null);
   const [buyerEmail, setBuyerEmail] = useState("");
 
-  // Rubrica indirizzi di spedizione salvati dal cliente + form per aggiungerne uno nuovo.
+  // Rubrica indirizzi di spedizione salvati dal cliente + la sede legale (sempre
+  // disponibile, non richiede salvataggio) + form per aggiungerne uno nuovo.
   const [addresses, setAddresses] = useState([]);
-  const [selectedAddressId, setSelectedAddressId] = useState("");
+  const [companyAddress, setCompanyAddress] = useState(null); // testo sede legale, o null se non impostata
+  const [selectedAddressId, setSelectedAddressId] = useState(""); // "__legal__" | id salvato
   const [showAddForm, setShowAddForm] = useState(false);
   const [newAddrText, setNewAddrText] = useState("");
   const [newAddrLabel, setNewAddrLabel] = useState("");
@@ -99,15 +101,25 @@ export default function CheckoutPage() {
         ]);
         setItems(cart);
         setAddresses(savedAddrs || []);
-        if (savedAddrs && savedAddrs.length > 0) {
-          const def = savedAddrs.find(a => a.is_default) || savedAddrs[0];
+        const legalText = companyAddr ? [companyAddr.address, companyAddr.city, companyAddr.country].filter(Boolean).join(", ") : null;
+        setCompanyAddress(legalText);
+
+        const def = (savedAddrs || []).find(a => a.is_default);
+        if (def) {
           setSelectedAddressId(def.id);
           setAddress(def.address);
+        } else if (legalText) {
+          // Di default proponiamo la sede legale: è sempre nota, non richiede
+          // di essere salvata come "indirizzo di spedizione" per essere usata.
+          setSelectedAddressId("__legal__");
+          setAddress(legalText);
+        } else if (savedAddrs && savedAddrs.length > 0) {
+          setSelectedAddressId(savedAddrs[0].id);
+          setAddress(savedAddrs[0].address);
         } else {
-          // nessun indirizzo salvato ancora: precompiliamo il form "nuovo indirizzo"
-          // con l'indirizzo aziendale, cosi' basta un click per salvarlo come primo.
+          // Nessuna sede legale nota e nessun indirizzo salvato: unico caso in
+          // cui apriamo subito il form per aggiungerne uno.
           setShowAddForm(true);
-          if (companyAddr) setNewAddrText([companyAddr.address, companyAddr.city, companyAddr.country].filter(Boolean).join(", "));
         }
       } catch (e) { setErr(poolErrorMessage(e)); }
       setLoading(false);
@@ -116,8 +128,9 @@ export default function CheckoutPage() {
 
   function selectAddress(id) {
     if (id === "__new__") { setShowAddForm(true); return; }
-    setSelectedAddressId(id);
     setShowAddForm(false);
+    setSelectedAddressId(id);
+    if (id === "__legal__") { setAddress(companyAddress || ""); return; }
     const found = addresses.find(a => a.id === id);
     if (found) setAddress(found.address);
   }
@@ -338,31 +351,29 @@ export default function CheckoutPage() {
                 <div style={{ border: `1px solid ${C.border}`, borderRadius: 14, padding: 20, marginBottom: 18 }}>
                   <div style={{ fontSize: 13, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: C.muted, marginBottom: 14, display: "flex", alignItems: "center", gap: 7 }}><MapPin size={15} /> Indirizzo di consegna</div>
 
-                  {addresses.length > 0 && (
-                    <>
-                      <label style={{ fontSize: 12.5, fontWeight: 600, color: C.muted, display: "block", marginBottom: 6 }}>Indirizzo salvato *</label>
-                      <select className="co-input" value={showAddForm ? "__new__" : selectedAddressId} onChange={e => selectAddress(e.target.value)} style={{ marginBottom: showAddForm ? 14 : 14 }}>
-                        {addresses.map(a => (
-                          <option key={a.id} value={a.id}>{a.label ? `${a.label} — ` : ""}{a.address}</option>
-                        ))}
-                        <option value="__new__">+ Aggiungi un altro indirizzo di spedizione</option>
-                      </select>
-                    </>
-                  )}
+                  <label style={{ fontSize: 12.5, fontWeight: 600, color: C.muted, display: "block", marginBottom: 6 }}>Indirizzo di consegna *</label>
+                  <select className="co-input" value={showAddForm ? "__new__" : selectedAddressId} onChange={e => selectAddress(e.target.value)} style={{ marginBottom: 14 }}>
+                    {companyAddress && <option value="__legal__">Sede legale — {companyAddress}</option>}
+                    {addresses.map(a => (
+                      <option key={a.id} value={a.id}>{a.label ? `${a.label} — ` : ""}{a.address}</option>
+                    ))}
+                    <option value="__new__">+ Aggiungi indirizzo di luogo di spedizione</option>
+                  </select>
 
-                  {(addresses.length === 0 || showAddForm) && (
+                  {showAddForm && (
                     <div style={{ border: `1px solid ${C.border}`, borderRadius: 10, padding: 14, marginBottom: 14, background: C.bg }}>
                       <label style={{ fontSize: 12.5, fontWeight: 600, color: C.muted, display: "block", marginBottom: 6 }}>Nuovo indirizzo di spedizione *</label>
                       <input className="co-input" value={newAddrText} onChange={e => setNewAddrText(e.target.value)} placeholder="Via, civico, CAP, città, paese" style={{ marginBottom: 10 }} />
                       <label style={{ fontSize: 12.5, fontWeight: 600, color: C.muted, display: "block", marginBottom: 6 }}>Etichetta (facoltativo)</label>
-                      <input className="co-input" value={newAddrLabel} onChange={e => setNewAddrLabel(e.target.value)} placeholder="Es. Sede legale, Magazzino Nord" style={{ marginBottom: 12 }} />
+                      <input className="co-input" value={newAddrLabel} onChange={e => setNewAddrLabel(e.target.value)} placeholder="Es. Magazzino Nord, Deposito Ovest" style={{ marginBottom: 12 }} />
                       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                         <button onClick={saveNewAddress} disabled={savingAddress}
                           style={{ background: C.blue, color: "#fff", border: "none", borderRadius: 9, padding: "10px 18px", fontSize: 13.5, fontWeight: 700, cursor: savingAddress ? "default" : "pointer", opacity: savingAddress ? 0.6 : 1, fontFamily: "Inter,system-ui", display: "inline-flex", alignItems: "center", gap: 6 }}>
                           <Plus size={14} /> {savingAddress ? "Salvataggio…" : "Salva indirizzo"}
                         </button>
-                        {addresses.length > 0 && (
-                          <button onClick={() => setShowAddForm(false)} style={{ background: "transparent", color: C.muted, border: `1px solid ${C.border}`, borderRadius: 9, padding: "10px 16px", fontSize: 13.5, fontWeight: 600, cursor: "pointer", fontFamily: "Inter,system-ui", display: "inline-flex", alignItems: "center", gap: 6 }}>
+                        {(companyAddress || addresses.length > 0) && (
+                          <button onClick={() => { if (companyAddress) selectAddress("__legal__"); else selectAddress(addresses[0].id); }}
+                            style={{ background: "transparent", color: C.muted, border: `1px solid ${C.border}`, borderRadius: 9, padding: "10px 16px", fontSize: 13.5, fontWeight: 600, cursor: "pointer", fontFamily: "Inter,system-ui", display: "inline-flex", alignItems: "center", gap: 6 }}>
                             <X size={14} /> Annulla
                           </button>
                         )}
@@ -377,7 +388,7 @@ export default function CheckoutPage() {
 
                 <div style={{ border: `1px solid ${C.border}`, borderRadius: 14, overflow: "hidden", marginBottom: 10 }}>
                   <div className="co-row" style={{ background: C.bg, fontSize: 11, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.04em", color: C.muted }}>
-                    <span>Prodotto / fornitore</span><span>Quantità</span><span>Lead time</span><span style={{ textAlign: "right" }}>Totale</span>
+                    <span>Prodotto / fornitore</span><span>Quantità</span><span>Giorni di preparazione ordine</span><span style={{ textAlign: "right" }}>Totale</span>
                   </div>
                   {items.map(it => (
                     <div key={`${it.product_id}|${it.supplier_company_id}`} className="co-row">
