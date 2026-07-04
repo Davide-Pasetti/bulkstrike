@@ -111,6 +111,7 @@ function CookieBanner() {
 export default function BulkStrikeLight() {
   const [searchCat, setSearchCat]   = useState("Tutte le categorie");
   const [showCatDd, setShowCatDd]   = useState(false);
+  const [sectorsExpanded, setSectorsExpanded] = useState(false); // solo mobile: mostra tutte le icone settore
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false); // menu a lineette, solo mobile
   const [searchQ, setSearchQ]       = useState("");
   const [activeChart, setActiveChart] = useState("Acido Citrico");
@@ -209,6 +210,7 @@ export default function BulkStrikeLight() {
         .bs-hamburger-btn { display:none; background:none; border:none; cursor:pointer; padding:6px; margin:-6px; flex-shrink:0; }
         .bs-search-mobile-row { display:none; }
         .bs-mobile-menu-panel { display:none; }
+        .bs-cats-expand-btn { display:none; }
         @media (max-width:768px) {
           .bs-grid-2 { grid-template-columns:1fr !important; gap:32px !important; }
           .bs-grid-3 { grid-template-columns:1fr !important; }
@@ -218,13 +220,17 @@ export default function BulkStrikeLight() {
           .bs-section { padding:48px 16px; }
           .bs-nav-links { display:none !important; }
           .bs-search-wrap { max-width:100% !important; }
-          .bs-search-cat { min-width:120px !important; }
+          .bs-search-cat { min-width:44px !important; padding:0 10px !important; justify-content:center !important; }
+          .bs-search-cat-label { display:none !important; }
           .bs-cta-btns { flex-direction:column !important; }
           .bs-hero-grid { grid-template-columns:1fr !important; gap:32px !important; }
           .bs-hamburger-btn { display:flex !important; align-items:center; justify-content:center; }
           .bs-search-desktop { display:none !important; }
           .bs-search-mobile-row { display:block !important; padding:10px 16px 14px; border-top:1px solid ${C.border}; }
           .bs-mobile-menu-panel { display:block !important; border-top:1px solid ${C.border}; background:#fff; }
+          .bs-cats { flex-wrap:wrap !important; overflow:hidden !important; max-height:152px; padding-bottom:8px !important; }
+          .bs-cats.expanded { max-height:none !important; }
+          .bs-cats-expand-btn { display:flex !important; align-items:center; justify-content:center; width:100%; background:none; border:none; border-top:1px solid ${C.border}; padding:8px 0; cursor:pointer; }
         }
       `}</style>
 
@@ -249,7 +255,7 @@ export default function BulkStrikeLight() {
           <div className="bs-search-desktop" style={{ position:"relative", flex:1, display:"flex", justifyContent:"center" }}>
             <div className="bs-search-wrap">
               <div className="bs-search-cat" onClick={() => setShowCatDd(!showCatDd)}>
-                <span style={{ overflow:"hidden", textOverflow:"ellipsis", maxWidth:110 }}>{searchCat}</span>
+                <span className="bs-search-cat-label" style={{ overflow:"hidden", textOverflow:"ellipsis", maxWidth:110 }}>{searchCat}</span>
                 <ChevronDown size={14} color="#64748B" />
               </div>
               {showCatDd && (
@@ -290,11 +296,18 @@ export default function BulkStrikeLight() {
 
         {/* Barra di ricerca — solo mobile, riga a parte sotto il logo/menu */}
         <div className="bs-search-mobile-row">
-          <div className="bs-search-wrap" style={{ maxWidth:"100%" }}>
+          <div className="bs-search-wrap" style={{ maxWidth:"100%", position:"relative" }}>
             <div className="bs-search-cat" onClick={() => setShowCatDd(!showCatDd)}>
-              <span style={{ overflow:"hidden", textOverflow:"ellipsis", maxWidth:90 }}>{searchCat}</span>
+              <span className="bs-search-cat-label" style={{ overflow:"hidden", textOverflow:"ellipsis", maxWidth:90 }}>{searchCat}</span>
               <ChevronDown size={14} color="#64748B" />
             </div>
+            {showCatDd && (
+              <div className="bs-cat-dd" style={{ top:46 }}>
+                {SEARCH_CATS.map(c => (
+                  <div key={c} className="bs-cat-dd-item" onClick={() => { setSearchCat(c); setShowCatDd(false); }}>{c}</div>
+                ))}
+              </div>
+            )}
             <input className="bs-search-input" placeholder="Cerca materie prime, fornitori..." value={searchQ} onChange={e => setSearchQ(e.target.value)} onKeyDown={e => { if (e.key === "Enter") runSearch(); }} />
             <button className="bs-search-btn" onClick={runSearch}><Search size={20} color="white" /></button>
           </div>
@@ -332,7 +345,7 @@ export default function BulkStrikeLight() {
       <div style={{ borderBottom:`1px solid ${C.border}`, background:"#fff" }}>
         <div style={{ maxWidth:1280, margin:"0 auto" }}>
           {/* livello 1: macro-aree */}
-          <div className="bs-cats">
+          <div className={`bs-cats${sectorsExpanded ? " expanded" : ""}`}>
             {macros.map(m => {
               const on = activeMacro?.id === m.id;
               return (
@@ -348,6 +361,10 @@ export default function BulkStrikeLight() {
               );
             })}
           </div>
+          {/* freccia per espandere tutte le categorie — solo mobile */}
+          <button className="bs-cats-expand-btn" onClick={() => setSectorsExpanded(e => !e)}>
+            <ChevronDown size={18} color={C.muted} style={{ transform: sectorsExpanded ? "rotate(180deg)" : "none", transition:"transform 0.2s" }}/>
+          </button>
 
           {/* livello 2: sotto-aree della macro selezionata */}
           {activeMacro && (
