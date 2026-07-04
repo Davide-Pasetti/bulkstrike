@@ -424,7 +424,7 @@ export default function BulkStrikeLight() {
                 <span style={{ fontSize:12, color:C.muted }}>Mancano 900 kg</span>
               </div>
             </div>
-            <button className="bs-btn" onClick={() => { window.location.href = "/pool?id=7191a826-ac9c-404b-8001-8e8fc8f08100"; }} style={{ width:"100%", justifyContent:"center" }}>Unisciti all'asta <ArrowRight size={16} /></button>
+            <button className="bs-btn" onClick={() => { window.location.href = "/pool?id=7191a826-ac9c-404b-8001-8e8fc8f08100"; }} style={{ width:"100%", justifyContent:"center" }}>Visualizza l'asta a ribasso <ArrowRight size={16} /></button>
           </div>
         </div>
       </div>
@@ -502,7 +502,7 @@ export default function BulkStrikeLight() {
                   </div>
                   <div style={{ fontSize:12, color:pct>=80?C.amber:C.muted, marginTop:4, textAlign:"right" }}>{pct}%</div>
                 </div>
-                <button className="bs-pool-btn" onClick={() => { window.location.href = "/pool?id=7191a826-ac9c-404b-8001-8e8fc8f08100"; }}>Unisciti all'asta <ArrowRight size={14} /></button>
+                <button className="bs-pool-btn" onClick={() => { window.location.href = "/pool?id=7191a826-ac9c-404b-8001-8e8fc8f08100"; }}>Visualizza l'asta a ribasso <ArrowRight size={14} /></button>
               </div>
             );
           })}

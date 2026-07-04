@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { getPoolDetail, getPoolBids, joinPool, poolErrorMessage } from "@/lib/api";
+import { getPoolDetail, getPoolBids, joinPool, joinPoolAtTarget, getMyTargetJoin, cancelTargetJoin, poolErrorMessage } from "@/lib/api";
 import NavAuth from "@/components/BulkStrikeNavAuth";
 import { Search, Bot, ArrowRight, Check, Clock, ChevronRight, Shield, Users, TrendingDown, X, Plus, Minus, Info, Gavel, Award } from "lucide-react";
 
@@ -91,6 +91,9 @@ export default function PoolAuctionPage() {
   const [acceptTerms, setAcceptTerms] = useState(false);
   const [secs, setSecs] = useState(pool.secondsLeft);
   const [joined, setJoined] = useState(false);
+  const [targetJoin, setTargetJoin] = useState(null);   // { id, quantity_kg, target_price_per_kg } | null
+  const [showTargetInput, setShowTargetInput] = useState(false);
+  const [targetPrice, setTargetPrice] = useState("");
 
   useEffect(() => {
     const t = setInterval(() => setSecs(s => s>0 ? s-1 : 0), 1000);
@@ -102,6 +105,7 @@ export default function PoolAuctionPage() {
     if (!id) return;            // nessun id → resta il pool dimostrativo
     setPoolId(id);
     loadPool(id);
+    getMyTargetJoin(id).then(setTargetJoin).catch(() => {});
   }, []);
 
   async function loadPool(id) {
@@ -142,6 +146,35 @@ export default function PoolAuctionPage() {
     } finally {
       setJoining(false);
     }
+  }
+
+  // Aderisci quando il prezzo raggiunge la soglia scelta. Se il prezzo attuale
+  // è già a quel livello o sotto, il server unisce subito (stessa cosa di joinTheAuction).
+  async function joinAtTarget() {
+    if (!poolId) { setJoinMsg("Questa è l'asta dimostrativa. Apri /pool?id=… con un'asta reale per partecipare."); return; }
+    const price = parseFloat(String(targetPrice).replace(",", "."));
+    if (!price || price <= 0) { setJoinMsg("Inserisci un prezzo soglia valido."); return; }
+    setJoining(true); setJoinMsg(null);
+    try {
+      const res = await joinPoolAtTarget(poolId, userQty, price, true);
+      if (res?.status === "joined_now") {
+        setJoinMsg("✓ Adesione registrata: sei nell'asta.");
+        setJoined(true);
+      } else {
+        setTargetJoin({ quantity_kg: userQty, target_price_per_kg: price });
+        setShowTargetInput(false);
+      }
+      loadPool(poolId);
+    } catch (e) {
+      setJoinMsg(poolErrorMessage(e));
+    } finally {
+      setJoining(false);
+    }
+  }
+
+  async function cancelTarget() {
+    if (targetJoin?.id) { try { await cancelTargetJoin(targetJoin.id); } catch (e) {} }
+    setTargetJoin(null);
   }
 
   const d = Math.floor(secs/86400), h = Math.floor((secs%86400)/3600), m = Math.floor((secs%3600)/60), s = secs%60;
@@ -270,7 +303,7 @@ export default function PoolAuctionPage() {
             <div style={{ width:34, height:34, borderRadius:9, background:C.purple, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}><Users size={17} color="#fff"/></div>
             <div>
               <div style={{ fontSize:14, fontWeight:700, marginBottom:2 }}>Leva 1 · Volume aggregato</div>
-              <div style={{ fontSize:13, color:C.muted, lineHeight:1.5 }}>Più cantine aderiscono, più si sblocca uno scaglione di prezzo più basso per tutti.</div>
+              <div style={{ fontSize:13, color:C.muted, lineHeight:1.5 }}>Più richieste di prodotto si aggregano, più si sblocca uno scaglione di prezzo più basso per tutti.</div>
             </div>
           </div>
           <div style={{ background:"#EFF6FF", border:`1px solid #BFDBFE`, borderRadius:12, padding:"14px 16px", display:"flex", gap:12, alignItems:"flex-start" }}>
@@ -355,6 +388,21 @@ export default function PoolAuctionPage() {
                   <span>Pagamento in escrow al prezzo di chiusura. Mai più dell'Acquisto Rapido.</span>
                 </div>
               </>
+            ) : targetJoin ? (
+              <>
+                <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:6 }}>
+                  <div style={{ width:34, height:34, borderRadius:"50%", background:"#FFF7ED", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}><Clock size={18} color={C.amber}/></div>
+                  <div style={{ fontSize:15, fontWeight:700 }}>Adesione in attesa</div>
+                </div>
+                <div style={{ fontSize:13, color:C.muted, marginBottom:16, lineHeight:1.5 }}>
+                  Ti aggiungeremo automaticamente con <b style={{color:C.text}}>{kg(targetJoin.quantity_kg)} kg</b> non appena un fornitore scende a <b style={{color:C.text}}>{eurKg(targetJoin.target_price_per_kg)}/kg</b> o sotto. Nessuna azione richiesta da parte tua.
+                </div>
+                <button onClick={cancelTarget} style={{ width:"100%", background:"transparent", color:C.muted, border:`1.5px solid ${C.border}`, borderRadius:10, padding:"12px", fontSize:14, fontWeight:600, cursor:"pointer", fontFamily:"Inter,system-ui" }}>Annulla adesione in attesa</button>
+                <div style={{ display:"flex", alignItems:"center", gap:6, marginTop:12, fontSize:12, color:C.muted }}>
+                  <Shield size={20} color={C.green} style={{ flexShrink:0 }}/>
+                  <span>Pagamento in escrow al prezzo di chiusura. Mai più dell'Acquisto Rapido.</span>
+                </div>
+              </>
             ) : (
               <>
                 <div style={{ fontSize:15, fontWeight:700, marginBottom:4 }}>Aderisci all'asta</div>
@@ -397,11 +445,30 @@ export default function PoolAuctionPage() {
                 <label style={{ display:"flex", gap:10, alignItems:"flex-start", background:"#FFF7ED", border:`1px solid ${C.amber}44`, borderRadius:9, padding:"11px 12px", marginBottom:14, cursor:"pointer" }}>
                   <input type="checkbox" checked={acceptTerms} onChange={e => setAcceptTerms(e.target.checked)} style={{ marginTop:2, width:16, height:16, accentColor:C.purple, flexShrink:0 }}/>
                   <span style={{ fontSize:12, color:"#7C2D12", lineHeight:1.5 }}>
-                    Aderendo accetto il <b>fornitore che offrirà il prezzo più basso</b> tra quelli certificati allo standard sopra indicato. Per scegliere un fornitore specifico devo usare l'Acquisto Rapido.
+                    Partecipando all'asta accetto l'acquisto della specifica materia prima dal fornitore che offrirà il prezzo più basso tra quelli certificati allo standard sopra indicato.
                   </span>
                 </label>
 
-                <button onClick={joinTheAuction} className="bs-btn" style={{ width:"100%" }} disabled={!acceptTerms || joining}>{joining ? "Adesione in corso…" : <>Aderisci all'asta <ArrowRight size={18}/></>}</button>
+                {showTargetInput && (
+                  <div style={{ border:`1px solid ${C.border}`, borderRadius:10, padding:12, marginBottom:12, background:C.bg }}>
+                    <div style={{ fontSize:12.5, fontWeight:600, color:C.muted, marginBottom:8 }}>A quale prezzo vuoi aderire?</div>
+                    <div style={{ display:"flex", alignItems:"center", gap:6, background:"#fff", border:`1px solid ${C.border}`, borderRadius:8, padding:"9px 12px" }}>
+                      <span style={{ color:C.muted }}>€</span>
+                      <input value={targetPrice} onChange={e => setTargetPrice(e.target.value.replace(/[^0-9,.]/g,""))} placeholder={String(effectiveNow.toFixed(2)).replace(".",",")} className="bs-num" style={{ flex:1, border:"none", outline:"none", fontSize:16, fontWeight:700, color:C.text }}/>
+                      <span style={{ color:C.muted, fontSize:13 }}>/kg</span>
+                    </div>
+                    <div style={{ fontSize:11, color:C.muted, marginTop:6 }}>Prezzo attuale: {eurKg(effectiveNow)}/kg. Ti aggiungeremo in automatico se e quando un fornitore arriva a questa cifra.</div>
+                  </div>
+                )}
+
+                <button onClick={joinTheAuction} className="bs-btn" style={{ width:"100%", marginBottom:8 }} disabled={!acceptTerms || joining}>{joining ? "Adesione in corso…" : <>Aderisci all'asta a ribasso all'attuale prezzo <ArrowRight size={18}/></>}</button>
+                <button
+                  onClick={() => { if (showTargetInput) joinAtTarget(); else setShowTargetInput(true); }}
+                  style={{ width:"100%", background:"transparent", color:C.purple, border:`1.5px solid ${C.purple}`, borderRadius:10, padding:"12px", fontSize:14, fontWeight:700, cursor:(!acceptTerms||joining)?"default":"pointer", opacity:(!acceptTerms||joining)?0.5:1, fontFamily:"Inter,system-ui", display:"flex", alignItems:"center", justifyContent:"center", gap:6, textAlign:"center" }}
+                  disabled={!acceptTerms || joining}
+                >
+                  {joining ? "Attivazione in corso…" : showTargetInput ? "Conferma soglia e attiva adesione" : "Aderisci all'asta a ribasso quando il prezzo raggiunge una cifra stabilita"}
+                </button>
                 {joinMsg && <div style={{ marginTop:10, fontSize:13, textAlign:"center", color: joinMsg.startsWith("✓") ? C.green : C.red }}>{joinMsg}</div>}
                 <div style={{ display:"flex", alignItems:"center", gap:6, marginTop:12, fontSize:12, color:C.muted }}>
                   <Shield size={20} color={C.green} style={{ flexShrink:0 }}/>
