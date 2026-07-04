@@ -7,7 +7,7 @@
 // dopo che il cliente ha scelto/confermato l'indirizzo di spedizione.
 import { useState, useEffect, useMemo } from "react";
 import { ShoppingCart, Trash2, ArrowRight, AlertTriangle, Package, ShieldCheck, ChevronRight } from "lucide-react";
-import { getCart, upsertCartItem, removeCartItem, clearCart, getSession, poolErrorMessage, previewCheckout, getMyCompanyAddress } from "@/lib/api";
+import { getCart, upsertCartItem, removeCartItem, clearCart, getSession, poolErrorMessage, previewCheckout, getMyCompanyAddress, getShippingQuotes } from "@/lib/api";
 import NavAuth from "@/components/BulkStrikeNavAuth";
 
 const C = { blue: "#0EA5E9", dark: "#0284C7", text: "#0F172A", muted: "#64748B", border: "#E2E8F0", bg: "#F8FAFE", green: "#059669", red: "#DC2626", amber: "#D97706" };
@@ -49,11 +49,27 @@ export default function CartPage() {
       if (cart.length === 0) { setPreview(null); return; }
       setPreviewLoading(true);
       try {
-        // Stima provvisoria: usiamo l'indirizzo registrato dell'azienda finché il
-        // cliente non ne sceglie uno diverso al checkout — evita lo "Spedizione €0,00".
+        // Indirizzo provvisorio: quello registrato dell'azienda, finché il
+        // cliente non ne sceglie uno diverso al checkout.
         const addr = await getMyCompanyAddress().catch(() => null);
         const shippingAddress = addr ? [addr.address, addr.city, addr.country].filter(Boolean).join(", ") : null;
-        setPreview(await previewCheckout(shippingAddress));
+
+        // Selezione di default: il corriere più economico per ciascun fornitore
+        // presente nel carrello — stessa logica del passo Pagamento del checkout.
+        // Il cliente potrà cambiare corriere lì; qui è solo l'anteprima.
+        const qtyBySupplier = new Map();
+        for (const it of cart) {
+          qtyBySupplier.set(it.supplier_company_id, (qtyBySupplier.get(it.supplier_company_id) || 0) + Number(it.quantity_kg));
+        }
+        const carrierSelections = {};
+        await Promise.all([...qtyBySupplier.entries()].map(async ([supplierId, qty]) => {
+          try {
+            const res = await getShippingQuotes(supplierId, qty);
+            if (res?.cheapest_id) carrierSelections[supplierId] = res.cheapest_id;
+          } catch (e) {}
+        }));
+
+        setPreview(await previewCheckout(shippingAddress, carrierSelections));
       } catch (e) {}
       finally { setPreviewLoading(false); }
     } catch (e) { setErr(poolErrorMessage(e)); }
@@ -251,7 +267,7 @@ export default function CartPage() {
               )}
               <button onClick={() => { window.location.href = "/checkout"; }} disabled={issues.length > 0 || items.length === 0}
                 style={{ width: "100%", justifyContent: "center", background: C.blue, color: "#fff", border: "none", borderRadius: 10, padding: "13px", fontSize: 14.5, fontWeight: 700, cursor: issues.length > 0 ? "default" : "pointer", opacity: issues.length > 0 ? 0.5 : 1, display: "flex", alignItems: "center", gap: 8, fontFamily: "Inter,system-ui" }}>
-                Verifica costi di spedizione <ArrowRight size={16} />
+                Confronta i costi di spedizione <ArrowRight size={16} />
               </button>
               <div style={{ display: "flex", gap: 7, alignItems: "flex-start", fontSize: 11.5, color: C.muted, marginTop: 12, lineHeight: 1.5 }}>
                 <ShieldCheck size={13} color={C.green} style={{ marginTop: 1, flexShrink: 0 }} />
