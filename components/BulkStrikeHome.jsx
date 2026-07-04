@@ -55,41 +55,40 @@ const CHART_DATA = {
 
 const BUYER_STEPS  = [
   { n:"01", title:"Cerca la materia prima",  desc:"Digita il prodotto o descrivi cosa cerchi. L'AI trova il prodotto esatto nella tassonomia BulkStrike." },
-  { n:"02", title:"Scegli: Rapido o Pool",   desc:"Acquista subito al prezzo più basso, oppure unisciti a un Pool per sbloccare lo scaglione successivo." },
+  { n:"02", title:"Scegli: Rapido o Asta a ribasso",   desc:"Acquista subito al prezzo più basso, oppure unisciti a un'asta a ribasso per sbloccare lo scaglione successivo." },
   { n:"03", title:"Ricevi la merce",         desc:"Pagamento protetto in escrow. Track & trace integrato. Confermi la consegna e il gioco è fatto." },
 ];
 const SELLER_STEPS = [
   { n:"01", title:"Pubblica il listino",     desc:"Inserisci i prodotti con listino a scaglioni. L'AI ti guida nella creazione della scheda prodotto." },
-  { n:"02", title:"Ricevi richieste",        desc:"Notifiche in tempo reale su Pool attivi, aste convocate e WantedBoard compatibili con il tuo catalogo." },
+  { n:"02", title:"Ricevi richieste",        desc:"Notifiche in tempo reale su aste a ribasso attive, richieste convocate e WantedBoard compatibili con il tuo catalogo." },
   { n:"03", title:"Vinci e spedisci",        desc:"Aggiudicati la fornitura, emetti i documenti in piattaforma e ricevi il pagamento in 5 giorni." },
 ];
 
 const AI_MSGS = [
   { u:true,  t:"Ho bisogno di 4 tonnellate di acido citrico food grade entro fine mese" },
-  { u:false, t:"Per 4 tonnellate di Acido Citrico E330 ho due opzioni:\n\n🟢 Acquisto Rapido — Supplier B — €1,14/kg all-in — 3 giorni\n\n⭐ Pool attivo — €0,99/kg all-in — 62% completato — ~4-6 giorni\n\nIl Pool ti fa risparmiare ~€60. Vuoi che ti iscriva?" },
-  { u:true,  t:"Sì, uniscimi al pool" },
-  { u:false, t:"✅ Iscritto. 4t · Acido Citrico E330 · €0,99/kg all-in.\nTi avviso quando il pool si completa. 🚀" },
+  { u:false, t:"Per 4 tonnellate di Acido Citrico E330 ho due opzioni:\n\n🟢 Acquisto Rapido — Supplier B — €1,14/kg all-in — 3 giorni\n\n⭐ Asta a ribasso attiva — €0,99/kg all-in — 62% completato — ~4-6 giorni\n\nL'asta ti fa risparmiare ~€60. Vuoi che ti iscriva?" },
+  { u:true,  t:"Sì, uniscimi all'asta" },
+  { u:false, t:"✅ Iscritto. 4t · Acido Citrico E330 · €0,99/kg all-in.\nTi avviso quando l'asta si completa. 🚀" },
 ];
 
 // ─── LOGO ICON ────────────────────────────────────────────────────────────────
 function BSIcon({ size = 36, uid = "a" }) {
+  // Logo: 3 parti (clienti, fornitori, corrieri) che convergono su un unico punto — l'incontro su BulkStrike.
   return (
     <svg width={size} height={size} viewBox="0 0 56 56" fill="none">
       <defs>
         <linearGradient id={`bg${uid}`} x1="0" y1="0" x2="56" y2="56" gradientUnits="userSpaceOnUse">
           <stop offset="0%" stopColor="#0D2137"/><stop offset="100%" stopColor="#0C4A6E"/>
         </linearGradient>
-        <linearGradient id={`ar${uid}`} x1="42" y1="12" x2="42" y2="40" gradientUnits="userSpaceOnUse">
-          <stop offset="0%" stopColor="#38BDF8"/><stop offset="100%" stopColor="#22D3EE"/>
-        </linearGradient>
       </defs>
       <rect width="56" height="56" rx="13" fill={`url(#bg${uid})`}/>
-      <rect x="10" y="14" width="22" height="5.5" rx="2.75" fill="white"/>
-      <rect x="10" y="23" width="16" height="5.5" rx="2.75" fill="white" fillOpacity="0.65"/>
-      <rect x="10" y="32" width="10" height="5.5" rx="2.75" fill="white" fillOpacity="0.35"/>
-      <rect x="36" y="12" width="1" height="32" fill="white" fillOpacity="0.07"/>
-      <path d="M42 12 L42 34" stroke={`url(#ar${uid})`} strokeWidth="3.5" strokeLinecap="round"/>
-      <path d="M35.5 28.5 L42 38 L48.5 28.5" stroke={`url(#ar${uid})`} strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+      <line x1="28" y1="33" x2="28" y2="14" stroke="white" strokeWidth="3" strokeLinecap="round"/>
+      <line x1="28" y1="33" x2="14" y2="45" stroke="white" strokeWidth="3" strokeLinecap="round" strokeOpacity="0.85"/>
+      <line x1="28" y1="33" x2="42" y2="45" stroke="white" strokeWidth="3" strokeLinecap="round" strokeOpacity="0.85"/>
+      <circle cx="28" cy="14" r="4.2" fill="white"/>
+      <circle cx="14" cy="45" r="4.2" fill="white" fillOpacity="0.85"/>
+      <circle cx="42" cy="45" r="4.2" fill="white" fillOpacity="0.85"/>
+      <circle cx="28" cy="33" r="5.5" fill="white"/>
     </svg>
   );
 }
@@ -274,7 +273,7 @@ export default function BulkStrikeLight() {
           {/* Nav right */}
           <div style={{ display:"flex", alignItems:"center", gap:20, flexShrink:0 }}>
             <div className="bs-nav-links" style={{ display:"flex", gap:20 }}>
-              {[["Pool Attivi","/pool"],["Prezzi","/catalogo"],["Fornitori","/fornitori"],["Corrieri","/corriere"],["Come funziona","#come-funziona"]].map(([l,href]) => (
+              {[["Aste attive","/pool"],["Prodotti","/catalogo"],["Fornitori","/fornitori"],["Corrieri","/corriere"],["Come funziona","#come-funziona"]].map(([l,href]) => (
                 <span key={l} onClick={() => { window.location.href = href; }} style={{ fontSize:14, color:C.muted, cursor:"pointer", fontWeight:500, whiteSpace:"nowrap" }}>{l}</span>
               ))}
             </div>
@@ -373,7 +372,7 @@ export default function BulkStrikeLight() {
           <div>
             <div style={{ display:"inline-flex", alignItems:"center", gap:8, background:"#EFF6FF", border:"1px solid #BFDBFE", borderRadius:100, padding:"6px 14px", marginBottom:20 }}>
               <div style={{ width:8, height:8, borderRadius:"50%", background:C.green, boxShadow:`0 0 6px ${C.green}` }} />
-              <span style={{ fontSize:13, color:"#1D4ED8", fontWeight:600 }}>142 Pool attivi in questo momento</span>
+              <span style={{ fontSize:13, color:"#1D4ED8", fontWeight:600 }}>142 aste attive in questo momento</span>
             </div>
             <h1 className="bs-hero-h1" style={{ fontSize:52, fontWeight:900, lineHeight:1.06, letterSpacing:"-0.03em", marginBottom:18 }}>
               Il mercato delle{" "}
@@ -381,14 +380,14 @@ export default function BulkStrikeLight() {
               a prezzi industriali
             </h1>
             <p style={{ fontSize:17, color:C.muted, lineHeight:1.65, marginBottom:28, maxWidth:460 }}>
-              Acquista sfuso insieme ad altri. Vendi a chi vuole davvero comprare. Pool di acquisto collettivo, aste a ribasso, prezzi in tempo reale. Da 1 kg a 50 tonnellate.
+              Acquista sfuso insieme ad altri. Vendi a chi vuole davvero comprare. Aste a ribasso, aggregazione della domanda, prezzi in tempo reale. Da 1 kg a 50 tonnellate.
             </p>
             <div className="bs-cta-btns" style={{ display:"flex", gap:12, flexWrap:"wrap" }}>
               <button className="bs-btn" onClick={() => { window.location.href = "/registrati"; }}>Inizia ad acquistare <ArrowRight size={18} /></button>
               <button className="bs-btn-out" onClick={() => { window.location.href = "/registrati"; }}>Diventa fornitore</button>
             </div>
             <div style={{ display:"flex", gap:20, marginTop:20, flexWrap:"wrap" }}>
-              {["✓ Registrazione gratuita","✓ Nessun abbonamento","✓ Pool senza impegno"].map(t => (
+              {["✓ Registrazione gratuita","✓ Nessun abbonamento","✓ Asta senza impegno"].map(t => (
                 <span key={t} style={{ fontSize:13, color:C.muted }}>{t}</span>
               ))}
             </div>
@@ -397,13 +396,13 @@ export default function BulkStrikeLight() {
           <div style={{ background:"#fff", border:`1px solid ${C.border}`, borderRadius:16, padding:24, boxShadow:"0 4px 24px rgba(14,165,233,0.08)", position:"relative" }}>
             <div style={{ position:"absolute", top:-12, right:16, background:C.red, borderRadius:100, padding:"4px 12px", fontSize:12, fontWeight:700, color:"#fff" }}>🔥 Quasi completo</div>
             <div style={{ marginBottom:16 }}>
-              <div style={{ fontSize:11, color:C.muted, marginBottom:4 }}>Pool più vicino all'attivazione</div>
+              <div style={{ fontSize:11, color:C.muted, marginBottom:4 }}>Asta più vicina all'attivazione</div>
               <div style={{ fontSize:19, fontWeight:800, color:C.text, marginBottom:2 }}>Polipropilene GP H030S</div>
               <div style={{ fontSize:13, color:C.muted }}>Vergine · 4 fornitori · 🇰🇷 🇩🇪 🇮🇹</div>
             </div>
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:18 }}>
               <div style={{ background:C.bg, borderRadius:10, padding:"12px 14px" }}>
-                <div style={{ fontSize:11, color:C.muted, marginBottom:3 }}>Prezzo pool all-in</div>
+                <div style={{ fontSize:11, color:C.muted, marginBottom:3 }}>Prezzo asta all-in</div>
                 <div className="bs-num" style={{ fontSize:24, fontWeight:700, color:C.blue }}>€0,98<span style={{ fontSize:12, fontWeight:400 }}>/kg</span></div>
               </div>
               <div style={{ background:C.bg, borderRadius:10, padding:"12px 14px" }}>
@@ -425,7 +424,7 @@ export default function BulkStrikeLight() {
                 <span style={{ fontSize:12, color:C.muted }}>Mancano 900 kg</span>
               </div>
             </div>
-            <button className="bs-btn" onClick={() => { window.location.href = "/pool?id=7191a826-ac9c-404b-8001-8e8fc8f08100"; }} style={{ width:"100%", justifyContent:"center" }}>Unisciti al Pool <ArrowRight size={16} /></button>
+            <button className="bs-btn" onClick={() => { window.location.href = "/pool?id=7191a826-ac9c-404b-8001-8e8fc8f08100"; }} style={{ width:"100%", justifyContent:"center" }}>Unisciti all'asta <ArrowRight size={16} /></button>
           </div>
         </div>
       </div>
@@ -435,7 +434,7 @@ export default function BulkStrikeLight() {
         <div style={{ maxWidth:1280, margin:"0 auto", padding:"36px 24px" }}>
           <div className="bs-grid-4" style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:24 }}>
             {[
-              { label:"Pool attivi ora",    val:count.pools,     suffix:"",   color:"#0EA5E9" },
+              { label:"Aste attive ora",    val:count.pools,     suffix:"",   color:"#0EA5E9" },
               { label:"Materie prime",      val:count.materials, suffix:"+",  color:"#0284C7" },
               { label:"Paesi coperti",      val:count.countries, suffix:"",   color:C.green },
               { label:"Mln € / mese",       val:count.volume,    suffix:"M€", color:C.amber },
@@ -454,7 +453,7 @@ export default function BulkStrikeLight() {
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-end", marginBottom:36, flexWrap:"wrap", gap:12 }}>
           <div>
             <div className="bs-label">Mercato Live</div>
-            <h2 className="bs-h2">Pool attivi ora</h2>
+            <h2 className="bs-h2">Aste attive ora</h2>
             <p style={{ fontSize:15, color:C.muted, marginTop:8 }}>Risparmia fino al 20% rispetto ai prezzi singoli</p>
           </div>
           <button onClick={() => { window.location.href = "/pool"; }} style={{ display:"flex", alignItems:"center", gap:6, color:C.blue, background:"none", border:"none", fontSize:14, fontWeight:600, cursor:"pointer" }}>
@@ -484,7 +483,7 @@ export default function BulkStrikeLight() {
                 </div>
                 <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:16 }}>
                   <div style={{ background:C.bg, borderRadius:10, padding:"12px 14px" }}>
-                    <div style={{ fontSize:11, color:C.muted, marginBottom:2 }}>Prezzo pool</div>
+                    <div style={{ fontSize:11, color:C.muted, marginBottom:2 }}>Prezzo asta</div>
                     <div className="bs-num" style={{ fontSize:20, fontWeight:700, color:C.blue }}>{pool.price}<span style={{ fontSize:11 }}>/kg</span></div>
                   </div>
                   <div style={{ background:C.bg, borderRadius:10, padding:"12px 14px" }}>
@@ -503,7 +502,7 @@ export default function BulkStrikeLight() {
                   </div>
                   <div style={{ fontSize:12, color:pct>=80?C.amber:C.muted, marginTop:4, textAlign:"right" }}>{pct}%</div>
                 </div>
-                <button className="bs-pool-btn" onClick={() => { window.location.href = "/pool?id=7191a826-ac9c-404b-8001-8e8fc8f08100"; }}>Unisciti al Pool <ArrowRight size={14} /></button>
+                <button className="bs-pool-btn" onClick={() => { window.location.href = "/pool?id=7191a826-ac9c-404b-8001-8e8fc8f08100"; }}>Unisciti all'asta <ArrowRight size={14} /></button>
               </div>
             );
           })}
@@ -532,7 +531,7 @@ export default function BulkStrikeLight() {
                 <span className="bs-num" style={{ fontSize:42, fontWeight:800, color:C.blue }}>
                   €{CHART_DATA[activeChart][CHART_DATA[activeChart].length-1].v.toFixed(2)}
                 </span>
-                <span style={{ fontSize:14, color:C.muted }}>/kg · prezzo pool attuale</span>
+                <span style={{ fontSize:14, color:C.muted }}>/kg · prezzo asta attuale</span>
               </div>
               <div style={{ display:"flex", alignItems:"center", gap:4, fontSize:14, color:C.green, marginTop:4 }}>
                 <TrendingDown size={14} /> -14,7% rispetto a gennaio
@@ -593,7 +592,7 @@ export default function BulkStrikeLight() {
               <p style={{ fontSize:15, color:C.muted, lineHeight:1.65, marginBottom:24 }}>
                 Descrivi cosa cerchi in italiano. L'AI trova il prodotto, confronta i fornitori, calcola il risparmio e completa l'acquisto con la tua conferma.
               </p>
-              {["Trova il fornitore più economico in Europa","Uniscimi al pool più vantaggioso","Aggiorna il mio listino prezzi","Quanto ho risparmiato questo mese?"].map(f => (
+              {["Trova il fornitore più economico in Europa","Uniscimi all'asta più vantaggiosa","Aggiorna il mio listino prezzi","Quanto ho risparmiato questo mese?"].map(f => (
                 <div key={f} style={{ display:"flex", alignItems:"center", gap:10, marginBottom:10 }}>
                   <div style={{ width:20, height:20, borderRadius:"50%", background:"#ECFDF5", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
                     <Check size={11} color={C.green} />
@@ -707,7 +706,7 @@ export default function BulkStrikeLight() {
             </div>
             <div style={{ padding:12, display:"flex", flexDirection:"column", gap:8, maxHeight:180, overflowY:"auto" }}>
               <div style={{ background:C.bg, borderRadius:"12px 12px 12px 4px", padding:"10px 12px", fontSize:13, maxWidth:"85%", color:C.text, lineHeight:1.5 }}>
-                Ciao! Sono l'assistente virtuale (AI) di BulkStrike — non una persona. Posso aiutarti a trovare materie prime, confrontare fornitori o unirti a un pool. Per parlare con una persona, scrivi a davide@bulkstrike.com. Come posso aiutarti?
+                Ciao! Sono l'assistente virtuale (AI) di BulkStrike — non una persona. Posso aiutarti a trovare materie prime, confrontare fornitori o unirti a un'asta a ribasso. Per parlare con una persona, scrivi a davide@bulkstrike.com. Come posso aiutarti?
               </div>
             </div>
             <div style={{ borderTop:`1px solid ${C.border}` }}>
