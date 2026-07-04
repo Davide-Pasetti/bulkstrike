@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { getPoolDetail, getPoolBids, joinPool, joinPoolAtTarget, getMyTargetJoin, cancelTargetJoin, poolErrorMessage } from "@/lib/api";
+import { getPoolDetail, getPoolBids, getPoolParticipants, getPoolTargetJoins, joinPool, joinPoolAtTarget, getMyTargetJoin, cancelTargetJoin, poolErrorMessage } from "@/lib/api";
 import NavAuth from "@/components/BulkStrikeNavAuth";
 import { Search, Bot, ArrowRight, Check, Clock, ChevronRight, Shield, Users, TrendingDown, X, Plus, Minus, Info, Gavel, Award } from "lucide-react";
 
@@ -79,6 +79,12 @@ function relTime(iso) {
   return `${Math.floor(s / 86400)} giorni fa`;
 }
 
+// Etichetta anonima per un'azienda: mai il nome, solo città/paese se noti.
+function regionLabel(city, country) {
+  if (city && country) return `${city}, ${country}`;
+  return city || country || "Regione non indicata";
+}
+
 export default function PoolAuctionPage() {
   const [pool, setPool] = useState(SEED_POOL);
   const [bidders, setBidders] = useState(SEED_BIDDERS);
@@ -92,6 +98,7 @@ export default function PoolAuctionPage() {
   const [secs, setSecs] = useState(pool.secondsLeft);
   const [joined, setJoined] = useState(false);
   const [targetJoin, setTargetJoin] = useState(null);   // { id, quantity_kg, target_price_per_kg } | null
+  const [pendingJoins, setPendingJoins] = useState([]); // adesioni in attesa di altri clienti, in forma anonima
   const [showTargetInput, setShowTargetInput] = useState(false);
   const [targetPrice, setTargetPrice] = useState("");
 
@@ -110,13 +117,15 @@ export default function PoolAuctionPage() {
 
   async function loadPool(id) {
     try {
-      const [detail, bids] = await Promise.all([getPoolDetail(id), getPoolBids(id)]);
+      const [detail, bids, parts, waiting] = await Promise.all([
+        getPoolDetail(id), getPoolBids(id), getPoolParticipants(id).catch(() => []), getPoolTargetJoins(id).catch(() => []),
+      ]);
       const bd = (bids || []).map((b, i) => ({ tag: b.anon_label, origin: "", flag: "", bid: b.price_per_kg, when: relTime(b.created_at), leader: i === 0 }));
-      const count = detail.participants?.[0]?.count || 0;
       const total = detail.total_volume_kg || 0;
-      const share = count ? Math.round(total / count) : 0;
       setBidders(bd);
-      setParticipants(Array.from({ length: count }, () => ({ who: "Azienda partecipante", qty: share, when: "" })));
+      // Anonimo: solo città/paese e kg, mai il nome dell'azienda.
+      setParticipants((parts || []).map(p => ({ who: regionLabel(p.city, p.country), qty: p.quantity_kg, when: "" })));
+      setPendingJoins(waiting || []);
       setPool({
         product: detail.product?.canonical_name || "",
         enum: detail.product?.e_number || "",
@@ -454,7 +463,7 @@ export default function PoolAuctionPage() {
                     <div style={{ fontSize:12.5, fontWeight:600, color:C.muted, marginBottom:8 }}>A quale prezzo vuoi aderire?</div>
                     <div style={{ display:"flex", alignItems:"center", gap:6, background:"#fff", border:`1px solid ${C.border}`, borderRadius:8, padding:"9px 12px" }}>
                       <span style={{ color:C.muted }}>€</span>
-                      <input value={targetPrice} onChange={e => setTargetPrice(e.target.value.replace(/[^0-9,.]/g,""))} placeholder={String(effectiveNow.toFixed(2)).replace(".",",")} className="bs-num" style={{ flex:1, border:"none", outline:"none", fontSize:16, fontWeight:700, color:C.text }}/>
+                      <input value={targetPrice} onChange={e => setTargetPrice(e.target.value.replace(/[^0-9,.]/g,""))} placeholder={String(effectiveNow.toFixed(2)).replace(".",",")} className="bs-num" style={{ flex:1, border:"none", outline:"none", background:"transparent", fontSize:16, fontWeight:700, color:C.text }}/>
                       <span style={{ color:C.muted, fontSize:13 }}>/kg</span>
                     </div>
                     <div style={{ fontSize:11, color:C.muted, marginTop:6 }}>Prezzo attuale: {eurKg(effectiveNow)}/kg. Ti aggiungeremo in automatico se e quando un fornitore arriva a questa cifra.</div>
@@ -527,13 +536,35 @@ export default function PoolAuctionPage() {
                     <div style={{ width:32, height:32, borderRadius:"50%", background:"#EFF6FF", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}><Users size={15} color={C.blue}/></div>
                     <div style={{ flex:1 }}>
                       <div style={{ fontSize:14, fontWeight:600 }}>{p.who}</div>
-                      <div style={{ fontSize:12, color:C.muted }}>{p.when}</div>
+                      {p.when && <div style={{ fontSize:12, color:C.muted }}>{p.when}</div>}
                     </div>
                     <span className="bs-num" style={{ fontSize:14, fontWeight:700 }}>{kg(p.qty)} kg</span>
                   </div>
                 ))}
               </div>
             </div>
+
+            {pendingJoins.length > 0 && (
+              <div className="bs-card" style={{ marginBottom:20, borderColor:`${C.amber}55` }}>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:4 }}>
+                  <div style={{ fontSize:16, fontWeight:700 }}>Chi ha aderito in base al prezzo</div>
+                  <span style={{ fontSize:12, color:C.muted }}>{pendingJoins.length} in attesa</span>
+                </div>
+                <div style={{ fontSize:12.5, color:C.muted, marginBottom:12, lineHeight:1.5 }}>Clienti pronti ad aderire automaticamente se un fornitore raggiunge il loro prezzo. Utile per i fornitori: un ulteriore ribasso può far entrare subito questi volumi.</div>
+                <div style={{ display:"flex", flexDirection:"column" }}>
+                  {pendingJoins.map((p,i) => (
+                    <div key={i} style={{ display:"flex", alignItems:"center", gap:12, padding:"10px 0", borderBottom:i<pendingJoins.length-1?`1px solid #F1F5F9`:"none" }}>
+                      <div style={{ width:32, height:32, borderRadius:"50%", background:"#FFF7ED", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}><Clock size={15} color={C.amber}/></div>
+                      <div style={{ flex:1 }}>
+                        <div style={{ fontSize:14, fontWeight:600 }}>{regionLabel(p.city, p.country)}</div>
+                        <div style={{ fontSize:12, color:C.muted }}>{kg(p.quantity_kg)} kg in attesa</div>
+                      </div>
+                      <span className="bs-num" style={{ fontSize:14, fontWeight:700, color:C.amber }}>{eurKg(p.target_price_per_kg)}/kg</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <div className="bs-card">
               <div style={{ fontSize:16, fontWeight:700, marginBottom:14 }}>Come funziona l'asta a ribasso</div>

@@ -425,6 +425,8 @@ export default function BulkStrikeLight() {
               </div>
             </div>
             <button className="bs-btn" onClick={() => { window.location.href = "/pool?id=7191a826-ac9c-404b-8001-8e8fc8f08100"; }} style={{ width:"100%", justifyContent:"center" }}>Visualizza l'asta a ribasso <ArrowRight size={16} /></button>
+            <div style={{ textAlign:"center", fontSize:12.5, color:C.muted, margin:"10px 0" }}>oppure</div>
+            <button className="bs-btn-out" onClick={() => { window.location.href = "/catalogo"; }} style={{ width:"100%", justifyContent:"center" }}>Acquista subito</button>
           </div>
         </div>
       </div>
@@ -503,6 +505,8 @@ export default function BulkStrikeLight() {
                   <div style={{ fontSize:12, color:pct>=80?C.amber:C.muted, marginTop:4, textAlign:"right" }}>{pct}%</div>
                 </div>
                 <button className="bs-pool-btn" onClick={() => { window.location.href = "/pool?id=7191a826-ac9c-404b-8001-8e8fc8f08100"; }}>Visualizza l'asta a ribasso <ArrowRight size={14} /></button>
+                <div style={{ textAlign:"center", fontSize:12, color:C.muted, margin:"8px 0" }}>oppure</div>
+                <button className="bs-pool-btn" onClick={() => { window.location.href = "/catalogo"; }}>Acquista subito</button>
               </div>
             );
           })}
