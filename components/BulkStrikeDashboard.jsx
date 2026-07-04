@@ -4,7 +4,7 @@ import {
   getWatchedMaterials, addWatchedMaterial, removeWatchedMaterial, updateMaterialAlert,
   getNotifications, markNotificationRead, markAllNotificationsRead, subscribeNotifications,
 } from "@/lib/api";
-import { Bell, Search, Plus, TrendingDown, Zap, Factory, Check, X, Gavel, LayoutGrid, Inbox, Clock, Boxes, ChevronRight, Users, Settings, Trophy, Send } from "lucide-react";
+import { Bell, Search, Plus, TrendingDown, Zap, Factory, Check, X, Gavel, LayoutGrid, Inbox, Clock, Boxes, ChevronRight, Users, Settings, Trophy, Send, Package } from "lucide-react";
 
 const C = { blue:"#0EA5E9", dark:"#0284C7", text:"#0F172A", muted:"#64748B", border:"#E2E8F0", bg:"#F8FAFE", green:"#059669", amber:"#D97706", red:"#DC2626", purple:"#7C3AED" };
 
@@ -342,6 +342,9 @@ export default function Dashboard() {
               </div>
             );
           })}
+          {role==="supplier" && (
+            <div className="bs-nav" onClick={() => { window.location.href = "/i-miei-prodotti"; }} style={{ background:"transparent", color:C.muted }}><Package size={18}/><span>I miei prodotti</span></div>
+          )}
           <div className="bs-nav" onClick={()=>setSection("account")} style={{ background:section==="account"?"#EFF6FF":"transparent", color:section==="account"?C.blue:C.muted }}><Settings size={18}/><span>Account</span></div>
         </aside>
 
