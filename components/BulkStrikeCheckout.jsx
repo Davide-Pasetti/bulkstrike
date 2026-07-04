@@ -17,16 +17,20 @@ const C = { blue: "#0EA5E9", dark: "#0284C7", text: "#0F172A", muted: "#64748B",
 const eur = (n) => n == null ? "—" : "€" + Number(n).toLocaleString("it-IT", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 function BSIcon({ size = 36, uid = "a" }) {
+  // Logo: 3 parti (clienti, fornitori, corrieri) che convergono su un unico punto — l'incontro su BulkStrike.
   return (
     <svg width={size} height={size} viewBox="0 0 56 56" fill="none">
       <defs>
         <linearGradient id={`bg${uid}`} x1="0" y1="0" x2="56" y2="56" gradientUnits="userSpaceOnUse"><stop offset="0%" stopColor="#0D2137" /><stop offset="100%" stopColor="#0C4A6E" /></linearGradient>
-        <linearGradient id={`fg${uid}`} x1="28" y1="14" x2="28" y2="47" gradientUnits="userSpaceOnUse"><stop offset="0%" stopColor="#FFFFFF" /><stop offset="100%" stopColor="#BAE6FD" /></linearGradient>
       </defs>
       <rect width="56" height="56" rx="13" fill={`url(#bg${uid})`} />
-      <path d="M13 15 L43 15 L34 33 L22 33 Z" fill={`url(#fg${uid})`} />
-      <rect x="24" y="32" width="8" height="8" rx="2" fill={`url(#fg${uid})`} />
-      <circle cx="28" cy="44" r="3.4" fill={`url(#fg${uid})`} />
+      <line x1="28" y1="33" x2="28" y2="14" stroke="white" strokeWidth="3" strokeLinecap="round" />
+      <line x1="28" y1="33" x2="14" y2="45" stroke="white" strokeWidth="3" strokeLinecap="round" strokeOpacity="0.85" />
+      <line x1="28" y1="33" x2="42" y2="45" stroke="white" strokeWidth="3" strokeLinecap="round" strokeOpacity="0.85" />
+      <circle cx="28" cy="14" r="4.2" fill="white" />
+      <circle cx="14" cy="45" r="4.2" fill="white" fillOpacity="0.85" />
+      <circle cx="42" cy="45" r="4.2" fill="white" fillOpacity="0.85" />
+      <circle cx="28" cy="33" r="5.5" fill="white" />
     </svg>
   );
 }
