@@ -124,6 +124,8 @@ function mapDbSupplier(s) {
     tiers,
     shipBase: ship.shipBase,
     shipKg: ship.shipKg,
+    formats: Array.isArray(s.formats) && s.formats.length ? s.formats : [{ label: "sacco", size_kg: 25 }],
+    variantAttributes: (s.variantAttributes && typeof s.variantAttributes === "object") ? s.variantAttributes : {},
   };
 }
 // da getProduct() (senza suppliers) → shape SEED_PRODUCT
@@ -274,13 +276,21 @@ export default function ProductPage() {
   const currentFormat = formats[selectedFormatIdx] || formats[0];
   const unitLabel = currentFormat.label;
   const unitSizeKg = currentFormat.size_kg;
+  // Unità minima vendibile: dal profilo del fornitore (min_order_kg). Se non
+  // impostata, il fornitore permette anche 1 sola unità.
+  const minUnits = featured?.min_order_kg > 0 ? Math.max(1, Math.ceil(featured.min_order_kg / unitSizeKg)) : 1;
   const unitCount = Math.max(1, Math.round(qty / unitSizeKg));
-  const setUnitCount = (n) => setQtySafe(Math.max(1, n) * unitSizeKg);
-  const selectFormat = (idx) => { setSelectedFormatIdx(idx); setQtySafe(Math.max(1, unitCount) * formats[idx].size_kg); };
+  const setUnitCount = (n) => setQtySafe(Math.max(minUnits, n) * unitSizeKg);
+  const selectFormat = (idx) => { setSelectedFormatIdx(idx); setQtySafe(Math.max(minUnits, unitCount) * formats[idx].size_kg); };
 
   // pool nudge: shown when the instant order is >= 1 pallet
   const palletKg = product.pallet_kg || PALLET_KG;
   const canOpenPool = qty >= palletKg;
+  // pallet/container come multipli dell'unità di vendita corrente — 11/23 pallet
+  // per un container 20'/40' sono gli standard logistici usuali per europallet.
+  const unitsPerPallet = Math.max(1, Math.round(palletKg / unitSizeKg));
+  const unitsPerContainer20 = unitsPerPallet * 11;
+  const unitsPerContainer40 = unitsPerPallet * 23;
   // best instant unit price across suppliers at this qty (for comparison with the active pool)
   const bestInstantUnit = ranked.length ? Math.min(...ranked.map(s => s.calc.unit)) : 0;
   const joinSavings = Math.max(0, (bestInstantUnit - pool.bestPrice) * qty);
@@ -295,7 +305,7 @@ export default function ProductPage() {
     return { deeperPrice, pct };
   })();
 
-  const setQtySafe = (v) => setQty(Math.max(1000, Math.min(200000, v)));
+  const setQtySafe = (v) => setQty(Math.max(minUnits * unitSizeKg, Math.min(200000, v)));
 
   // ── azioni reali (openPool / upsertCartItem richiedono login → altrimenti /registrati)
   async function requireAuth() {
@@ -509,15 +519,21 @@ export default function ProductPage() {
                 <button className="bs-qty-btn" onClick={() => setUnitCount(unitCount - 1)}><Minus size={16}/></button>
                 <div style={{ display:"flex", alignItems:"baseline", gap:6, background:"#fff", border:`1px solid ${C.border}`, borderRadius:8, padding:"8px 14px" }}>
                   <input className="bs-num" style={{ width:60, border:"none", outline:"none", fontSize:20, fontWeight:700, color:C.text }} value={unitCount} onChange={e => setUnitCount(parseInt(e.target.value.replace(/\D/g,"")||"0"))} />
-                  <span style={{ fontSize:14, color:C.muted }}>{unitLabel}{unitCount===1?"":"i"}</span>
+                  <span style={{ fontSize:14, color:C.muted }}>unità</span>
                 </div>
                 <button className="bs-qty-btn" onClick={() => setUnitCount(unitCount + 1)}><Plus size={16}/></button>
                 <div style={{ fontSize:13, color:C.muted, marginLeft:2 }}>= <b className="bs-num" style={{ color:C.text }}>{qty.toLocaleString("it-IT")} {massUnit}</b> totali <span style={{ color:"#94A3B8" }}>(automatico)</span></div>
               </div>
+              {minUnits > 1 && <div style={{ fontSize:11.5, color:C.muted, marginTop:6 }}>Unità minima vendibile per questo fornitore: {minUnits} ({(minUnits*unitSizeKg).toLocaleString("it-IT")} {massUnit}).</div>}
               <div style={{ display:"flex", gap:6, marginTop:10, flexWrap:"wrap" }}>
-                {[10,40,100,240].map(n => (
-                  <button key={n} onClick={() => { setUnitCount(n); setSelectedId(null); setSelectedFormatIdx(0); }} style={{ padding:"7px 12px", borderRadius:7, border:`1px solid ${unitCount===n?C.blue:C.border}`, background:unitCount===n?"#EFF6FF":"#fff", color:unitCount===n?C.blue:C.muted, fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:"Inter,system-ui" }}>
-                    {n} {n===1?unitLabel:`${unitLabel}i`} <span style={{ color:"#94A3B8" }}>({(n*unitSizeKg).toLocaleString("it-IT")} {massUnit})</span>
+                {[
+                  ["Minimo d'ordine", minUnits],
+                  ["1 pallet", unitsPerPallet],
+                  ["1 container 20'", unitsPerContainer20],
+                  ["1 container 40'", unitsPerContainer40],
+                ].map(([label,n]) => (
+                  <button key={label} onClick={() => { setUnitCount(n); setSelectedId(null); setSelectedFormatIdx(0); }} style={{ padding:"7px 12px", borderRadius:7, border:`1px solid ${unitCount===n?C.blue:C.border}`, background:unitCount===n?"#EFF6FF":"#fff", color:unitCount===n?C.blue:C.muted, fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:"Inter,system-ui" }}>
+                    {label} <span style={{ color:"#94A3B8" }}>({n} unità · {(n*unitSizeKg).toLocaleString("it-IT")} {massUnit})</span>
                   </button>
                 ))}
               </div>
@@ -531,7 +547,7 @@ export default function ProductPage() {
                 <span style={{ fontSize:13, color:"#92400E", fontWeight:600 }}>
                   {canOpenPool
                     ? "Hai raggiunto la quantità minima per aprire un'asta a ribasso."
-                    : `Quantità minima di 1 pallet (${palletKg.toLocaleString("it-IT")} kg) non ancora raggiunta.`}
+                    : `Quantità minima di 1 pallet (${palletKg.toLocaleString("it-IT")} kg), necessaria per aprire un'asta a ribasso, non ancora raggiunta.`}
                 </span>
               </div>
             )}
@@ -686,6 +702,15 @@ export default function ProductPage() {
                 {featured.certs.map(c => <span key={c} className="bs-chip" style={{ background:"#ECFDF5", color:C.green }}><Check size={10}/> {c}</span>)}
                 <span style={{ marginLeft:"auto", fontSize:12, color:C.muted }}>Purezza <b style={{ color:C.text }}>{featured.purity}</b></span>
               </div>
+
+              {/* variante: granulometria, purezza, colore, ecc. — libere per fornitore */}
+              {Object.keys(featured.variantAttributes || {}).length > 0 && (
+                <div style={{ display:"flex", gap:8, marginTop:10, flexWrap:"wrap", alignItems:"center" }}>
+                  {Object.entries(featured.variantAttributes).map(([k,v]) => (
+                    <span key={k} className="bs-chip" style={{ background:"#F1F5F9", color:C.text }}>{k}: <b>{String(v)}</b></span>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* OTHER SUPPLIERS */}
