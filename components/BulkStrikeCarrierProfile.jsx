@@ -398,8 +398,10 @@ export default function CarrierProfilePage() {
                 </div>
               )}
 
-              <div style={{ overflowX: "auto" }}>
-              <div style={{ display: "flex", gap: 10, background: C.bg, borderRadius: 10, padding: 14, minWidth: "max-content" }}>
+              <div style={{ background: C.bg, borderRadius: 10, padding: 14 }}>
+                <div style={{ fontSize: 11, color: C.muted, marginBottom: 8 }}>← scorri per vedere tutti i campi →</div>
+                <div style={{ overflowX: "auto", marginBottom: 12 }}>
+                <div style={{ display: "flex", gap: 10, minWidth: "max-content" }}>
                 <div style={{ flexShrink: 0, width: 120 }}>
                   <span style={labelStyle}>Nazione</span>
                   <select value={rateForm.zoneArea} onChange={e => setRateForm({ ...rateForm, zoneArea: e.target.value })} style={inputStyle}>
@@ -422,10 +424,9 @@ export default function CarrierProfilePage() {
                 <div style={{ flexShrink: 0, width: 100 }}><span style={labelStyle}>Tariffa base €</span><input type="number" value={rateForm.baseFee} onChange={e => setRateForm({ ...rateForm, baseFee: e.target.value })} style={inputStyle} /></div>
                 {pricingMode === "distance" && <div style={{ flexShrink: 0, width: 90 }}><span style={labelStyle}>€/km</span><input type="number" step="0.01" value={rateForm.perKmFee} onChange={e => setRateForm({ ...rateForm, perKmFee: e.target.value })} style={inputStyle} /></div>}
                 <div style={{ flexShrink: 0, width: 130 }}><span style={labelStyle}>Tariffa aggiuntiva €/kg</span><input type="number" step="0.01" value={rateForm.perKgFee} onChange={e => setRateForm({ ...rateForm, perKgFee: e.target.value })} style={inputStyle} /></div>
-                <div style={{ flexShrink: 0, width: 150, display: "flex", alignItems: "flex-end" }}>
-                  <button onClick={addRate} disabled={rateBusy} style={{ width: "100%", background: C.blue, color: "#fff", border: "none", borderRadius: 8, padding: "9px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 5, fontSize: 13, fontWeight: 700, fontFamily: "Inter,system-ui" }}><Plus size={14} /> {rateForm.id ? "Salva modifica" : "Aggiungi tariffa"}</button>
                 </div>
-              </div>
+                </div>
+                <button onClick={addRate} disabled={rateBusy} style={{ width: "100%", background: C.blue, color: "#fff", border: "none", borderRadius: 8, padding: "11px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, fontSize: 14, fontWeight: 700, fontFamily: "Inter,system-ui" }}><Plus size={15} /> {rateForm.id ? "Salva modifica" : "Aggiungi tariffa"}</button>
               </div>
             </div>
 
