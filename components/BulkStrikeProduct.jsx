@@ -40,7 +40,7 @@ const CHART = [
   {t:"Mag",v:2.61},{t:"Giu",v:2.55},{t:"Lug",v:2.49},{t:"Ago",v:2.42},
 ];
 
-const SEED_POOL = { exists:true, id:null, bestPrice:1.68, current:13800, companies:8, suppliers:4, closesIn:"4g 9h" };  // pool/asta attiva su questo prodotto
+const SEED_POOL = { exists:true, id:null, bestPrice:1.68, current:13800, companies:8, suppliers:4, closesIn:"4g 9h", myQuantityKg:0 };  // pool/asta attiva su questo prodotto
 
 const SEED_QA = [
   { q:"È adatto alla stabilizzazione tartarica a freddo?", a:"Sì, l'acido tartarico L(+) è impiegato per la correzione dell'acidità del mosto e del vino. Per la stabilizzazione a freddo si abbina spesso a bitartrato di potassio." },
@@ -143,7 +143,7 @@ function mapDbProduct(p) {
 }
 // da getOpenPoolForProduct() → shape SEED_POOL
 function mapDbPool(pool) {
-  if (!pool) return { exists:false, id:null, bestPrice:0, current:0, companies:0, suppliers:0, closesIn:"" };
+  if (!pool) return { exists:false, id:null, bestPrice:0, current:0, companies:0, suppliers:0, closesIn:"", myQuantityKg:0 };
   return {
     exists: true,
     id: pool.id,
@@ -152,6 +152,7 @@ function mapDbPool(pool) {
     companies: Number(pool.participants) || 0,
     suppliers: Number(pool.num_bids) || 0,
     closesIn: untilLabel(pool.status === "final_phase" ? pool.final_phase_ends_at : pool.closes_at),
+    myQuantityKg: pool.my_quantity_kg != null ? Number(pool.my_quantity_kg) : 0,
   };
 }
 // etichetta "Xg Yh" da un timestamp futuro
@@ -187,6 +188,7 @@ export default function ProductPage() {
   const [loading, setLoading] = useState(true);
   const [crumb, setCrumb] = useState(null); // { macro, sector } reali del prodotto
   const [busy, setBusy] = useState(false);
+  const [openAcceptTerms, setOpenAcceptTerms] = useState(false); // disclaimer da accettare prima di aprire davvero un'asta
   const [cartOk, setCartOk] = useState(false);
   const [actionMsg, setActionMsg] = useState("");
   const [searchQ, setSearchQ] = useState("");
@@ -262,6 +264,14 @@ export default function ProductPage() {
   const featured = (selectedId ? ranked.find(s => s.id === selectedId) : ranked[0]) || null;
   const others = featured ? ranked.filter(s => s.id !== featured.id) : [];
   const cheapestId = ranked.length ? ranked[0].id : null;
+
+  // Acquisto Rapido è a unità di vendita (es. sacchi da 25 kg), non a kg liberi.
+  // Il formato dipende dal fornitore in evidenza; qty (kg) resta lo stato reale,
+  // unitCount è solo la sua vista in unità per quel formato.
+  const unitLabel = featured?.unit_label || "sacco";
+  const unitSizeKg = featured?.unit_size_kg || 25;
+  const unitCount = Math.max(1, Math.round(qty / unitSizeKg));
+  const setUnitCount = (n) => setQtySafe(Math.max(1, n) * unitSizeKg);
 
   // pool nudge: shown when the instant order is >= 1 pallet
   const palletKg = product.pallet_kg || PALLET_KG;
@@ -473,29 +483,30 @@ export default function ProductPage() {
 
           {/* LEFT COLUMN */}
           <div>
-            {/* QUANTITY SELECTOR */}
+            {/* QUANTITY SELECTOR — a unità di vendita, non kg liberi */}
             <div style={{ border:`1px solid ${C.border}`, borderRadius:14, padding:20, marginBottom:20, background:C.bg }}>
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12, flexWrap:"wrap", gap:10 }}>
                 <div>
                   <div style={{ fontSize:14, fontWeight:700 }}>Di quanto hai bisogno?</div>
-                  <div style={{ fontSize:12, color:C.muted }}>Il prezzo si aggiorna in base allo scaglione di volume</div>
+                  <div style={{ fontSize:12, color:C.muted }}>A {unitLabel}i da {unitSizeKg} kg ciascuno — formato del fornitore in evidenza. Il prezzo si aggiorna in base allo scaglione di volume.</div>
                 </div>
                 <span className="bs-chip" style={{ background:"#EFF6FF", color:"#1D4ED8" }}>Scaglione attuale: {tierLabel(qty)}</span>
               </div>
               <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap" }}>
-                <button className="bs-qty-btn" onClick={() => setQtySafe(qty - 1000)}><Minus size={16}/></button>
+                <button className="bs-qty-btn" onClick={() => setUnitCount(unitCount - 1)}><Minus size={16}/></button>
                 <div style={{ display:"flex", alignItems:"baseline", gap:6, background:"#fff", border:`1px solid ${C.border}`, borderRadius:8, padding:"8px 14px" }}>
-                  <input className="bs-num" style={{ width:90, border:"none", outline:"none", fontSize:20, fontWeight:700, color:C.text }} value={qty} onChange={e => setQtySafe(parseInt(e.target.value.replace(/\D/g,"")||"0"))} />
-                  <span style={{ fontSize:14, color:C.muted }}>kg</span>
+                  <input className="bs-num" style={{ width:60, border:"none", outline:"none", fontSize:20, fontWeight:700, color:C.text }} value={unitCount} onChange={e => setUnitCount(parseInt(e.target.value.replace(/\D/g,"")||"0"))} />
+                  <span style={{ fontSize:14, color:C.muted }}>{unitCount === 1 ? unitLabel : `${unitLabel}i`}</span>
                 </div>
-                <button className="bs-qty-btn" onClick={() => setQtySafe(qty + 1000)}><Plus size={16}/></button>
-                <div style={{ display:"flex", gap:6, marginLeft:4, flexWrap:"wrap" }}>
-                  {[2000,8000,25000,60000].map(q => (
-                    <button key={q} onClick={() => { setQty(q); setSelectedId(null); }} style={{ padding:"7px 12px", borderRadius:7, border:`1px solid ${qty===q?C.blue:C.border}`, background:qty===q?"#EFF6FF":"#fff", color:qty===q?C.blue:C.muted, fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:"Inter,system-ui" }}>
-                      {q>=1000?`${q/1000}t`:`${q}kg`}
-                    </button>
-                  ))}
-                </div>
+                <button className="bs-qty-btn" onClick={() => setUnitCount(unitCount + 1)}><Plus size={16}/></button>
+                <div style={{ fontSize:13, color:C.muted, marginLeft:2 }}>= <b className="bs-num" style={{ color:C.text }}>{qty.toLocaleString("it-IT")} kg</b> totali <span style={{ color:"#94A3B8" }}>(automatico)</span></div>
+              </div>
+              <div style={{ display:"flex", gap:6, marginTop:10, flexWrap:"wrap" }}>
+                {[10,40,100,240].map(n => (
+                  <button key={n} onClick={() => { setUnitCount(n); setSelectedId(null); }} style={{ padding:"7px 12px", borderRadius:7, border:`1px solid ${unitCount===n?C.blue:C.border}`, background:unitCount===n?"#EFF6FF":"#fff", color:unitCount===n?C.blue:C.muted, fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:"Inter,system-ui" }}>
+                    {n} {n===1?unitLabel:`${unitLabel}i`} <span style={{ color:"#94A3B8" }}>({(n*unitSizeKg).toLocaleString("it-IT")} kg)</span>
+                  </button>
+                ))}
               </div>
             </div>
 
@@ -509,9 +520,12 @@ export default function ProductPage() {
                   </div>
                   <div style={{ flex:1, minWidth:0 }}>
                     <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:4, flexWrap:"wrap" }}>
-                      <span style={{ fontSize:16, fontWeight:800 }}>C'è già un'asta a ribasso attiva per questo prodotto</span>
+                      <span style={{ fontSize:16, fontWeight:800 }}>{pool.myQuantityKg > 0 ? "Hai già aderito all'asta a ribasso di questo prodotto" : "C'è già un'asta a ribasso attiva per questo prodotto"}</span>
                       <span className="bs-chip" style={{ background:"#fff", color:C.purple, border:`1px solid ${C.purple}44` }}><Clock size={11}/> chiude tra {pool.closesIn}</span>
                     </div>
+                    {pool.myQuantityKg > 0 && (
+                      <div style={{ fontSize:13, color:C.text, marginBottom:10 }}>Hai già <b>{Number(pool.myQuantityKg).toLocaleString("it-IT")} kg</b> in questa asta.</div>
+                    )}
                     <div style={{ fontSize:14, color:C.muted, lineHeight:1.6, marginBottom:14 }}>
                       È un'<b style={{ color:C.text }}>asta a ribasso</b>: <b style={{ color:C.text }}>{pool.companies} aziende</b> si sono già aggregate e <b style={{ color:C.text }}>{pool.suppliers} fornitori certificati</b> competono. Unendoti, paghi il prezzo più basso raggiunto — e il prezzo <b style={{ color:C.text }}>può solo scendere</b> fino alla chiusura.
                     </div>
@@ -529,7 +543,7 @@ export default function ProductPage() {
                     </div>
                     <div style={{ display:"flex", gap:12, flexWrap:"wrap", alignItems:"center" }}>
                       <button onClick={goToPool} style={{ background:C.purple, color:"#fff", border:"none", borderRadius:9, padding:"12px 22px", fontSize:14, fontWeight:700, cursor:"pointer", display:"inline-flex", alignItems:"center", gap:7, fontFamily:"Inter,system-ui" }}>
-                        <Users size={16}/> Unisciti all'asta <ArrowRight size={15}/>
+                        <Users size={16}/> {pool.myQuantityKg > 0 ? "Aggiungi un quantitativo all'asta in corso" : "Unisciti all'asta"} <ArrowRight size={15}/>
                       </button>
                       <span style={{ fontSize:12, color:C.muted }}>oppure acquista subito qui sotto</span>
                     </div>
@@ -565,8 +579,14 @@ export default function ProductPage() {
                         </span>
                       ))}
                     </div>
+                    <label style={{ display:"flex", gap:9, alignItems:"flex-start", background:"#fff", border:`1px solid ${C.purple}33`, borderRadius:9, padding:"10px 12px", marginBottom:14, cursor:"pointer" }}>
+                      <input type="checkbox" checked={openAcceptTerms} onChange={e => setOpenAcceptTerms(e.target.checked)} style={{ marginTop:2, width:16, height:16, accentColor:C.purple, flexShrink:0 }}/>
+                      <span style={{ fontSize:12, color:C.muted, lineHeight:1.5 }}>
+                        Aprendo l'asta accetto che la mia quantità entri nel volume aggregato e che il fornitore verrà scelto tra quelli certificati in base al prezzo più basso raggiunto alla chiusura.
+                      </span>
+                    </label>
                     <div style={{ display:"flex", gap:12, flexWrap:"wrap", alignItems:"center" }}>
-                      <button onClick={handleOpenPool} disabled={busy} style={{ background:C.purple, color:"#fff", border:"none", borderRadius:9, padding:"12px 22px", fontSize:14, fontWeight:700, cursor:busy?"default":"pointer", opacity:busy?0.6:1, display:"inline-flex", alignItems:"center", gap:7, fontFamily:"Inter,system-ui" }}>
+                      <button onClick={handleOpenPool} disabled={busy || !openAcceptTerms} style={{ background:C.purple, color:"#fff", border:"none", borderRadius:9, padding:"12px 22px", fontSize:14, fontWeight:700, cursor:(busy||!openAcceptTerms)?"default":"pointer", opacity:(busy||!openAcceptTerms)?0.5:1, display:"inline-flex", alignItems:"center", gap:7, fontFamily:"Inter,system-ui" }}>
                         <Gavel size={16}/> Apri un'asta a ribasso con {(qty/1000).toLocaleString("it-IT")}t <ArrowRight size={15}/>
                       </button>
                       <span style={{ fontSize:12, color:C.muted }}>oppure acquista subito qui sotto</span>
@@ -685,8 +705,16 @@ export default function ProductPage() {
                 <Beaker size={26} color={C.muted} style={{ marginBottom:8 }} />
                 <div style={{ fontSize:15, fontWeight:700, color:C.text, marginBottom:4 }}>Nessun fornitore quotato per questo prodotto</div>
                 <div style={{ fontSize:13, marginBottom:14 }}>Puoi comunque aprire un'asta a ribasso: aggreghi la domanda e i fornitori certificati competono al ribasso.</div>
+                {canOpenPool && (
+                  <label style={{ display:"flex", gap:9, alignItems:"flex-start", background:"#fff", border:`1px solid ${C.border}`, borderRadius:9, padding:"10px 12px", marginBottom:14, cursor:"pointer", textAlign:"left" }}>
+                    <input type="checkbox" checked={openAcceptTerms} onChange={e => setOpenAcceptTerms(e.target.checked)} style={{ marginTop:2, width:16, height:16, accentColor:C.purple, flexShrink:0 }}/>
+                    <span style={{ fontSize:12, color:C.muted, lineHeight:1.5 }}>
+                      Aprendo l'asta accetto che la mia quantità entri nel volume aggregato e che il fornitore verrà scelto tra quelli certificati in base al prezzo più basso raggiunto alla chiusura.
+                    </span>
+                  </label>
+                )}
                 {canOpenPool
-                  ? <button onClick={handleOpenPool} disabled={busy} style={{ background:C.purple, color:"#fff", border:"none", borderRadius:9, padding:"12px 22px", fontSize:14, fontWeight:700, cursor:busy?"default":"pointer", opacity:busy?0.6:1, display:"inline-flex", alignItems:"center", gap:7, fontFamily:"Inter,system-ui" }}><Gavel size={16}/> Apri un'asta a ribasso con {(qty/1000).toLocaleString("it-IT")}t</button>
+                  ? <button onClick={handleOpenPool} disabled={busy || !openAcceptTerms} style={{ background:C.purple, color:"#fff", border:"none", borderRadius:9, padding:"12px 22px", fontSize:14, fontWeight:700, cursor:(busy||!openAcceptTerms)?"default":"pointer", opacity:(busy||!openAcceptTerms)?0.5:1, display:"inline-flex", alignItems:"center", gap:7, fontFamily:"Inter,system-ui" }}><Gavel size={16}/> Apri un'asta a ribasso con {(qty/1000).toLocaleString("it-IT")}t</button>
                   : <div style={{ fontSize:12 }}>Imposta almeno {(palletKg/1000).toLocaleString("it-IT")}t (1 pallet) per aprire un pool.</div>}
                 {actionMsg && <div style={{ marginTop:8, fontSize:12, color:C.red, fontWeight:600 }}>{actionMsg}</div>}
               </div>
@@ -779,7 +807,7 @@ export default function ProductPage() {
                 <div style={{ width:`${Math.max(6, Math.min(100, Math.round((pool.current/(palletKg*20))*100)))}%`, height:"100%", background:`linear-gradient(90deg,${C.purple},#A855F7)`, borderRadius:100 }}/>
               </div>
               <button onClick={goToPool} style={{ width:"100%", background:C.purple, color:"#fff", border:"none", borderRadius:9, padding:"12px", fontSize:14, fontWeight:700, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:6, fontFamily:"Inter,system-ui" }}>
-                Unisciti all'asta <ArrowRight size={15}/>
+                {pool.myQuantityKg > 0 ? "Aggiungi un quantitativo" : "Unisciti all'asta"} <ArrowRight size={15}/>
               </button>
             </div>
             )}

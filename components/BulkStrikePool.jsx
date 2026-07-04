@@ -42,8 +42,7 @@ const SEED_PARTICIPANTS = [
   { who:"Cantina in Friuli",           qty:400,  when:"3 giorni fa" },
 ];
 
-const PALLET_KG = 1000;        // peso di 1 pallet di QUESTO prodotto (acido tartarico ≈ 40×25kg / 1 big bag)
-const MIN_OPEN = PALLET_KG;    // minimo per aprire un pool = 1 pallet (varia da prodotto a prodotto)
+const PALLET_KG = 1000;        // peso di 1 pallet demo, usato solo se il prodotto reale non è ancora caricato
 
 function BSIcon({ size = 36, uid = "a" }) {
   // Logo: 3 parti (clienti, fornitori, corrieri) che convergono su un unico punto — l'incontro su BulkStrike.
@@ -97,8 +96,10 @@ export default function PoolAuctionPage() {
   const [acceptTerms, setAcceptTerms] = useState(false);
   const [secs, setSecs] = useState(pool.secondsLeft);
   const [joined, setJoined] = useState(false);
+  const [realPalletKg, setRealPalletKg] = useState(null); // kg di 1 pallet per il prodotto reale, se noto
   const [targetJoin, setTargetJoin] = useState(null);   // { id, quantity_kg, target_price_per_kg } | null
   const [pendingJoins, setPendingJoins] = useState([]); // adesioni in attesa di altri clienti, in forma anonima
+  const [myQty, setMyQty] = useState(0); // quanto ho già messo in questo pool (anche da sessioni precedenti)
   const [showTargetInput, setShowTargetInput] = useState(false);
   const [targetPrice, setTargetPrice] = useState("");
 
@@ -126,6 +127,8 @@ export default function PoolAuctionPage() {
       // Anonimo: solo città/paese e kg, mai il nome dell'azienda.
       setParticipants((parts || []).map(p => ({ who: regionLabel(p.city, p.country), qty: p.quantity_kg, when: "" })));
       setPendingJoins(waiting || []);
+      setMyQty(Number(detail.my_quantity_kg) || 0);
+      if (detail.pallet_kg) setRealPalletKg(Number(detail.pallet_kg));
       setPool({
         product: detail.product?.canonical_name || "",
         enum: detail.product?.e_number || "",
@@ -199,7 +202,12 @@ export default function PoolAuctionPage() {
   const aloneCeiling = tierCeiling(userQty);
   const savings = Math.max(0, (aloneCeiling - effectiveNow) * userQty);
   const setQtySafe = (v) => setUserQty(Math.max(100, Math.min(40000, v)));
-  const belowMin = userQty < MIN_OPEN;
+  const palletKg = realPalletKg || PALLET_KG; // kg di 1 pallet: reale se noto, altrimenti la demo
+  const belowMin = userQty < palletKg;
+  // Le aste vanno solo a pallet interi: userQty (kg) resta lo stato reale,
+  // palletCount è solo la sua vista in pallet per questo prodotto.
+  const palletCount = Math.max(1, Math.round(userQty / palletKg));
+  const setPalletCount = (n) => setQtySafe(Math.max(1, n) * palletKg);
 
   return (
     <div style={{ background:"#fff", color:C.text, fontFamily:"'Inter',system-ui,sans-serif", minHeight:"100vh", overflowX:"hidden" }}>
@@ -414,28 +422,33 @@ export default function PoolAuctionPage() {
               </>
             ) : (
               <>
-                <div style={{ fontSize:15, fontWeight:700, marginBottom:4 }}>{poolId ? "Aderisci all'asta" : "Apri un'asta"}</div>
-                <div style={{ fontSize:13, color:C.muted, marginBottom:14 }}>La tua quantità entra subito nel volume aggregato</div>
+                <div style={{ fontSize:15, fontWeight:700, marginBottom:4 }}>{myQty > 0 ? "Aggiungi un quantitativo" : (poolId ? "Aderisci all'asta" : "Apri un'asta")}</div>
+                {myQty > 0 ? (
+                  <div style={{ fontSize:13, color:C.muted, marginBottom:14, lineHeight:1.5 }}>Hai già aderito con <b style={{color:C.text}}>{kg(myQty)} kg</b>. Il quantitativo qui sotto si aggiunge a quello che hai già.</div>
+                ) : (
+                  <div style={{ fontSize:13, color:C.muted, marginBottom:14 }}>La tua quantità entra subito nel volume aggregato</div>
+                )}
 
-                <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:12 }}>
-                  <button className="bs-qty-btn" onClick={() => setQtySafe(userQty-500)}><Minus size={16}/></button>
+                <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:8 }}>
+                  <button className="bs-qty-btn" onClick={() => setPalletCount(palletCount-1)}><Minus size={16}/></button>
                   <div style={{ flex:1, display:"flex", alignItems:"baseline", justifyContent:"center", gap:6, background:C.bg, border:`1px solid ${belowMin?C.amber:C.border}`, borderRadius:8, padding:"9px 12px" }}>
-                    <input className="bs-num" style={{ width:80, border:"none", outline:"none", background:"transparent", fontSize:20, fontWeight:700, textAlign:"center", color:C.text }} value={userQty} onChange={e => setQtySafe(parseInt(e.target.value.replace(/\D/g,"")||"0"))}/>
-                    <span style={{ fontSize:14, color:C.muted }}>kg</span>
+                    <input className="bs-num" style={{ width:50, border:"none", outline:"none", background:"transparent", fontSize:20, fontWeight:700, textAlign:"center", color:C.text }} value={palletCount} onChange={e => setPalletCount(parseInt(e.target.value.replace(/\D/g,"")||"0"))}/>
+                    <span style={{ fontSize:14, color:C.muted }}>{palletCount===1?"pallet":"pallet"}</span>
                   </div>
-                  <button className="bs-qty-btn" onClick={() => setUserQty(userQty+500)}><Plus size={16}/></button>
+                  <button className="bs-qty-btn" onClick={() => setPalletCount(palletCount+1)}><Plus size={16}/></button>
                 </div>
+                <div style={{ fontSize:12, color:C.muted, marginBottom:12 }}>= <b className="bs-num" style={{color:C.text}}>{kg(userQty)} kg</b> totali <span style={{ color:"#94A3B8" }}>(1 pallet = {kg(palletKg)} kg per questo prodotto)</span></div>
 
                 <div style={{ display:"flex", gap:6, marginBottom:14 }}>
-                  {[PALLET_KG,2000,5000].map(q => (
-                    <button key={q} onClick={() => setUserQty(q)} style={{ flex:1, padding:"7px", borderRadius:7, border:`1px solid ${userQty===q?C.purple:C.border}`, background:userQty===q?"#FBF7FF":"#fff", color:userQty===q?C.purple:C.muted, fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:"Inter,system-ui" }}>{q===PALLET_KG?"1 pallet":`${q/1000}t`}</button>
+                  {[1,2,5,10].map(n => (
+                    <button key={n} onClick={() => setPalletCount(n)} style={{ flex:1, padding:"7px", borderRadius:7, border:`1px solid ${palletCount===n?C.purple:C.border}`, background:palletCount===n?"#FBF7FF":"#fff", color:palletCount===n?C.purple:C.muted, fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:"Inter,system-ui" }}>{n} pallet{n===1?"":"s"}</button>
                   ))}
                 </div>
 
                 {belowMin && (
                   <div style={{ background:"#FFFBEB", border:`1px solid ${C.amber}55`, borderRadius:9, padding:"10px 12px", marginBottom:14, fontSize:12, color:"#92400E", display:"flex", gap:8 }}>
                     <Info size={26} color={C.amber} style={{ flexShrink:0 }}/>
-                    <span>Sotto i <b>{kg(MIN_OPEN)} kg (1 pallet di questo prodotto)</b> non puoi aprire un pool, ma puoi aggiungerti a questo già attivo oppure fare l'<b>Acquisto Rapido</b>.</span>
+                    <span>Sotto 1 pallet (<b>{kg(palletKg)} kg</b> per questo prodotto) non puoi aprire un'asta, ma puoi aggiungerti a questa già attiva oppure fare l'<b>Acquisto Rapido</b>.</span>
                   </div>
                 )}
 
@@ -470,13 +483,13 @@ export default function PoolAuctionPage() {
                   </div>
                 )}
 
-                <button onClick={joinTheAuction} className="bs-btn" style={{ width:"100%", marginBottom:8 }} disabled={!acceptTerms || joining}>{joining ? "Adesione in corso…" : <>{poolId ? "Aderisci all'asta a ribasso all'attuale prezzo" : "Apri un'asta a ribasso all'attuale prezzo"} <ArrowRight size={18}/></>}</button>
+                <button onClick={joinTheAuction} className="bs-btn" style={{ width:"100%", marginBottom:8 }} disabled={!acceptTerms || joining}>{joining ? "Adesione in corso…" : <>{myQty > 0 ? "Aggiungi questo quantitativo all'asta in corso" : (poolId ? "Aderisci all'asta a ribasso all'attuale prezzo" : "Apri un'asta a ribasso all'attuale prezzo")} <ArrowRight size={18}/></>}</button>
                 <button
                   onClick={() => { if (showTargetInput) joinAtTarget(); else setShowTargetInput(true); }}
                   style={{ width:"100%", background:"transparent", color:C.purple, border:`1.5px solid ${C.purple}`, borderRadius:10, padding:"12px", fontSize:14, fontWeight:700, cursor:(!acceptTerms||joining)?"default":"pointer", opacity:(!acceptTerms||joining)?0.5:1, fontFamily:"Inter,system-ui", display:"flex", alignItems:"center", justifyContent:"center", gap:6, textAlign:"center" }}
                   disabled={!acceptTerms || joining}
                 >
-                  {joining ? "Attivazione in corso…" : showTargetInput ? "Conferma soglia e attiva adesione" : (poolId ? "Aderisci all'asta a ribasso quando il prezzo raggiunge una cifra stabilita" : "Apri un'asta a ribasso quando il prezzo raggiunge una cifra stabilita")}
+                  {joining ? "Attivazione in corso…" : showTargetInput ? "Conferma soglia e attiva adesione" : (myQty > 0 ? "Aggiungi altro quantitativo quando il prezzo raggiunge una cifra stabilita" : (poolId ? "Aderisci all'asta a ribasso quando il prezzo raggiunge una cifra stabilita" : "Apri un'asta a ribasso quando il prezzo raggiunge una cifra stabilita"))}
                 </button>
                 {joinMsg && <div style={{ marginTop:10, fontSize:13, textAlign:"center", color: joinMsg.startsWith("✓") ? C.green : C.red }}>{joinMsg}</div>}
                 <div style={{ display:"flex", alignItems:"center", gap:6, marginTop:12, fontSize:12, color:C.muted }}>
@@ -569,7 +582,7 @@ export default function PoolAuctionPage() {
             <div className="bs-card">
               <div style={{ fontSize:16, fontWeight:700, marginBottom:14 }}>Come funziona l'asta a ribasso</div>
               {[
-                ["Apri o unisciti",`Apri un'asta a ribasso (minimo 1 pallet, ${kg(PALLET_KG)} kg per questo prodotto) o unisciti a una già attiva. La tua quantità entra subito nel volume aggregato.`],
+                ["Apri o unisciti",`Apri un'asta a ribasso (minimo 1 pallet, ${kg(palletKg)} kg per questo prodotto) o unisciti a una già attiva. La tua quantità entra subito nel volume aggregato.`],
                 ["Doppio ribasso per 7 giorni","Per una settimana il prezzo scende in due modi: i fornitori certificati competono al ribasso e ogni nuova adesione può sbloccare uno scaglione di volume più basso."],
                 ["Vince il più economico","Alla chiusura si aggiudica il fornitore con l'offerta più bassa tra quelli conformi allo standard. La sua identità viene svelata."],
                 ["Chiusura garantita","L'asta chiude sempre. Anche da solo acquisti al prezzo del tuo volume. Pagamento in escrow, spedizione separata per ogni azienda."],
