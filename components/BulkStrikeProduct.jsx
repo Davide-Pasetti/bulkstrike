@@ -169,6 +169,7 @@ function untilLabel(iso) {
 export default function ProductPage() {
   const [qty, setQty] = useState(8000);
   const [selectedId, setSelectedId] = useState(null);   // null = auto best (prezzo netto piu basso)
+  const [selectedFormatIdx, setSelectedFormatIdx] = useState(0); // indice del formato scelto tra quelli del fornitore in evidenza
   const [showSpecs, setShowSpecs] = useState(false);
   const [openQa, setOpenQa] = useState(null);
   const [chatOpen, setChatOpen] = useState(false);
@@ -231,7 +232,7 @@ export default function ProductPage() {
           setPool(mapDbPool(op));
           setCrumb(bc || null);
           setSelectedId(null);
-          // le FAQ SEED sono specifiche dell'acido tartarico: mostrale solo per quel prodotto
+          setSelectedFormatIdx(0);
           setQa(id === "ba475798-09b8-4471-91d4-f7555e4b0c9b" ? SEED_QA : []);
         }
       } catch (e) {
@@ -268,10 +269,14 @@ export default function ProductPage() {
   // Acquisto Rapido è a unità di vendita (es. sacchi da 25 kg), non a kg liberi.
   // Il formato dipende dal fornitore in evidenza; qty (kg) resta lo stato reale,
   // unitCount è solo la sua vista in unità per quel formato.
-  const unitLabel = featured?.unit_label || "sacco";
-  const unitSizeKg = featured?.unit_size_kg || 25;
+  const massUnit = product.default_unit === "L" ? "L" : "kg"; // solido→kg, liquido→litri
+  const formats = featured?.formats?.length ? featured.formats : [{ label: "sacco", size_kg: 25 }];
+  const currentFormat = formats[selectedFormatIdx] || formats[0];
+  const unitLabel = currentFormat.label;
+  const unitSizeKg = currentFormat.size_kg;
   const unitCount = Math.max(1, Math.round(qty / unitSizeKg));
   const setUnitCount = (n) => setQtySafe(Math.max(1, n) * unitSizeKg);
+  const selectFormat = (idx) => { setSelectedFormatIdx(idx); setQtySafe(Math.max(1, unitCount) * formats[idx].size_kg); };
 
   // pool nudge: shown when the instant order is >= 1 pallet
   const palletKg = product.pallet_kg || PALLET_KG;
@@ -483,32 +488,41 @@ export default function ProductPage() {
 
           {/* LEFT COLUMN */}
           <div>
-            {/* QUANTITY SELECTOR — a unità di vendita, non kg liberi */}
+            {/* QUANTITA NECESSARIA — due passaggi: 1) formato, 2) numero di unita di quel formato */}
             <div style={{ border:`1px solid ${C.border}`, borderRadius:14, padding:20, marginBottom:20, background:C.bg }}>
-              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12, flexWrap:"wrap", gap:10 }}>
-                <div>
-                  <div style={{ fontSize:14, fontWeight:700 }}>Di quanto hai bisogno?</div>
-                  <div style={{ fontSize:12, color:C.muted }}>A {unitLabel}i da {unitSizeKg} kg ciascuno — formato del fornitore in evidenza. Il prezzo si aggiorna in base allo scaglione di volume.</div>
-                </div>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16, flexWrap:"wrap", gap:10 }}>
+                <div style={{ fontSize:14, fontWeight:700 }}>Seleziona le quantità necessarie</div>
                 <span className="bs-chip" style={{ background:"#EFF6FF", color:"#1D4ED8" }}>Scaglione attuale: {tierLabel(qty)}</span>
               </div>
+
+              <div style={{ fontSize:12.5, fontWeight:600, color:C.muted, marginBottom:8 }}>Seleziona formato disponibile</div>
+              <div style={{ display:"flex", gap:6, marginBottom:16, flexWrap:"wrap" }}>
+                {formats.map((f,i) => (
+                  <button key={i} onClick={() => selectFormat(i)} style={{ padding:"8px 14px", borderRadius:7, border:`1px solid ${selectedFormatIdx===i?C.blue:C.border}`, background:selectedFormatIdx===i?"#EFF6FF":"#fff", color:selectedFormatIdx===i?C.blue:C.text, fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:"Inter,system-ui" }}>
+                    {f.size_kg} {massUnit}/{f.label}
+                  </button>
+                ))}
+              </div>
+
+              <div style={{ fontSize:12.5, fontWeight:600, color:C.muted, marginBottom:8 }}>Seleziona il numero di unità per il formato selezionato · il prezzo si aggiorna in base allo scaglione di volume</div>
               <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap" }}>
                 <button className="bs-qty-btn" onClick={() => setUnitCount(unitCount - 1)}><Minus size={16}/></button>
                 <div style={{ display:"flex", alignItems:"baseline", gap:6, background:"#fff", border:`1px solid ${C.border}`, borderRadius:8, padding:"8px 14px" }}>
                   <input className="bs-num" style={{ width:60, border:"none", outline:"none", fontSize:20, fontWeight:700, color:C.text }} value={unitCount} onChange={e => setUnitCount(parseInt(e.target.value.replace(/\D/g,"")||"0"))} />
-                  <span style={{ fontSize:14, color:C.muted }}>{unitCount === 1 ? unitLabel : `${unitLabel}i`}</span>
+                  <span style={{ fontSize:14, color:C.muted }}>{unitLabel}{unitCount===1?"":"i"}</span>
                 </div>
                 <button className="bs-qty-btn" onClick={() => setUnitCount(unitCount + 1)}><Plus size={16}/></button>
-                <div style={{ fontSize:13, color:C.muted, marginLeft:2 }}>= <b className="bs-num" style={{ color:C.text }}>{qty.toLocaleString("it-IT")} kg</b> totali <span style={{ color:"#94A3B8" }}>(automatico)</span></div>
+                <div style={{ fontSize:13, color:C.muted, marginLeft:2 }}>= <b className="bs-num" style={{ color:C.text }}>{qty.toLocaleString("it-IT")} {massUnit}</b> totali <span style={{ color:"#94A3B8" }}>(automatico)</span></div>
               </div>
               <div style={{ display:"flex", gap:6, marginTop:10, flexWrap:"wrap" }}>
                 {[10,40,100,240].map(n => (
-                  <button key={n} onClick={() => { setUnitCount(n); setSelectedId(null); }} style={{ padding:"7px 12px", borderRadius:7, border:`1px solid ${unitCount===n?C.blue:C.border}`, background:unitCount===n?"#EFF6FF":"#fff", color:unitCount===n?C.blue:C.muted, fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:"Inter,system-ui" }}>
-                    {n} {n===1?unitLabel:`${unitLabel}i`} <span style={{ color:"#94A3B8" }}>({(n*unitSizeKg).toLocaleString("it-IT")} kg)</span>
+                  <button key={n} onClick={() => { setUnitCount(n); setSelectedId(null); setSelectedFormatIdx(0); }} style={{ padding:"7px 12px", borderRadius:7, border:`1px solid ${unitCount===n?C.blue:C.border}`, background:unitCount===n?"#EFF6FF":"#fff", color:unitCount===n?C.blue:C.muted, fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:"Inter,system-ui" }}>
+                    {n} {n===1?unitLabel:`${unitLabel}i`} <span style={{ color:"#94A3B8" }}>({(n*unitSizeKg).toLocaleString("it-IT")} {massUnit})</span>
                   </button>
                 ))}
               </div>
             </div>
+
 
             {/* Indicatore soglia pallet — sempre visibile quando non c'è già un'asta, cambia stato in base alla quantità */}
             {!pool.exists && (
@@ -708,7 +722,7 @@ export default function ProductPage() {
                     <div className="bs-num" style={{ fontSize:13, fontWeight:600 }}>{eur(s.calc.product)} + {eur(s.calc.shipping)}</div>
                     {consolidatedWith(s.company_id) && <div style={{ fontSize:10, color:C.green, fontWeight:700, marginTop:2 }}>spedizione consolidabile</div>}
                   </div>
-                  <button className="bs-btn-ghost" onClick={() => { setSelectedId(s.id); window.scrollTo({top:0,behavior:"smooth"}); }}>Seleziona</button>
+                  <button className="bs-btn-ghost" onClick={() => { setSelectedId(s.id); setSelectedFormatIdx(0); window.scrollTo({top:0,behavior:"smooth"}); }}>Seleziona</button>
                 </div>
               ))}
             </div>
