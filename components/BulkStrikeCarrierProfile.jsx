@@ -237,7 +237,7 @@ export default function CarrierProfilePage() {
   function handleExit() { window.location.href = "/dashboard"; }
 
   const inputStyle = { width: "100%", padding: "9px 11px", border: `1.5px solid ${C.border}`, borderRadius: 8, fontSize: 13.5, outline: "none", fontFamily: "Inter,system-ui", background: "#fff", color: C.text };
-  const labelStyle = { fontSize: 11.5, fontWeight: 600, color: C.muted, display: "block", marginBottom: 5 };
+  const labelStyle = { fontSize: 11.5, fontWeight: 600, color: C.muted, display: "block", height: 28, lineHeight: "14px", marginBottom: 5, overflow: "hidden" };
 
   return (
     <div style={{ background: "#fff", color: C.text, fontFamily: "'Inter',system-ui,sans-serif", minHeight: "100vh", colorScheme: "light" }}>
@@ -373,8 +373,7 @@ export default function CarrierProfilePage() {
             {/* TABELLA UNICA: nazione, regione, giorni di consegna, kg, tariffe — sostituisce "aree servite" + "tariffe" separate */}
             <div className="cp-card">
               <div style={{ fontSize: 13, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: C.muted, marginBottom: 4 }}><MapPin size={13} style={{ verticalAlign: -2, marginRight: 5 }} />Tariffe</div>
-              <div style={{ fontSize: 12, color: C.muted, marginBottom: 14 }}>Ogni riga è una tariffa completa: dichiara da sola anche la copertura di quella nazione/regione — non serve più aggiungerla a parte.</div>
-
+              
               {(profile.rates || []).length > 0 && (
                 <div style={{ marginBottom: 16, overflowX: "auto" }}>
                   <div className="cp-rate-row" style={{ fontWeight: 800, fontSize: 10.5, color: C.muted, textTransform: "uppercase", minWidth: 760 }}>
@@ -399,7 +398,6 @@ export default function CarrierProfilePage() {
               )}
 
               <div style={{ background: C.bg, borderRadius: 10, padding: 14 }}>
-                <div style={{ fontSize: 11, color: C.muted, marginBottom: 8 }}>← scorri per vedere tutti i campi →</div>
                 <div style={{ overflowX: "auto", marginBottom: 12 }}>
                 <div style={{ display: "flex", gap: 10, minWidth: "max-content" }}>
                 <div style={{ flexShrink: 0, width: 120 }}>
