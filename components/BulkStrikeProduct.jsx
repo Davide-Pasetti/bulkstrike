@@ -510,6 +510,18 @@ export default function ProductPage() {
               </div>
             </div>
 
+            {/* Indicatore soglia pallet — sempre visibile quando non c'è già un'asta, cambia stato in base alla quantità */}
+            {!pool.exists && (
+              <div style={{ border:`1px solid ${C.amber}44`, background:"#FFFBEB", borderRadius:12, padding:"12px 16px", marginBottom:20, display:"flex", alignItems:"center", gap:10, opacity: canOpenPool ? 1 : 0.5, transition:"opacity 0.25s ease" }}>
+                <Info size={18} color={C.amber} style={{ flexShrink:0 }}/>
+                <span style={{ fontSize:13, color:"#92400E", fontWeight:600 }}>
+                  {canOpenPool
+                    ? "Hai raggiunto la quantità minima per aprire un'asta a ribasso."
+                    : `Quantità minima di 1 pallet (${palletKg.toLocaleString("it-IT")} kg) non ancora raggiunta.`}
+                </span>
+              </div>
+            )}
+
             {/* POOL BANNER — an active pool already exists for this product */}
             {pool.exists && (
               <div style={{ border:`1.5px solid ${C.purple}`, background:"linear-gradient(135deg,#F5F0FF,#EDE4F7)", borderRadius:14, padding:"18px 20px", marginBottom:24 }}>
