@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
-import { Search, Bot, ArrowRight, Check, Clock, ChevronRight, TrendingDown, X, ChevronDown } from "lucide-react";
+import { Search, Bot, ArrowRight, Check, Clock, ChevronRight, TrendingDown, X, ChevronDown, Menu } from "lucide-react";
 import { getMacroAreas, getSectorProducts, searchProducts } from "@/lib/api";
 import NavAuth from "@/components/BulkStrikeNavAuth";
 
@@ -111,6 +111,7 @@ function CookieBanner() {
 export default function BulkStrikeLight() {
   const [searchCat, setSearchCat]   = useState("Tutte le categorie");
   const [showCatDd, setShowCatDd]   = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false); // menu a lineette, solo mobile
   const [searchQ, setSearchQ]       = useState("");
   const [activeChart, setActiveChart] = useState("Acido Citrico");
   const [activeTab, setActiveTab]   = useState("acquirente");
@@ -205,6 +206,9 @@ export default function BulkStrikeLight() {
         .bs-chatbot-panel { position:absolute; bottom:70px; right:0; width:300px; background:#fff; border-radius:16px; border:1px solid #E2E8F0; box-shadow:0 20px 60px rgba(0,0,0,0.15); overflow:hidden; }
         .bs-chatbot-btn { width:56px; height:56px; border-radius:50%; background:#0EA5E9; border:3px solid #fff; cursor:pointer; display:flex; align-items:center; justify-content:center; box-shadow:0 4px 20px rgba(14,165,233,0.4); transition:transform 0.2s; }
         .bs-chatbot-btn:hover { transform:scale(1.08); }
+        .bs-hamburger-btn { display:none; background:none; border:none; cursor:pointer; padding:6px; margin:-6px; flex-shrink:0; }
+        .bs-search-mobile-row { display:none; }
+        .bs-mobile-menu-panel { display:none; }
         @media (max-width:768px) {
           .bs-grid-2 { grid-template-columns:1fr !important; gap:32px !important; }
           .bs-grid-3 { grid-template-columns:1fr !important; }
@@ -217,12 +221,21 @@ export default function BulkStrikeLight() {
           .bs-search-cat { min-width:120px !important; }
           .bs-cta-btns { flex-direction:column !important; }
           .bs-hero-grid { grid-template-columns:1fr !important; gap:32px !important; }
+          .bs-hamburger-btn { display:flex !important; align-items:center; justify-content:center; }
+          .bs-search-desktop { display:none !important; }
+          .bs-search-mobile-row { display:block !important; padding:10px 16px 14px; border-top:1px solid ${C.border}; }
+          .bs-mobile-menu-panel { display:block !important; border-top:1px solid ${C.border}; background:#fff; }
         }
       `}</style>
 
       {/* ── NAVBAR ── */}
       <nav style={{ position:"sticky", top:0, zIndex:50, background:"rgba(255,255,255,0.96)", backdropFilter:"blur(12px)", borderBottom:`1px solid ${C.border}` }}>
         <div style={{ maxWidth:1280, margin:"0 auto", padding:"0 24px", height:68, display:"flex", alignItems:"center", gap:20 }}>
+          {/* Menu a lineette — solo mobile */}
+          <button className="bs-hamburger-btn" onClick={() => setMobileMenuOpen(o => !o)} aria-label="Menu">
+            {mobileMenuOpen ? <X size={22} color={C.text}/> : <Menu size={22} color={C.text}/>}
+          </button>
+
           {/* Logo */}
           <div onClick={() => { window.location.href = "/"; }} style={{ display:"flex", alignItems:"center", gap:10, flexShrink:0, cursor:"pointer" }}>
             <BSIcon size={36} uid="nav" />
@@ -232,8 +245,8 @@ export default function BulkStrikeLight() {
             </div>
           </div>
 
-          {/* Search bar */}
-          <div style={{ position:"relative", flex:1, display:"flex", justifyContent:"center" }}>
+          {/* Search bar — qui solo su desktop, su mobile scende sotto in una riga a parte */}
+          <div className="bs-search-desktop" style={{ position:"relative", flex:1, display:"flex", justifyContent:"center" }}>
             <div className="bs-search-wrap">
               <div className="bs-search-cat" onClick={() => setShowCatDd(!showCatDd)}>
                 <span style={{ overflow:"hidden", textOverflow:"ellipsis", maxWidth:110 }}>{searchCat}</span>
@@ -264,8 +277,8 @@ export default function BulkStrikeLight() {
             </div>
           </div>
 
-          {/* Nav right */}
-          <div style={{ display:"flex", alignItems:"center", gap:20, flexShrink:0 }}>
+          {/* Nav right — su mobile, margin-left:auto lo spinge a destra del logo dato che la ricerca qui sopra è nascosta */}
+          <div style={{ display:"flex", alignItems:"center", gap:20, flexShrink:0, marginLeft:"auto" }}>
             <div className="bs-nav-links" style={{ display:"flex", gap:20 }}>
               {[["Aste attive","/pool"],["Prodotti","/catalogo"],["Fornitori","/fornitori"],["Corrieri","/corriere"],["Come funziona","#come-funziona"]].map(([l,href]) => (
                 <span key={l} onClick={() => { window.location.href = href; }} style={{ fontSize:14, color:C.muted, cursor:"pointer", fontWeight:500, whiteSpace:"nowrap" }}>{l}</span>
@@ -274,6 +287,27 @@ export default function BulkStrikeLight() {
             <NavAuth />
           </div>
         </div>
+
+        {/* Barra di ricerca — solo mobile, riga a parte sotto il logo/menu */}
+        <div className="bs-search-mobile-row">
+          <div className="bs-search-wrap" style={{ maxWidth:"100%" }}>
+            <div className="bs-search-cat" onClick={() => setShowCatDd(!showCatDd)}>
+              <span style={{ overflow:"hidden", textOverflow:"ellipsis", maxWidth:90 }}>{searchCat}</span>
+              <ChevronDown size={14} color="#64748B" />
+            </div>
+            <input className="bs-search-input" placeholder="Cerca materie prime, fornitori..." value={searchQ} onChange={e => setSearchQ(e.target.value)} onKeyDown={e => { if (e.key === "Enter") runSearch(); }} />
+            <button className="bs-search-btn" onClick={runSearch}><Search size={20} color="white" /></button>
+          </div>
+        </div>
+
+        {/* Menu a lineette aperto — solo mobile */}
+        {mobileMenuOpen && (
+          <div className="bs-mobile-menu-panel">
+            {[["Aste attive","/pool"],["Prodotti","/catalogo"],["Fornitori","/fornitori"],["Corrieri","/corriere"],["Come funziona","#come-funziona"]].map(([l,href]) => (
+              <div key={l} onClick={() => { window.location.href = href; }} style={{ padding:"13px 20px", fontSize:15, fontWeight:600, color:C.text, borderBottom:`1px solid ${C.border}`, cursor:"pointer" }}>{l}</div>
+            ))}
+          </div>
+        )}
       </nav>
 
       {/* ── TICKER TAPE ── */}
