@@ -498,6 +498,10 @@ export default function CheckoutPage() {
                             <span className="co-num" style={{ whiteSpace: "nowrap" }}>{it.unit_price != null ? eur(Number(it.unit_price) * Number(it.quantity_kg)) : "—"}</span>
                           </div>
                         ))}
+                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, fontWeight: 700, marginTop: 8 }}>
+                          <span>Subtotale materia prima</span>
+                          <span className="co-num" style={{ whiteSpace: "nowrap" }}>{eur(goodsForDisplay)}</span>
+                        </div>
                       </div>
 
                       {/* spedizione consolidata per fornitore — un fornitore con più prodotti nel carrello paga una spedizione sola */}
@@ -508,10 +512,15 @@ export default function CheckoutPage() {
                             <div key={s.supplier_company_id} style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, marginBottom: 6, gap: 10 }}>
                               <span style={{ color: C.muted }}>
                                 {s.supplier_name} <span style={{ color: "#94A3B8" }}>({s.product_count} {s.product_count === 1 ? "prodotto" : "prodotti"} · {Number(s.total_qty).toLocaleString("it-IT")} kg{s.product_count > 1 ? " · spedizione unica" : ""})</span>
+                                {s.is_hold && <span style={{ color: C.amber, fontWeight: 600 }}> · in attesa di corriere</span>}
                               </span>
-                              <span className="co-num" style={{ whiteSpace: "nowrap" }}>{eur(s.shipping_amount)}</span>
+                              <span className="co-num" style={{ whiteSpace: "nowrap" }}>{s.is_hold ? "—" : eur(s.shipping_amount)}</span>
                             </div>
                           ))}
+                          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, fontWeight: 700, marginTop: 8 }}>
+                            <span>Subtotale spedizione</span>
+                            <span className="co-num" style={{ whiteSpace: "nowrap" }}>{eur(shippingForDisplay)}</span>
+                          </div>
                         </div>
                       )}
 

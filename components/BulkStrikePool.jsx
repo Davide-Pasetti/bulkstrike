@@ -129,7 +129,7 @@ export default function PoolAuctionPage() {
   }
 
   async function joinTheAuction() {
-    if (!poolId) { setJoinMsg("Questo è il pool dimostrativo. Apri /pool?id=… con un pool reale per partecipare."); return; }
+    if (!poolId) { setJoinMsg("Questa è l'asta dimostrativa. Apri /pool?id=… con un'asta reale per partecipare."); return; }
     setJoining(true); setJoinMsg(null);
     try {
       await joinPool(poolId, userQty, true);
@@ -207,7 +207,7 @@ export default function PoolAuctionPage() {
             </div>
           </div>
           <div className="bs-nav-links" style={{ display:"flex", gap:18, alignItems:"center" }}>
-            {[["Pool","/pool"],["Prezzi","/pool"],["Fornitori","/registrati"]].map(([l,href]) => <span key={l} onClick={() => { window.location.href = href; }} style={{ fontSize:14, color:C.muted, cursor:"pointer", fontWeight:500 }}>{l}</span>)}
+            {[["Aste a ribasso","/pool"],["Prezzi","/pool"],["Fornitori","/registrati"]].map(([l,href]) => <span key={l} onClick={() => { window.location.href = href; }} style={{ fontSize:14, color:C.muted, cursor:"pointer", fontWeight:500 }}>{l}</span>)}
             <NavAuth />
           </div>
         </div>
@@ -233,7 +233,7 @@ export default function PoolAuctionPage() {
 
         {/* BREADCRUMB */}
         <div style={{ display:"flex", alignItems:"center", gap:8, fontSize:13, color:C.muted, marginBottom:18, flexWrap:"wrap" }}>
-          <span>Home</span><ChevronRight size={13}/><span>Pool · Aste attive</span><ChevronRight size={13}/>
+          <span>Home</span><ChevronRight size={13}/><span>Asta a ribasso · attive</span><ChevronRight size={13}/>
           <span style={{ color:C.text, fontWeight:600 }}>{pool.product}</span>
         </div>
 
@@ -241,7 +241,7 @@ export default function PoolAuctionPage() {
         <div style={{ display:"flex", justifyContent:"space-between", gap:16, flexWrap:"wrap", marginBottom:20 }}>
           <div>
             <div style={{ display:"flex", gap:8, marginBottom:8, flexWrap:"wrap", alignItems:"center" }}>
-              <span className="bs-chip" style={{ background:"#FBF7FF", color:C.purple }}><Gavel size={12}/> Asta a ribasso · Pool prodotto</span>
+              <span className="bs-chip" style={{ background:"#FBF7FF", color:C.purple }}><Gavel size={12}/> Asta a ribasso · per prodotto</span>
               <span className="bs-chip" style={{ background:"#FEF2F2", color:C.red }}><span className="bs-live-dot"/> Live</span>
               <span className="bs-chip" style={{ background:"#EFF6FF", color:"#1D4ED8" }}>{pool.enum}</span>
             </div>
@@ -345,10 +345,10 @@ export default function PoolAuctionPage() {
               <>
                 <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:6 }}>
                   <div style={{ width:34, height:34, borderRadius:"50%", background:"#DCFCE7", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}><Check size={18} color={C.green}/></div>
-                  <div style={{ fontSize:15, fontWeight:700 }}>Ti sei aggiunto al pool!</div>
+                  <div style={{ fontSize:15, fontWeight:700 }}>Ti sei unito all'asta a ribasso!</div>
                 </div>
                 <div style={{ fontSize:13, color:C.muted, marginBottom:16, lineHeight:1.5 }}>La tua quantità è entrata nel volume aggregato. Segui l'andamento dell'asta dal tuo profilo.</div>
-                <button onClick={() => { window.location.href = "/dashboard?section=pools"; }} className="bs-btn" style={{ width:"100%" }}>Visualizza i tuoi pool <ArrowRight size={18}/></button>
+                <button onClick={() => { window.location.href = "/dashboard?section=pools"; }} className="bs-btn" style={{ width:"100%" }}>Visualizza le tue aste <ArrowRight size={18}/></button>
                 <div style={{ display:"flex", alignItems:"center", gap:6, marginTop:12, fontSize:12, color:C.muted }}>
                   <Shield size={20} color={C.green} style={{ flexShrink:0 }}/>
                   <span>Pagamento in escrow al prezzo di chiusura. Mai più dell'Acquisto Rapido.</span>
@@ -415,7 +415,7 @@ export default function PoolAuctionPage() {
         <div style={{ background:"#07111E", borderRadius:14, padding:"18px 24px", marginBottom:28, display:"flex", gap:14, alignItems:"center", flexWrap:"wrap" }}>
           <Shield size={22} color="#22D3EE" style={{ flexShrink:0 }}/>
           <div style={{ flex:1, minWidth:220 }}>
-            <div style={{ fontSize:14, fontWeight:700, color:"#F0F6FF" }}>Il pool si chiude sempre · a rischio zero</div>
+            <div style={{ fontSize:14, fontWeight:700, color:"#F0F6FF" }}>L'asta si chiude sempre · a rischio zero</div>
             <div style={{ fontSize:13, color:"#6B94B8", lineHeight:1.5 }}>Anche se l'asta resta deserta e sei l'unico partecipante, alla scadenza acquisti comunque la tua quantità al prezzo del tuo volume. Non paghi mai più dell'Acquisto Rapido: l'unico costo è l'attesa.</div>
           </div>
         </div>
@@ -468,12 +468,12 @@ export default function PoolAuctionPage() {
             </div>
 
             <div className="bs-card">
-              <div style={{ fontSize:16, fontWeight:700, marginBottom:14 }}>Come funziona il pool ad asta</div>
+              <div style={{ fontSize:16, fontWeight:700, marginBottom:14 }}>Come funziona l'asta a ribasso</div>
               {[
-                ["Apri o aderisci",`Apri un pool (minimo 1 pallet, ${kg(PALLET_KG)} kg per questo prodotto) o aggiungiti a uno attivo. La tua quantità entra subito nel volume aggregato.`],
+                ["Apri o unisciti",`Apri un'asta a ribasso (minimo 1 pallet, ${kg(PALLET_KG)} kg per questo prodotto) o unisciti a una già attiva. La tua quantità entra subito nel volume aggregato.`],
                 ["Doppio ribasso per 7 giorni","Per una settimana il prezzo scende in due modi: i fornitori certificati competono al ribasso e ogni nuova adesione può sbloccare uno scaglione di volume più basso."],
                 ["Vince il più economico","Alla chiusura si aggiudica il fornitore con l'offerta più bassa tra quelli conformi allo standard. La sua identità viene svelata."],
-                ["Chiusura garantita","Il pool chiude sempre. Anche da solo acquisti al prezzo del tuo volume. Pagamento in escrow, spedizione separata per ogni azienda."],
+                ["Chiusura garantita","L'asta chiude sempre. Anche da solo acquisti al prezzo del tuo volume. Pagamento in escrow, spedizione separata per ogni azienda."],
               ].map(([t,desc],i) => (
                 <div key={i} style={{ display:"flex", gap:12, marginBottom:i<3?14:0 }}>
                   <div style={{ width:24, height:24, borderRadius:"50%", background:C.purple, color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontSize:12, fontWeight:700, flexShrink:0 }}>{i+1}</div>

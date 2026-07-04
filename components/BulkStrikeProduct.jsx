@@ -367,6 +367,7 @@ export default function ProductPage() {
         .bs-qty-btn:hover { border-color:#0EA5E9; color:#0EA5E9; }
         .bs-chatbot-btn { width:56px; height:56px; border-radius:50%; background:#0EA5E9; border:3px solid #fff; cursor:pointer; display:flex; align-items:center; justify-content:center; box-shadow:0 4px 20px rgba(14,165,233,0.4); }
         .bs-spec-row { display:flex; justify-content:space-between; padding:10px 0; border-bottom:1px solid #F1F5F9; font-size:14px; }
+        .bs-feature-grid { display:grid; grid-template-columns:1.4fr 1fr; gap:16px; align-items:center; }
         @media (max-width:880px){
           .bs-grid-main { grid-template-columns:1fr !important; }
           .bs-supplier-row { grid-template-columns:1fr 1fr !important; gap:10px !important; }
@@ -374,6 +375,7 @@ export default function ProductPage() {
           .bs-nav-links { display:none !important; }
           .bs-search-wrap { max-width:100% !important; }
           .bs-chart-grid { grid-template-columns:1fr !important; }
+          .bs-feature-grid { grid-template-columns:1fr !important; gap:14px !important; }
         }
       `}</style>
 
@@ -404,12 +406,12 @@ export default function ProductPage() {
                 </div>
               )}
               {searchOpen && searchResults.length === 0 && searchQ.trim().length >= 2 && (
-                <div style={{ position:"absolute", top:48, left:0, right:0, background:"#fff", border:`1px solid ${C.border}`, borderRadius:10, padding:"12px 14px", zIndex:60, fontSize:13, color:C.muted }}>Nessun prodotto trovato per “{searchQ}”.</div>
+                <div style={{ position:"absolute", top:48, left:0, right:0, background:"#fff", border:`1px solid ${C.border}`, borderRadius:10, padding:"12px 14px", zIndex:60, fontSize:13, color:C.muted }}>Nessun prodotto trovato per "{searchQ}".</div>
               )}
             </div>
           </div>
           <div className="bs-nav-links" style={{ display:"flex", gap:18, alignItems:"center" }}>
-            {[["Pool","/pool"],["Prezzi","/pool"],["Fornitori","/registrati"]].map(([l,href]) => <span key={l} onClick={() => { window.location.href = href; }} style={{ fontSize:14, color:C.muted, cursor:"pointer", fontWeight:500 }}>{l}</span>)}
+            {[["Aste a ribasso","/pool"],["Prezzi","/pool"],["Fornitori","/registrati"]].map(([l,href]) => <span key={l} onClick={() => { window.location.href = href; }} style={{ fontSize:14, color:C.muted, cursor:"pointer", fontWeight:500 }}>{l}</span>)}
             <NavAuth />
           </div>
         </div>
@@ -419,7 +421,7 @@ export default function ProductPage() {
       <div style={{ background:"#07111E", padding:"9px 0" }}>
         <div className="bs-ticker-wrap"><div className="bs-ticker">
           {[...Array(2)].flatMap((_,k) => [
-            ["Acido Tartarico","€2,49",-2.8],["Acido Citrico","€0,81",-2.3],["Metabisolfito K","€1,95",+1.1],["Bentonite","€0,42",-0.6],["Acido Malico","€3,10",+0.9],["Gomma Arabica","€8,40",+2.2],["Mannoproteine","€14,20",-0.3],["MCR","€0,95",+1.7]
+            ["Acido Tartarico","€2,49",-2.8],["Acido Citrico","€0,81",-2.3],["Metabisolfito K","€1,95",1.1],["Bentonite","€0,42",-0.6],["Acido Malico","€3,10",0.9],["Gomma Arabica","€8,40",2.2],["Mannoproteine","€14,20",-0.3],["MCR","€0,95",1.7]
           ].map(([n,p,c],i) => (
             <div key={k+"-"+i} style={{ display:"flex", alignItems:"center", gap:8, padding:"0 22px", whiteSpace:"nowrap" }}>
               <span style={{ fontSize:13, color:"#6B94B8" }}>{n}</span>
@@ -506,7 +508,7 @@ export default function ProductPage() {
                   </div>
                   <div style={{ flex:1, minWidth:0 }}>
                     <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:4, flexWrap:"wrap" }}>
-                      <span style={{ fontSize:16, fontWeight:800 }}>C'è già un pool attivo per questo prodotto</span>
+                      <span style={{ fontSize:16, fontWeight:800 }}>C'è già un'asta a ribasso attiva per questo prodotto</span>
                       <span className="bs-chip" style={{ background:"#fff", color:C.purple, border:`1px solid ${C.purple}44` }}><Clock size={11}/> chiude tra {pool.closesIn}</span>
                     </div>
                     <div style={{ fontSize:14, color:C.muted, lineHeight:1.6, marginBottom:14 }}>
@@ -526,7 +528,7 @@ export default function ProductPage() {
                     </div>
                     <div style={{ display:"flex", gap:12, flexWrap:"wrap", alignItems:"center" }}>
                       <button onClick={goToPool} style={{ background:C.purple, color:"#fff", border:"none", borderRadius:9, padding:"12px 22px", fontSize:14, fontWeight:700, cursor:"pointer", display:"inline-flex", alignItems:"center", gap:7, fontFamily:"Inter,system-ui" }}>
-                        <Users size={16}/> Unisciti al pool <ArrowRight size={15}/>
+                        <Users size={16}/> Unisciti all'asta <ArrowRight size={15}/>
                       </button>
                       <span style={{ fontSize:12, color:C.muted }}>oppure acquista subito qui sotto</span>
                     </div>
@@ -544,7 +546,7 @@ export default function ProductPage() {
                   </div>
                   <div style={{ flex:1, minWidth:0 }}>
                     <div style={{ fontSize:16, fontWeight:800, marginBottom:4 }}>
-                      Stai acquistando {(qty/1000).toLocaleString("it-IT")}t — apri un pool e potresti pagare meno
+                      Stai acquistando {(qty/1000).toLocaleString("it-IT")}t — apri un'asta a ribasso e potresti pagare meno
                     </div>
                     <div style={{ fontSize:14, color:C.muted, lineHeight:1.6, marginBottom:14 }}>
                       Trasforma il tuo acquisto in un'<b style={{ color:C.text }}>asta a ribasso</b>: altre aziende possono aggregarsi alla tua richiesta e il prezzo <b style={{ color:C.text }}>può solo scendere</b>. {ranked.length} fornitori certificati competono. In cambio, l'ordine si concretizza in <b style={{ color:C.text }}>7 giorni</b> anziché subito.
@@ -564,7 +566,7 @@ export default function ProductPage() {
                     </div>
                     <div style={{ display:"flex", gap:12, flexWrap:"wrap", alignItems:"center" }}>
                       <button onClick={handleOpenPool} disabled={busy} style={{ background:C.purple, color:"#fff", border:"none", borderRadius:9, padding:"12px 22px", fontSize:14, fontWeight:700, cursor:busy?"default":"pointer", opacity:busy?0.6:1, display:"inline-flex", alignItems:"center", gap:7, fontFamily:"Inter,system-ui" }}>
-                        <Gavel size={16}/> Apri un pool con {(qty/1000).toLocaleString("it-IT")}t <ArrowRight size={15}/>
+                        <Gavel size={16}/> Apri un'asta a ribasso con {(qty/1000).toLocaleString("it-IT")}t <ArrowRight size={15}/>
                       </button>
                       <span style={{ fontSize:12, color:C.muted }}>oppure acquista subito qui sotto</span>
                     </div>
@@ -598,7 +600,7 @@ export default function ProductPage() {
               </div>
 
               {/* MATERIA PRIMA + SPEDIZIONE, sempre visibili — IVA esclusa (quella si calcola al checkout) */}
-              <div style={{ display:"grid", gridTemplateColumns:"1.4fr 1fr", gap:16, alignItems:"center" }}>
+              <div className="bs-feature-grid">
                 <div style={{ background:C.bg, borderRadius:12, padding:"16px 18px" }}>
                   <div style={{ fontSize:12, color:C.muted, marginBottom:10, fontWeight:600 }}>Materia prima + spedizione · {(qty/1000)}t</div>
                   <div style={{ display:"flex", flexDirection:"column", gap:7 }}>
@@ -625,7 +627,7 @@ export default function ProductPage() {
                   {pool.exists && (
                   <div style={{ marginTop:10, fontSize:13 }}>
                     <span style={{ color:C.muted }}>oppure </span>
-                    <span onClick={goToPool} style={{ color:C.purple, fontWeight:600, cursor:"pointer" }}>c'è un pool attivo: ora {eurKg(pool.bestPrice)}/kg ↓</span>
+                    <span onClick={goToPool} style={{ color:C.purple, fontWeight:600, cursor:"pointer" }}>c'è un pool attivo: ora {eurKg(pool.bestPrice)}/kg →</span>
                   </div>
                   )}
                 </div>
@@ -681,9 +683,9 @@ export default function ProductPage() {
               <div style={{ border:`1px dashed ${C.border}`, borderRadius:14, padding:"28px 24px", marginBottom:28, textAlign:"center", color:C.muted }}>
                 <Beaker size={26} color={C.muted} style={{ marginBottom:8 }} />
                 <div style={{ fontSize:15, fontWeight:700, color:C.text, marginBottom:4 }}>Nessun fornitore quotato per questo prodotto</div>
-                <div style={{ fontSize:13, marginBottom:14 }}>Puoi comunque aprire un pool: aggreghi la domanda e i fornitori certificati competono al ribasso.</div>
+                <div style={{ fontSize:13, marginBottom:14 }}>Puoi comunque aprire un'asta a ribasso: aggreghi la domanda e i fornitori certificati competono al ribasso.</div>
                 {canOpenPool
-                  ? <button onClick={handleOpenPool} disabled={busy} style={{ background:C.purple, color:"#fff", border:"none", borderRadius:9, padding:"12px 22px", fontSize:14, fontWeight:700, cursor:busy?"default":"pointer", opacity:busy?0.6:1, display:"inline-flex", alignItems:"center", gap:7, fontFamily:"Inter,system-ui" }}><Gavel size={16}/> Apri un pool con {(qty/1000).toLocaleString("it-IT")}t</button>
+                  ? <button onClick={handleOpenPool} disabled={busy} style={{ background:C.purple, color:"#fff", border:"none", borderRadius:9, padding:"12px 22px", fontSize:14, fontWeight:700, cursor:busy?"default":"pointer", opacity:busy?0.6:1, display:"inline-flex", alignItems:"center", gap:7, fontFamily:"Inter,system-ui" }}><Gavel size={16}/> Apri un'asta a ribasso con {(qty/1000).toLocaleString("it-IT")}t</button>
                   : <div style={{ fontSize:12 }}>Imposta almeno {(palletKg/1000).toLocaleString("it-IT")}t (1 pallet) per aprire un pool.</div>}
                 {actionMsg && <div style={{ marginTop:8, fontSize:12, color:C.red, fontWeight:600 }}>{actionMsg}</div>}
               </div>
@@ -758,7 +760,7 @@ export default function ProductPage() {
             <div style={{ border:`1px solid ${C.purple}33`, borderRadius:14, padding:18, background:"#FBF7FF" }}>
               <div style={{ display:"flex", alignItems:"center", gap:7, marginBottom:8 }}>
                 <Gavel size={15} color={C.purple}/>
-                <span style={{ fontSize:13, fontWeight:700, color:C.purple }}>Pool attivo · asta a ribasso</span>
+                <span style={{ fontSize:13, fontWeight:700, color:C.purple }}>Asta a ribasso attiva</span>
                 <span style={{ marginLeft:"auto", fontSize:12, color:C.muted, display:"flex", alignItems:"center", gap:3 }}><Clock size={11}/> {pool.closesIn}</span>
               </div>
               <div style={{ display:"flex", alignItems:"baseline", gap:8, marginBottom:8 }}>
@@ -776,7 +778,7 @@ export default function ProductPage() {
                 <div style={{ width:`${Math.max(6, Math.min(100, Math.round((pool.current/(palletKg*20))*100)))}%`, height:"100%", background:`linear-gradient(90deg,${C.purple},#A855F7)`, borderRadius:100 }}/>
               </div>
               <button onClick={goToPool} style={{ width:"100%", background:C.purple, color:"#fff", border:"none", borderRadius:9, padding:"12px", fontSize:14, fontWeight:700, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:6, fontFamily:"Inter,system-ui" }}>
-                Unisciti al Pool <ArrowRight size={15}/>
+                Unisciti all'asta <ArrowRight size={15}/>
               </button>
             </div>
             )}
@@ -840,14 +842,14 @@ export default function ProductPage() {
             </div>
             <div style={{ padding:12 }}>
               <div style={{ background:C.bg, borderRadius:"12px 12px 12px 4px", padding:"10px 12px", fontSize:13, color:C.text, lineHeight:1.5 }}>
-                Sono l'assistente virtuale (AI) di BulkStrike, non una persona. Stai guardando l'Acido Tartarico: vuoi che ti trovi il prezzo migliore per la tua quantità o che ti unisca al pool attivo? Per parlare con una persona, scrivi a davide@bulkstrike.com.
+                Sono l'assistente virtuale (AI) di BulkStrike, non una persona. Stai guardando l'Acido Tartarico: vuoi che ti trovi il prezzo migliore per la tua quantità o che ti unisca all'asta a ribasso attiva? Per parlare con una persona, scrivi a davide@bulkstrike.com.
               </div>
             </div>
             <div style={{ borderTop:`1px solid ${C.border}` }}>
               <div style={{ padding:"6px 12px 0", fontSize:10, color:C.muted, textAlign:"center" }}>Risposte generate da intelligenza artificiale</div>
               <div style={{ padding:10, display:"flex", gap:8 }}>
                 <input placeholder="Scrivi un messaggio..." style={{ flex:1, border:`1px solid ${C.border}`, borderRadius:8, padding:"8px 12px", fontSize:13, outline:"none", fontFamily:"Inter,system-ui" }}/>
-                <button style={{ background:C.blue, border:"none", borderRadius:8, width:34, cursor:"pointer", color:"#fff", fontWeight:700 }}>↑</button>
+                <button style={{ background:C.blue, border:"none", borderRadius:8, width:34, cursor:"pointer", color:"#fff", fontWeight:700 }}>→</button>
               </div>
             </div>
           </div>

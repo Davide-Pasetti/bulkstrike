@@ -22,13 +22,13 @@ const ALL_MATERIALS = [...new Set(Object.values(SECTOR_PRODUCTS).flat())];
 
 const ALERT_DEFS = {
   buyer: [
-    { k:"pool",     icon:Bell,         label:"Apre un pool",    desc:"Avvisami quando apre un pool per questo articolo — per partecipare" },
+    { k:"pool",     icon:Bell,         label:"Apre un'asta a ribasso",    desc:"Avvisami quando apre un'asta a ribasso per questo articolo — per partecipare" },
     { k:"price",    icon:TrendingDown, label:"Prezzo in calo",  desc:"Avvisami su nuove offerte più basse" },
     { k:"supplier", icon:Factory,      label:"Nuovo fornitore", desc:"Avvisami quando si aggiunge un fornitore certificato" },
   ],
   supplier: [
-    { k:"pool",    icon:Bell,   label:"Apre un pool",      desc:"Avvisami quando apre un pool — per fare un'offerta a ribasso" },
-    { k:"closing", icon:Clock,  label:"In chiusura (30 min)", desc:"Avvisami 30 minuti prima della chiusura di un pool a cui partecipi" },
+    { k:"pool",    icon:Bell,   label:"Apre un'asta a ribasso",      desc:"Avvisami quando apre un'asta a ribasso — per fare un'offerta a ribasso" },
+    { k:"closing", icon:Clock,  label:"In chiusura (30 min)", desc:"Avvisami 30 minuti prima della chiusura di un'asta a ribasso a cui partecipi" },
     { k:"request", icon:Search, label:"Richiesta cliente", desc:"Avvisami quando un cliente cerca questo prodotto" },
     { k:"outbid",  icon:Zap,    label:"Offerta superata",  desc:"Avvisami se un concorrente offre un prezzo più basso del tuo" },
   ],
@@ -41,17 +41,17 @@ const SEED_MATS = {
 };
 const SEED_NOTIFS = {
   buyer: [
-    { id:1, type:"pool",     mat:"Acido tartarico L(+)",        text:"È aperto un nuovo pool — miglior prezzo €1,68/kg, può solo scendere", time:"5 min fa", unread:true,  action:"Partecipa" },
-    { id:2, type:"price",    mat:"Acido tartarico L(+)",        text:"Prezzo sceso del 6% nel pool attivo: ora €1,62/kg", time:"2 ore fa", unread:true,  action:"Vedi pool" },
+    { id:1, type:"pool",     mat:"Acido tartarico L(+)",        text:"È aperta una nuova asta a ribasso — miglior prezzo €1,68/kg, può solo scendere", time:"5 min fa", unread:true,  action:"Partecipa" },
+    { id:2, type:"price",    mat:"Acido tartarico L(+)",        text:"Prezzo sceso del 6% nell'asta a ribasso attiva: ora €1,62/kg", time:"2 ore fa", unread:true,  action:"Vedi asta" },
     { id:3, type:"supplier", mat:"Bentonite",                   text:"Nuovo fornitore certificato disponibile: Laviosa (IT)", time:"1 giorno fa", unread:false, action:"Vedi" },
-    { id:4, type:"pool",     mat:"Metabisolfito di potassio",   text:"Un pool sta per chiudere tra 8 ore", time:"1 giorno fa", unread:false, action:"Partecipa" },
+    { id:4, type:"pool",     mat:"Metabisolfito di potassio",   text:"Un'asta a ribasso sta per chiudere tra 8 ore", time:"1 giorno fa", unread:false, action:"Partecipa" },
   ],
   supplier: [
-    { id:5, type:"closing", mat:"Acido tartarico L(+)",  text:"Un pool a cui partecipi chiude tra 30 min — preparati a difendere o ribassare", time:"ora", unread:true,  action:"Vai al pool" },
-    { id:1, type:"pool",    mat:"Acido tartarico L(+)",   text:"Nuovo pool aperto: 9 aziende, 13.800 kg aggregati — fai la tua offerta", time:"12 min fa", unread:true,  action:"Fai un'offerta" },
+    { id:5, type:"closing", mat:"Acido tartarico L(+)",  text:"Un'asta a ribasso a cui partecipi chiude tra 30 min — preparati a difendere o ribassare", time:"ora", unread:true,  action:"Vai all'asta" },
+    { id:1, type:"pool",    mat:"Acido tartarico L(+)",   text:"Nuova asta a ribasso aperta: 9 aziende, 13.800 kg aggregati — fai la tua offerta", time:"12 min fa", unread:true,  action:"Fai un'offerta" },
     { id:2, type:"outbid",  mat:"Acido tartarico L(+)",   text:"Sei stato superato: un concorrente offre €1,62/kg", time:"1 ora fa", unread:true,  action:"Rilancia" },
     { id:3, type:"request", mat:"Bitartrato di potassio", text:"Una cantina cerca questo prodotto (5t)", time:"3 ore fa", unread:false, action:"Rispondi" },
-    { id:4, type:"pool",    mat:"Acido metatartarico",    text:"Pool in chiusura tra 6 ore — ultima occasione per offrire", time:"1 giorno fa", unread:false, action:"Fai un'offerta" },
+    { id:4, type:"pool",    mat:"Acido metatartarico",    text:"Asta a ribasso in chiusura tra 6 ore — ultima occasione per offrire", time:"1 giorno fa", unread:false, action:"Fai un'offerta" },
   ],
 };
 const SEED_POOLS = {
@@ -177,7 +177,7 @@ export default function Dashboard() {
   const [wPrice, setWPrice] = useState("");
 
   // Apertura diretta di una sezione via querystring (es. /dashboard?section=pools,
-  // usato dal pulsante "Visualizza i tuoi pool" dopo l'adesione a un'asta).
+  // usato dal pulsante "Visualizza le tue aste" dopo l'adesione a un'asta).
   useEffect(() => {
     const s = new URLSearchParams(window.location.search).get("section");
     if (s) setSection(s);
@@ -280,7 +280,7 @@ export default function Dashboard() {
   const NAV = [
     { id:"overview", label:"Panoramica", icon:LayoutGrid },
     { id:"alerts",   label:"Avvisi & materie prime", icon:Bell },
-    { id:"pools",    label:"Pool attivi", icon:Gavel },
+    { id:"pools",    label:"Aste attive", icon:Gavel },
     { id:"notifs",   label:"Notifiche", icon:Inbox },
   ];
 
@@ -356,7 +356,7 @@ export default function Dashboard() {
                 {[
                   { icon:Boxes, color:C.blue,   val:Object.keys(cur).length, lab:"Materie monitorate" },
                   { icon:Bell,  color:C.purple, val:activeAlerts, lab:"Avvisi attivi" },
-                  { icon:Gavel, color:C.amber,  val:pools.length, lab:"Pool in corso" },
+                  { icon:Gavel, color:C.amber,  val:pools.length, lab:"Aste in corso" },
                   { icon:Inbox, color:C.red,    val:unread, lab:"Notifiche non lette" },
                 ].map((s,i)=>{ const Ico=s.icon; return (
                   <div key={i} className="bs-card" style={{ padding:16 }}>
@@ -382,7 +382,7 @@ export default function Dashboard() {
                 {/* active pools */}
                 <div className="bs-card" style={{ padding:18 }}>
                   <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:12 }}>
-                    <div style={{ fontSize:15, fontWeight:700 }}>Pool attivi</div>
+                    <div style={{ fontSize:15, fontWeight:700 }}>Aste attive</div>
                     <button onClick={()=>setSection("pools")} style={{ background:"none", border:"none", color:C.blue, fontSize:12.5, fontWeight:600, cursor:"pointer", fontFamily:"Inter,system-ui" }}>Gestisci</button>
                   </div>
                   <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
@@ -408,7 +408,7 @@ export default function Dashboard() {
           {section==="alerts" && (
             <>
               <h1 style={{ fontSize:23, fontWeight:800, marginBottom:4 }}>Avvisi & materie prime</h1>
-              <p style={{ fontSize:14, color:C.muted, marginBottom:20 }}>Le materie prime che segui e gli avvisi che vuoi ricevere. {role==="buyer"?"Gli avvisi ti fanno cogliere i pool e i cali di prezzo.":"Gli avvisi ti segnalano dove puoi offrire e competere."}</p>
+              <p style={{ fontSize:14, color:C.muted, marginBottom:20 }}>Le materie prime che segui e gli avvisi che vuoi ricevere. {role==="buyer"?"Gli avvisi ti fanno cogliere le aste a ribasso e i cali di prezzo.":"Gli avvisi ti segnalano dove puoi offrire e competere."}</p>
 
               {/* ADD */}
               <div className="bs-card" style={{ padding:18, marginBottom:18 }}>
@@ -465,8 +465,8 @@ export default function Dashboard() {
           {/* ===== POOLS ===== */}
           {section==="pools" && (
             <>
-              <h1 style={{ fontSize:23, fontWeight:800, marginBottom:4 }}>Pool attivi</h1>
-              <p style={{ fontSize:14, color:C.muted, marginBottom:20 }}>{role==="buyer"?"I pool a cui stai partecipando. Il prezzo può solo scendere fino alla chiusura.":"I pool in cui stai competendo. Rilancia per restare il più conveniente."}</p>
+              <h1 style={{ fontSize:23, fontWeight:800, marginBottom:4 }}>Aste attive</h1>
+              <p style={{ fontSize:14, color:C.muted, marginBottom:20 }}>{role==="buyer"?"Le aste a ribasso a cui stai partecipando. Il prezzo può solo scendere fino alla chiusura.":"Le aste a ribasso in cui stai competendo. Rilancia per restare il più conveniente."}</p>
 
               {/* FINAL PHASE — post-close counter-offers (supplier only) */}
               {role==="supplier" && (
@@ -483,7 +483,7 @@ export default function Dashboard() {
                   </div>
                   <div style={{ padding:18 }}>
                     <div style={{ fontSize:12.5, color:C.muted, lineHeight:1.6, marginBottom:16, background:C.bg, borderRadius:10, padding:"12px 14px" }}>
-                      Il pool è chiuso. Per <b style={{color:C.text}}>5 minuti</b> chi ha perso può fare <b style={{color:C.text}}>una sola</b> contro-offerta a ribasso. Per ogni contro-offerta, il vincitore ha <b style={{color:C.text}}>5 minuti</b> (dal momento della contro-offerta) per rispondere <b style={{color:C.text}}>una sola volta</b> e restare vincitore. Nel caso peggiore il pool si chiude dopo <b style={{color:C.text}}>10 minuti</b>.
+                      L'asta è chiusa. Per <b style={{color:C.text}}>5 minuti</b> chi ha perso può fare <b style={{color:C.text}}>una sola</b> contro-offerta a ribasso. Per ogni contro-offerta, il vincitore ha <b style={{color:C.text}}>5 minuti</b> (dal momento della contro-offerta) per rispondere <b style={{color:C.text}}>una sola volta</b> e restare vincitore. Nel caso peggiore l'asta si chiude dopo <b style={{color:C.text}}>10 minuti</b>.
                     </div>
 
                     {finalView==="challenger" ? (
@@ -516,7 +516,7 @@ export default function Dashboard() {
                     ) : (
                       <div>
                         <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:14 }}>
-                          <Trophy size={18} color={C.amber}/><span style={{ fontSize:14 }}>Hai <b style={{color:C.green}}>vinto</b> il pool a <b className="bs-num">€1,62/kg</b></span>
+                          <Trophy size={18} color={C.amber}/><span style={{ fontSize:14 }}>Hai <b style={{color:C.green}}>vinto</b> l'asta a <b className="bs-num">€1,62/kg</b></span>
                         </div>
                         {!wIncoming ? (
                           <div style={{ border:`1px solid ${C.border}`, borderRadius:12, padding:16, textAlign:"center" }}>
@@ -564,7 +564,7 @@ export default function Dashboard() {
                       <div><div style={{ fontSize:11, color:C.muted }}>Fornitori in gara</div><div className="bs-num" style={{ fontSize:18, fontWeight:800 }}>{p.suppliers}</div></div>
                     </div>
                     <button onClick={() => { window.location.href = p.id ? `/pool?id=${p.id}` : "/pool"; }} style={{ background:C.purple, color:"#fff", border:"none", borderRadius:9, padding:"10px 18px", fontSize:14, fontWeight:700, cursor:"pointer", fontFamily:"Inter,system-ui", display:"inline-flex", alignItems:"center", gap:7 }}>
-                      {role==="buyer" ? <>Vai al pool <ChevronRight size={15}/></> : <><Zap size={15}/> Rilancia offerta</>}
+                      {role==="buyer" ? <>Vai all'asta <ChevronRight size={15}/></> : <><Zap size={15}/> Rilancia offerta</>}
                     </button>
                   </div>
                 ))}
