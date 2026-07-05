@@ -236,7 +236,7 @@ export default function BulkStrikeLight() {
           {/* Nav right — su mobile, margin-left:auto lo spinge a destra del logo dato che la ricerca qui sopra è nascosta */}
           <div style={{ display:"flex", alignItems:"center", gap:20, flexShrink:0, marginLeft:"auto" }}>
             <div className="bs-nav-links" style={{ display:"flex", gap:20 }}>
-              {[["Aste attive","/pool"],["Prodotti","/catalogo"],["Fornitori","/fornitori"],["Corrieri","/corriere"],["Come funziona","#come-funziona"]].map(([l,href]) => (
+              {[["Aste attive","/pool"],["Prodotti","/catalogo"],["Fornitori","/fornitori"],["Corrieri","/corrieri"],["Come funziona","#come-funziona"]].map(([l,href]) => (
                 <span key={l} onClick={() => { window.location.href = href; }} style={{ fontSize:14, color:C.muted, cursor:"pointer", fontWeight:500, whiteSpace:"nowrap" }}>{l}</span>
               ))}
             </div>
@@ -252,7 +252,7 @@ export default function BulkStrikeLight() {
         {/* Menu a lineette aperto — solo mobile */}
         {mobileMenuOpen && (
           <div className="bs-mobile-menu-panel">
-            {[["Aste attive","/pool"],["Prodotti","/catalogo"],["Fornitori","/fornitori"],["Corrieri","/corriere"],["Come funziona","#come-funziona"]].map(([l,href]) => (
+            {[["Aste attive","/pool"],["Prodotti","/catalogo"],["Fornitori","/fornitori"],["Corrieri","/corrieri"],["Come funziona","#come-funziona"]].map(([l,href]) => (
               <div key={l} onClick={() => { window.location.href = href; }} style={{ padding:"13px 20px", fontSize:15, fontWeight:600, color:C.text, borderBottom:`1px solid ${C.border}`, cursor:"pointer" }}>{l}</div>
             ))}
           </div>

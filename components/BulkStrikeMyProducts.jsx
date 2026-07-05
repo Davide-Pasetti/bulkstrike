@@ -1,17 +1,25 @@
 "use client";
-// BulkStrikeMyProducts — pagina esclusiva fornitore (/i-miei-prodotti).
-// Qui il fornitore inserisce i prodotti che vende, con scaglioni di prezzo,
+// BulkStrikeMyProducts — LISTINO del fornitore (/i-miei-prodotti).
+// Qui il fornitore gestisce i prodotti che vende, con scaglioni di prezzo,
 // formati di vendita (unità) e varianti (granulometria, purezza, colore...).
 // Ogni riga supplier_products è una VARIANTE: uno stesso prodotto può avere
 // più righe (es. fine vs grossa). Gli attributi di variante non sono visibili
 // ai clienti finché un admin non li verifica (variant_status).
+//
+// Novità di questa versione:
+// - Import listino da PDF con AI: la edge function parse-supplier-price-list
+//   (gemella di parse-carrier-price-list) interpreta qualsiasi formato di
+//   listino e propone le righe; qui vengono abbinate ai prodotti del catalogo
+//   e riviste prima del salvataggio. Nessun salvataggio automatico.
+// - Duplicazione one-click di una variante (con scaglioni inclusi).
 import { useState, useEffect, useMemo } from "react";
-import { Plus, X, Check, Trash2, Pencil, AlertTriangle, Layers, Search, ChevronRight, Clock, Package, ShieldCheck } from "lucide-react";
+import { Plus, X, Check, Trash2, Pencil, AlertTriangle, Layers, Search, ChevronRight, Clock, Package, ShieldCheck, Copy, FileUp } from "lucide-react";
 import {
   getSession, getMyCompany, poolErrorMessage, searchProducts,
   getMySupplierListings, addSupplierProductVariant, updateSupplierProductVariant,
   deleteSupplierProductVariant, setSupplierProductTiers,
 } from "@/lib/api";
+import { supabase } from "@/lib/supabase"; // per invocare la edge function del PDF senza toccare lib/api
 import NavAuth from "@/components/BulkStrikeNavAuth";
 
 const C = { blue:"#0EA5E9", dark:"#0284C7", text:"#0F172A", muted:"#64748B", border:"#E2E8F0", bg:"#F8FAFE", green:"#059669", red:"#DC2626", amber:"#D97706", purple:"#7C3AED" };
@@ -64,6 +72,11 @@ export default function MyProductsPage() {
   const [attributes, setAttributes] = useState([]);
   const [tiers, setTiers] = useState([emptyTier()]);
   const [saving, setSaving] = useState(false);
+
+  // ---- Import da PDF (AI) ----
+  const [pdfParsing, setPdfParsing] = useState(false);
+  const [pdfRows, setPdfRows] = useState([]); // righe proposte da rivedere prima dell'import
+  const [importing, setImporting] = useState(false);
 
   useEffect(() => { load(); }, []);
 
@@ -174,6 +187,134 @@ export default function MyProductsPage() {
     catch (e) { setErr(poolErrorMessage(e)); }
   }
 
+  // ---- DUPLICAZIONE one-click: copia variante + scaglioni, pronta da modificare ----
+  async function handleDuplicate(v) {
+    setErr(""); setOkMsg("");
+    if (!v.product?.id) { setErr("Prodotto della variante non riconosciuto."); return; }
+    try {
+      const payload = {
+        grade: v.grade ? `${v.grade} (copia)` : "Copia",
+        origin: v.origin || null,
+        min_order_kg: v.min_order_kg ?? null,
+        lead_time_days: v.lead_time_days ?? null,
+        certifications: v.certifications || [],
+        available_formats: v.available_formats?.length ? v.available_formats.map(f => ({ label:f.label, size_kg:Number(f.size_kg) })) : [emptyFormat()],
+        variant_attributes: v.variant_attributes || {},
+      };
+      const row = await addSupplierProductVariant(v.product.id, payload);
+      const dupTiers = (v.price_tiers || []).map(t => ({ min_kg:Number(t.min_kg), max_kg:t.max_kg == null ? null : Number(t.max_kg), price_per_kg:Number(t.price_per_kg) }));
+      if (dupTiers.length) await setSupplierProductTiers(row.id, dupTiers);
+      await load();
+      setOkMsg("Variante duplicata (con scaglioni): aprila con la matita per modificarla.");
+    } catch (e) { setErr(poolErrorMessage(e)); }
+  }
+
+  // ---- IMPORT DA PDF (AI) ----
+
+  // Abbina il nome letto dal PDF a un prodotto del catalogo: prova il nome
+  // completo, poi le prime 2 parole, poi la prima. Match esatto se possibile.
+  async function findProductFor(name) {
+    const clean = (name || "").trim();
+    if (!clean) return null;
+    const words = clean.split(/\s+/);
+    const tries = [clean, words.slice(0, 2).join(" "), words[0]];
+    for (const t of tries) {
+      if (!t || t.length < 2) continue;
+      const res = await searchProducts(t).catch(() => []);
+      if (res.length) {
+        const exact = res.find(r => (r.canonical_name || "").trim().toLowerCase() === clean.toLowerCase());
+        return exact || res[0];
+      }
+    }
+    return null;
+  }
+
+  async function handlePdfFile(e) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setErr(""); setOkMsg(""); setPdfParsing(true); setPdfRows([]);
+    try {
+      const base64 = await new Promise((res, rej) => {
+        const r = new FileReader();
+        r.onload = () => res(String(r.result).split(",")[1]);
+        r.onerror = () => rej(new Error("Lettura file non riuscita"));
+        r.readAsDataURL(file);
+      });
+      const { data, error } = await supabase.functions.invoke("parse-supplier-price-list", { body: { pdfBase64: base64 } });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      const parsed = data?.products || [];
+      if (!parsed.length) { setErr("Nessun prodotto riconosciuto nel PDF."); setPdfParsing(false); return; }
+      const rows = [];
+      for (const p of parsed) {
+        const matched = await findProductFor(p.product_name);
+        rows.push({
+          include: true,
+          source_name: p.product_name || "?",
+          product: matched, // { id, canonical_name } | null → da abbinare a mano
+          q: "", qResults: [],
+          grade: p.grade || "",
+          origin: p.origin || "",
+          min_order_kg: p.min_order_kg ?? "",
+          lead_time_days: p.lead_time_days ?? "",
+          format_label: p.format_label || "sacco",
+          format_size_kg: p.format_size_kg ?? 25,
+          tiers: (p.tiers?.length ? p.tiers : [{ min_kg:0, max_kg:null, price_per_kg:"" }]).map(t => ({
+            min_kg: t.min_kg ?? 0, max_kg: t.max_kg ?? "", price_per_kg: t.price_per_kg ?? "",
+          })),
+        });
+      }
+      setPdfRows(rows);
+    } catch (e2) { setErr("Lettura PDF non riuscita: " + (e2?.message || e2)); }
+    setPdfParsing(false);
+  }
+
+  const updatePdfRow = (i, patch) => setPdfRows(p => p.map((r, idx) => idx === i ? { ...r, ...patch } : r));
+  const updatePdfTier = (i, j, patch) => setPdfRows(p => p.map((r, idx) => idx === i ? { ...r, tiers: r.tiers.map((t, tj) => tj === j ? { ...t, ...patch } : t) } : r));
+  const addPdfTier = (i) => setPdfRows(p => p.map((r, idx) => idx === i ? { ...r, tiers: [...r.tiers, emptyTier()] } : r));
+  const removePdfTier = (i, j) => setPdfRows(p => p.map((r, idx) => idx === i ? { ...r, tiers: r.tiers.filter((_, tj) => tj !== j) } : r));
+
+  const setRowQuery = (i, q) => {
+    updatePdfRow(i, { q });
+    if (q.trim().length >= 2) searchProducts(q).then(res => updatePdfRow(i, { qResults: res })).catch(() => {});
+    else updatePdfRow(i, { qResults: [] });
+  };
+
+  async function handleImportRows() {
+    setErr(""); setOkMsg("");
+    const selected = pdfRows.filter(r => r.include);
+    if (!selected.length) { setErr("Nessuna riga selezionata."); return; }
+    const unmatched = selected.filter(r => !r.product);
+    if (unmatched.length) { setErr(`${unmatched.length} righe selezionate non hanno un prodotto abbinato: abbinale o deselezionale.`); return; }
+    setImporting(true);
+    let ok = 0, ko = 0;
+    for (const r of selected) {
+      try {
+        const validTiers = (r.tiers || []).filter(t => t.min_kg !== "" && t.price_per_kg !== "" && t.price_per_kg != null).map(t => ({
+          min_kg: Number(t.min_kg), max_kg: t.max_kg === "" || t.max_kg == null ? null : Number(t.max_kg), price_per_kg: Number(t.price_per_kg),
+        }));
+        if (!validTiers.length) { ko++; continue; }
+        const payload = {
+          grade: r.grade || null,
+          origin: r.origin || null,
+          min_order_kg: r.min_order_kg === "" || r.min_order_kg == null ? null : Number(r.min_order_kg),
+          lead_time_days: r.lead_time_days === "" || r.lead_time_days == null ? null : Number(r.lead_time_days),
+          certifications: [],
+          available_formats: [{ label: r.format_label || "sacco", size_kg: Number(r.format_size_kg) || 25 }],
+          variant_attributes: {},
+        };
+        const row = await addSupplierProductVariant(r.product.id, payload);
+        await setSupplierProductTiers(row.id, validTiers);
+        ok++;
+      } catch (e) { ko++; }
+    }
+    setImporting(false);
+    setPdfRows([]);
+    await load();
+    setOkMsg(`Import completato: ${ok} ${ok === 1 ? "listino creato" : "listini creati"}${ko ? `, ${ko} scartati (prezzi mancanti o errore)` : ""}.`);
+  }
+
   const addFormatRow = () => setFormats(p => [...p, emptyFormat()]);
   const removeFormatRow = (i) => setFormats(p => p.filter((_,idx) => idx !== i));
   const updateFormatRow = (i, patch) => setFormats(p => p.map((f,idx) => idx === i ? { ...f, ...patch } : f));
@@ -199,7 +340,7 @@ export default function MyProductsPage() {
         .mp-label { display:block; font-size:11.5px; font-weight:600; color:${C.muted}; margin-bottom:5px; }
         .mp-btn { background:${C.blue}; color:#fff; border:none; border-radius:9px; padding:11px 20px; font-size:14px; font-weight:700; cursor:pointer; display:inline-flex; align-items:center; gap:7px; font-family:'Inter',system-ui; }
         .mp-btn:disabled { opacity:0.5; cursor:default; }
-        .mp-btn-out { background:transparent; color:${C.muted}; border:1px solid ${C.border}; border-radius:9px; padding:11px 18px; font-size:14px; font-weight:600; cursor:pointer; font-family:'Inter',system-ui; }
+        .mp-btn-out { background:transparent; color:${C.muted}; border:1px solid ${C.border}; border-radius:9px; padding:11px 18px; font-size:14px; font-weight:600; cursor:pointer; font-family:'Inter',system-ui; display:inline-flex; align-items:center; gap:7px; }
         .mp-row-grid { display:grid; grid-template-columns:1fr 1fr 1fr auto; gap:8px; align-items:end; margin-bottom:8px; }
         @media (max-width:700px) { .mp-row-grid { grid-template-columns:1fr 1fr !important; } .mp-nav-links { display:none !important; } }
       `}</style>
@@ -225,7 +366,7 @@ export default function MyProductsPage() {
       <div style={{ maxWidth:1100, margin:"0 auto", padding:"22px 20px 60px" }}>
         <div style={{ display:"flex", alignItems:"center", gap:8, fontSize:13, color:C.muted, marginBottom:18 }}>
           <span onClick={() => { window.location.href = "/dashboard"; }} style={{ cursor:"pointer" }}>Dashboard</span><ChevronRight size={13}/>
-          <span style={{ color:C.text, fontWeight:600 }}>I miei prodotti</span>
+          <span style={{ color:C.text, fontWeight:600 }}>Listino</span>
         </div>
 
         {loading ? (
@@ -244,15 +385,95 @@ export default function MyProductsPage() {
         ) : (
           <>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6, flexWrap:"wrap", gap:10 }}>
-              <h1 style={{ fontSize:26, fontWeight:800, letterSpacing:"-0.02em" }}>I miei prodotti</h1>
-              {!showForm && <button onClick={() => openAddForm()} className="mp-btn"><Plus size={16}/> Aggiungi prodotto</button>}
+              <h1 style={{ fontSize:26, fontWeight:800, letterSpacing:"-0.02em" }}>Listino</h1>
+              <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+                <label className="mp-btn-out" style={{ color:C.purple, borderColor:"#DDD6FE", cursor: pdfParsing ? "default" : "pointer", opacity: pdfParsing ? 0.6 : 1 }}>
+                  <FileUp size={15}/> {pdfParsing ? "Lettura PDF in corso…" : "Importa da PDF (AI)"}
+                  <input type="file" accept="application/pdf" onChange={handlePdfFile} disabled={pdfParsing} style={{ display:"none" }} />
+                </label>
+                {!showForm && <button onClick={() => openAddForm()} className="mp-btn"><Plus size={16}/> Aggiungi prodotto</button>}
+              </div>
             </div>
-            <p style={{ fontSize:13.5, color:C.muted, marginBottom:20, maxWidth:640 }}>
-              Ogni prodotto può avere più varianti (es. granulometria, purezza, colore diversi), ognuna con il proprio prezzo e formato di vendita. Gli attributi di variante compaiono ai clienti solo dopo una verifica.
+            <p style={{ fontSize:13.5, color:C.muted, marginBottom:20, maxWidth:680 }}>
+              Ogni prodotto può avere più varianti (es. granulometria, purezza, colore diversi), ognuna con il proprio prezzo e formato di vendita. Puoi anche caricare il tuo listino in PDF: l'AI lo interpreta e ti propone le righe da confermare. Gli attributi di variante compaiono ai clienti solo dopo una verifica.
             </p>
 
             {err && <div style={{ marginBottom:16, padding:"10px 14px", background:"#FEF2F2", border:"1px solid #FECACA", borderRadius:9, fontSize:13, color:C.red }}>{err}</div>}
             {okMsg && <div style={{ marginBottom:16, padding:"10px 14px", background:"#ECFDF5", border:"1px solid #A7F3D0", borderRadius:9, fontSize:13, color:C.green }}>{okMsg}</div>}
+
+            {/* ── REVISIONE IMPORT PDF ── */}
+            {pdfRows.length > 0 && (
+              <div className="mp-card" style={{ marginBottom:24, borderColor:"#DDD6FE" }}>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6, flexWrap:"wrap", gap:8 }}>
+                  <div style={{ fontSize:15, fontWeight:700, color:C.purple }}>Listino letto dal PDF — {pdfRows.length} prodotti da rivedere</div>
+                  <button onClick={() => setPdfRows([])} style={{ background:"none", border:"none", cursor:"pointer", color:C.muted }}><X size={18}/></button>
+                </div>
+                <p style={{ fontSize:12.5, color:C.muted, margin:"0 0 14px" }}>
+                  Controlla l'abbinamento al catalogo e i prezzi, deseleziona quello che non vuoi importare, poi conferma. Nulla viene salvato prima della conferma.
+                </p>
+                <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+                  {pdfRows.map((r, i) => (
+                    <div key={i} style={{ border:`1px solid ${r.include ? C.border : "#F1F5F9"}`, borderRadius:10, padding:"12px 14px", opacity: r.include ? 1 : 0.55 }}>
+                      <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap", marginBottom:10 }}>
+                        <input type="checkbox" checked={r.include} onChange={e => updatePdfRow(i, { include: e.target.checked })} style={{ accentColor:C.purple, width:16, height:16, flexShrink:0 }} />
+                        <span style={{ fontSize:13.5, fontWeight:700 }}>{r.source_name}</span>
+                        <span style={{ fontSize:11.5, color:C.muted }}>dal PDF</span>
+                        {r.product ? (
+                          <span className="mp-chip" style={{ background:"#ECFDF5", color:C.green }}>
+                            <Check size={11}/> {r.product.canonical_name}
+                            <X size={11} style={{ cursor:"pointer", marginLeft:2 }} onClick={() => updatePdfRow(i, { product:null })} />
+                          </span>
+                        ) : (
+                          <span className="mp-chip" style={{ background:"#FEF2F2", color:C.red }}><AlertTriangle size={11}/> Da abbinare al catalogo</span>
+                        )}
+                      </div>
+
+                      {!r.product && (
+                        <div style={{ marginBottom:10, position:"relative", maxWidth:420 }}>
+                          <Search size={14} color={C.muted} style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)" }}/>
+                          <input className="mp-input" style={{ paddingLeft:32 }} value={r.q} onChange={e => setRowQuery(i, e.target.value)} placeholder="Cerca il prodotto nel catalogo…" />
+                          {r.qResults.length > 0 && (
+                            <div style={{ border:`1px solid ${C.border}`, borderRadius:8, marginTop:5, maxHeight:170, overflowY:"auto", background:"#fff" }}>
+                              {r.qResults.map(p => (
+                                <div key={p.id} onClick={() => updatePdfRow(i, { product:p, qResults:[], q:"" })} style={{ padding:"8px 11px", cursor:"pointer", borderBottom:`1px solid ${C.border}`, fontSize:13 }}>
+                                  {p.canonical_name} {p.e_number && <span style={{ color:C.muted }}>· {p.e_number}</span>}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(130px,1fr))", gap:8, marginBottom:10 }}>
+                        <div><label className="mp-label">Grade</label><input className="mp-input" value={r.grade} onChange={e => updatePdfRow(i, { grade:e.target.value })} placeholder="Es. Food Grade" /></div>
+                        <div><label className="mp-label">Origine</label><input className="mp-input" value={r.origin} onChange={e => updatePdfRow(i, { origin:e.target.value })} placeholder="Es. Italia" /></div>
+                        <div><label className="mp-label">Ordine min (kg)</label><input className="mp-input" type="number" value={r.min_order_kg} onChange={e => updatePdfRow(i, { min_order_kg:e.target.value })} /></div>
+                        <div><label className="mp-label">Lead time (gg)</label><input className="mp-input" type="number" value={r.lead_time_days} onChange={e => updatePdfRow(i, { lead_time_days:e.target.value })} /></div>
+                        <div><label className="mp-label">Formato</label><input className="mp-input" value={r.format_label} onChange={e => updatePdfRow(i, { format_label:e.target.value })} placeholder="sacco" /></div>
+                        <div><label className="mp-label">kg per unità</label><input className="mp-input" type="number" value={r.format_size_kg} onChange={e => updatePdfRow(i, { format_size_kg:e.target.value })} /></div>
+                      </div>
+
+                      <label className="mp-label">Scaglioni (kg min · kg max · €/kg)</label>
+                      {r.tiers.map((t, j) => (
+                        <div key={j} className="mp-row-grid">
+                          <input className="mp-input" type="number" value={t.min_kg} onChange={e => updatePdfTier(i, j, { min_kg:e.target.value })} placeholder="kg min" />
+                          <input className="mp-input" type="number" value={t.max_kg} onChange={e => updatePdfTier(i, j, { max_kg:e.target.value })} placeholder="kg max (vuoto = ∞)" />
+                          <input className="mp-input" type="number" step="0.01" value={t.price_per_kg} onChange={e => updatePdfTier(i, j, { price_per_kg:e.target.value })} placeholder="€/kg" />
+                          <button onClick={() => removePdfTier(i, j)} disabled={r.tiers.length===1} style={{ background:"none", border:`1px solid ${C.border}`, borderRadius:8, width:36, height:36, cursor:r.tiers.length===1?"default":"pointer", color:C.muted, opacity:r.tiers.length===1?0.4:1 }}><Trash2 size={14}/></button>
+                        </div>
+                      ))}
+                      <button onClick={() => addPdfTier(i)} style={{ background:"none", border:"none", color:C.blue, fontSize:12.5, fontWeight:600, cursor:"pointer", display:"flex", alignItems:"center", gap:5, padding:0 }}><Plus size={13}/> Aggiungi scaglione</button>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ display:"flex", gap:10, marginTop:16, flexWrap:"wrap" }}>
+                  <button onClick={handleImportRows} disabled={importing} className="mp-btn" style={{ background:C.purple }}>
+                    <Check size={16}/> {importing ? "Import in corso…" : `Importa ${pdfRows.filter(r => r.include).length} selezionati`}
+                  </button>
+                  <button onClick={() => setPdfRows([])} className="mp-btn-out">Annulla</button>
+                </div>
+              </div>
+            )}
 
             {/* FORM aggiungi/modifica */}
             {showForm && (
@@ -375,7 +596,7 @@ export default function MyProductsPage() {
             )}
 
             {/* ELENCO PRODOTTI/VARIANTI */}
-            {grouped.length === 0 && !showForm ? (
+            {grouped.length === 0 && !showForm && pdfRows.length === 0 ? (
               <div style={{ padding:"40px 20px", textAlign:"center", border:`1px solid ${C.border}`, borderRadius:14, color:C.muted }}>
                 <Package size={26} color={C.border} style={{ marginBottom:8 }}/>
                 <div style={{ fontSize:14 }}>Non hai ancora nessun prodotto a listino.</div>
@@ -422,8 +643,9 @@ export default function MyProductsPage() {
                                 </div>
                               </div>
                               <div style={{ display:"flex", gap:6, flexShrink:0 }}>
-                                <button onClick={() => openEditForm(v)} style={{ background:"none", border:`1px solid ${C.border}`, borderRadius:8, width:34, height:34, cursor:"pointer", color:C.muted, display:"flex", alignItems:"center", justifyContent:"center" }}><Pencil size={14}/></button>
-                                <button onClick={() => handleDelete(v.id)} style={{ background:"none", border:`1px solid ${C.border}`, borderRadius:8, width:34, height:34, cursor:"pointer", color:C.red, display:"flex", alignItems:"center", justifyContent:"center" }}><Trash2 size={14}/></button>
+                                <button onClick={() => handleDuplicate(v)} title="Duplica variante (con scaglioni)" style={{ background:"none", border:`1px solid ${C.border}`, borderRadius:8, width:34, height:34, cursor:"pointer", color:C.blue, display:"flex", alignItems:"center", justifyContent:"center" }}><Copy size={14}/></button>
+                                <button onClick={() => openEditForm(v)} title="Modifica" style={{ background:"none", border:`1px solid ${C.border}`, borderRadius:8, width:34, height:34, cursor:"pointer", color:C.muted, display:"flex", alignItems:"center", justifyContent:"center" }}><Pencil size={14}/></button>
+                                <button onClick={() => handleDelete(v.id)} title="Elimina" style={{ background:"none", border:`1px solid ${C.border}`, borderRadius:8, width:34, height:34, cursor:"pointer", color:C.red, display:"flex", alignItems:"center", justifyContent:"center" }}><Trash2 size={14}/></button>
                               </div>
                             </div>
                           </div>
