@@ -5,10 +5,14 @@
 // ordinamento e ricerca. Tutto lato client sui dati di get_catalog().
 // I prezzi (best_price) sono già IVA e spedizione escluse lato server (min
 // price_per_kg dai price_tiers) — qui aggiungiamo solo la dicitura esplicita.
+// La barra di ricerca in nav usa il componente condiviso ProductSearch:
+// dropdown di suggerimenti (nome+CAS+E-number+sinonimi) e, in parallelo,
+// filtra live la griglia mentre digiti (onQueryChange → setQ).
 import { useState, useEffect, useMemo } from "react";
-import { Search, ChevronRight, X, Flame, Package, SlidersHorizontal, ShieldCheck, Gavel, Layers, FileCheck2, Boxes } from "lucide-react";
+import { ChevronRight, X, Flame, Package, SlidersHorizontal, ShieldCheck, Gavel, Layers, FileCheck2, Boxes } from "lucide-react";
 import { getCatalog, getMacroAreas } from "@/lib/api";
 import NavAuth from "@/components/BulkStrikeNavAuth";
+import ProductSearch from "@/components/BulkStrikeProductSearch";
 
 const C = { blue: "#0EA5E9", dark: "#0284C7", text: "#0F172A", muted: "#64748B", border: "#E2E8F0", bg: "#F8FAFE", green: "#059669", red: "#DC2626", amber: "#D97706", purple: "#7C3AED" };
 
@@ -121,10 +125,9 @@ export default function CatalogPage() {
             </div>
           </div>
           <div style={{ flex: 1, display: "flex", justifyContent: "center" }}>
-            <div style={{ display: "flex", border: `2px solid ${C.blue}`, borderRadius: 10, overflow: "hidden", height: 42, width: "100%", maxWidth: 520, background: "#fff" }}>
-              <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Cerca materie prime, CAS, E-number..." style={{ flex: 1, border: "none", padding: "0 14px", fontSize: 14, outline: "none", fontFamily: "Inter,system-ui" }} />
-              <button style={{ background: C.blue, border: "none", padding: "0 16px", cursor: "pointer" }}><Search size={18} color="#fff" /></button>
-            </div>
+            {/* Autocomplete + filtro live: onQueryChange filtra la griglia mentre digiti,
+                la lente/Invio segue la logica del componente (evidenziato → esatto → unico → filtro) */}
+            <ProductSearch value={q} height={42} maxWidth={520} placeholder="Cerca materie prime, CAS, E-number..." onQueryChange={setQ} onSubmitQuery={(t) => setQ(t)} />
           </div>
           <div className="cat-nav-links" style={{ gap: 18, alignItems: "center" }}>
             {[["Pool", "/pool"], ["Catalogo", "/catalogo"], ["Fornitori", "/fornitori"]].map(([l, href]) => <span key={l} onClick={() => { window.location.href = href; }} style={{ fontSize: 14, color: C.muted, cursor: "pointer", fontWeight: 500 }}>{l}</span>)}
@@ -256,7 +259,7 @@ export default function CatalogPage() {
                     style={{ border: `1px solid ${C.border}`, borderRadius: 12, padding: 14, cursor: "pointer", background: "#fff", display: "flex", flexDirection: "column", gap: 10, minHeight: 150 }}>
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
                       <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, color: C.muted, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 100, padding: "3px 9px", maxWidth: "100%", overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>
-                        <span>{activeSectorObj?.icon || p.primary_icon || "📦"}</span>{activeSectorObj?.name || p.primary_sector || "Materie prime"}
+                      <span>{activeSectorObj?.icon || p.primary_icon || "📦"}</span>{activeSectorObj?.name || p.primary_sector || "Materie prime"}
                       </span>
                       {p.has_pool && <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 10, fontWeight: 800, color: "#B45309", background: "#FEF3C7", borderRadius: 100, padding: "3px 8px", flexShrink: 0 }}><Flame size={11} />POOL</span>}
                     </div>
