@@ -221,7 +221,9 @@ export default function RegisterPage() {
 
   const emailOk = (v) => /^\S+@\S+\.\S+$/.test((v || "").trim());
   const filled = (v) => !!(v && v.trim());
-  const step1Valid = !!type && emailOk(f.email) && f.pass.length >= 8 && f.pass === f.pass2;
+  // 12 = minimo impostato su Supabase Auth (dashboard): tenere allineati,
+  // altrimenti l'errore arriva dal server senza spiegazione nel form
+  const step1Valid = !!type && emailOk(f.email) && f.pass.length >= 12 && f.pass === f.pass2;
   const step2Valid = filled(f.company) && filled(f.vat) && filled(f.country) && filled(f.city) && filled(f.address) && filled(f.phone) && filled(f.contact);
   const step3Valid = type === "supplier" || type === "carrier"
     ? emailOk(f.emailMgmt) && emailOk(f.emailAdmin) && filled(f.ibanHolder) && filled(f.iban) && canConsent
@@ -331,7 +333,7 @@ export default function RegisterPage() {
                       <input style={inputStyle} type="email" placeholder="nome@azienda.it" value={f.email} onChange={e=>set("email",e.target.value)}/>
                     </Field>
                     <Field icon={<Lock size={14} color={C.muted}/>} label="Password" required half>
-                      <input style={inputStyle} type="password" placeholder="Almeno 8 caratteri" value={f.pass} onChange={e=>set("pass",e.target.value)}/>
+                      <input style={inputStyle} type="password" placeholder="Almeno 12 caratteri" value={f.pass} onChange={e=>set("pass",e.target.value)}/>
                     </Field>
                     <Field icon={<Lock size={14} color={C.muted}/>} label="Conferma password" required half>
                       <input style={inputStyle} type="password" placeholder="Ripeti la password" value={f.pass2} onChange={e=>set("pass2",e.target.value)}/>
