@@ -9,7 +9,7 @@
 // ============================================================
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { RICEVUTA_EMITTENTE, PAYMENT_CONFIG } from '@/lib/payments/paymentConfig';
@@ -20,7 +20,19 @@ const eur = (n) =>
 const dataIt = (d) =>
   new Date(d).toLocaleDateString('it-IT', { day: '2-digit', month: 'long', year: 'numeric' });
 
+// Con cacheComponents attivo (next.config.ts) non si può usare
+// `export const dynamic = 'force-dynamic'`: useParams() va invece
+// racchiuso in un boundary <Suspense>, altrimenti il prerender in build
+// fallisce con "Uncached data was accessed outside of <Suspense>".
 export default function RicevutaPage() {
+  return (
+    <Suspense fallback={<p style={{ padding: 40 }}>Caricamento…</p>}>
+      <RicevutaContent />
+    </Suspense>
+  );
+}
+
+function RicevutaContent() {
   const { id } = useParams();
   const supabase = createClient();
   const [ricevuta, setRicevuta] = useState(null);
