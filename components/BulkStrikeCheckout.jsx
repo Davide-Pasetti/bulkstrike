@@ -71,6 +71,7 @@ export default function CheckoutPage() {
   const [addresses, setAddresses] = useState([]);
   const [companyAddress, setCompanyAddress] = useState(null); // testo sede legale, o null se non impostata
   const [selectedAddressId, setSelectedAddressId] = useState(""); // "__legal__" | id salvato
+  const [billingAddressId, setBillingAddressId] = useState(""); // "__legal__" | id salvato — indipendente dalla consegna
   const [showAddForm, setShowAddForm] = useState(false);
   const [newAddrText, setNewAddrText] = useState("");
   const [newAddrLabel, setNewAddrLabel] = useState("");
@@ -102,6 +103,9 @@ export default function CheckoutPage() {
         setCompanyAddress(legalText);
 
         const def = (savedAddrs || []).find(a => a.is_default);
+        // Fatturazione: di default la sede legale (corretto per l'emissione fattura),
+        // altrimenti il primo indirizzo salvato. Selezione indipendente dalla consegna.
+        setBillingAddressId(legalText ? "__legal__" : (savedAddrs?.[0]?.id || ""));
         if (def) {
           setSelectedAddressId(def.id);
           setAddress(def.address);
@@ -219,6 +223,7 @@ export default function CheckoutPage() {
 
   const subtotal = useMemo(() => items.reduce((a, it) => a + (it.unit_price != null ? Number(it.unit_price) * Number(it.quantity_kg) : 0), 0), [items]);
   const hasIssues = useMemo(() => items.some(it => !it.offer_active || it.unit_price == null || (it.min_order_kg != null && Number(it.quantity_kg) < Number(it.min_order_kg))), [items]);
+  const billingAddressText = billingAddressId === "__legal__" ? (companyAddress || "") : (addresses.find(a => a.id === billingAddressId)?.address || companyAddress || "");
 
   // pronti a pagare solo quando: i preventivi sono tutti arrivati, e ogni fornitore CHE HA
   // corrieri disponibili ha una selezione fatta (i fornitori senza corrieri vanno in attesa da soli).
@@ -369,16 +374,15 @@ export default function CheckoutPage() {
                   <div style={{ fontSize: 13, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: C.muted, marginBottom: 14, display: "flex", alignItems: "center", gap: 7 }}><Receipt size={15} /> Indirizzo di fatturazione</div>
 
                   <label style={{ fontSize: 12.5, fontWeight: 600, color: C.muted, display: "block", marginBottom: 6 }}>Indirizzo di fatturazione *</label>
-                  <select className="co-input" value="__legal__" disabled
-                    style={{ marginBottom: 8, background: "#F8FAFC", color: C.text, cursor: "default" }}>
-                    {companyAddress
-                      ? <option value="__legal__">Sede legale — {companyAddress}</option>
-                      : <option value="">Nessun indirizzo legale impostato</option>}
+                  <select className="co-input" value={billingAddressId} onChange={e => setBillingAddressId(e.target.value)} style={{ marginBottom: 8 }}>
+                    {companyAddress && <option value="__legal__">Sede legale — {companyAddress}</option>}
+                    {addresses.map(a => (
+                      <option key={a.id} value={a.id}>{a.label ? `${a.label} — ` : ""}{a.address}</option>
+                    ))}
+                    {!companyAddress && addresses.length === 0 && <option value="">Nessun indirizzo disponibile</option>}
                   </select>
                   <div style={{ fontSize: 11.5, color: C.muted }}>
-                    {companyAddress
-                      ? "Usato per l'emissione della fattura: corrisponde alla sede legale registrata dell'azienda. Per modificarlo, aggiorna i dati aziendali nel tuo profilo."
-                      : "Nessun indirizzo legale trovato: completa i dati della tua azienda nel profilo prima di procedere."}
+                    Usato per l'emissione della fattura. Di default è la sede legale — puoi scegliere un altro indirizzo salvato se la fattura va intestata altrove.
                   </div>
                 </div>
 
@@ -527,6 +531,7 @@ export default function CheckoutPage() {
                 <div style={{ border: `1px solid ${C.border}`, borderRadius: 14, padding: 20, marginBottom: 18 }}>
                   <div style={{ fontSize: 13, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: C.muted, marginBottom: 14 }}>Riepilogo</div>
                   <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13.5, marginBottom: 8 }}><span style={{ color: C.muted }}>Righe</span><span className="co-num" style={{ fontWeight: 600 }}>{items.length}</span></div>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13.5, marginBottom: 8 }}><span style={{ color: C.muted }}>Fatturazione</span><span style={{ fontWeight: 600, textAlign: "right", maxWidth: 280 }}>{billingAddressText}</span></div>
                   <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13.5, marginBottom: 8 }}><span style={{ color: C.muted }}>Consegna</span><span style={{ fontWeight: 600, textAlign: "right", maxWidth: 280 }}>{address}</span></div>
                   <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13.5, marginBottom: 8 }}><span style={{ color: C.muted }}>Commissioni BulkStrike</span><span className="co-num" style={{ fontWeight: 700, color: C.green }}>€0,00</span></div>
 
