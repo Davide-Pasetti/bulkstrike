@@ -46,18 +46,6 @@ if (!filePath) {
   process.exit(1);
 }
 
-// ── Mappa: supplier_type Europages → BulkStrike ──────────────────
-const SUPPLIER_TYPE_MAP = {
-  'manufacturer':        'producer',
-  'manufacturer/producer': 'producer',
-  'producer':            'producer',
-  'fabbricante/produttore': 'producer',
-  'wholesaler':          'distributor',
-  'grossista':           'distributor',
-  'distributor':         'distributor',
-  'trading company':     'distributor',
-  'service provider':    'distributor',
-};
 
 function mapSupplierType(categories = []) {
   const joined = categories.join(' ').toLowerCase();
@@ -250,7 +238,7 @@ async function main() {
 
   // Upsert a batch di 100
   const BATCH = 100;
-  let inserted = 0, updated = 0, errors = 0;
+  let inserted = 0, errors = 0;
 
   for (let i = 0; i < rows.length; i += BATCH) {
     const batch = rows.slice(i, i + BATCH);
@@ -258,7 +246,7 @@ async function main() {
       const result = await upsertBatch(batch);
       inserted += result.length;
       process.stdout.write(`  ⬆  ${Math.min(i + BATCH, rows.length)}/${rows.length} \r`);
-    } catch (err) {
+    } catch {
       // Prova record per record se il batch fallisce
       for (const row of batch) {
         try {
