@@ -1,11 +1,11 @@
 import { useState, useEffect } from "react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
-import { Search, Bot, ArrowRight, Check, Clock, ChevronRight, TrendingDown, X, ChevronDown } from "lucide-react";
-import { getMacroAreas, getSectorProducts, searchProducts } from "@/lib/api";
+import { Bot, ArrowRight, Check, Clock, ChevronRight, TrendingDown, X, ChevronDown, Menu } from "lucide-react";
+import { getMacroAreas, getSectorProducts } from "@/lib/api";
 import NavAuth from "@/components/BulkStrikeNavAuth";
+import ProductSearch from "@/components/BulkStrikeProductSearch";
 
-// ─── DATA ─────────────────────────────────────────────────────────────────────
-const SEARCH_CATS = ["Tutte le categorie","Chimica","Metallurgia","Agricoltura","Tessuti","Plastiche","Minerali","Alimentari","Farmaceutici","Carta","Energia","Gomma"];
+// ─── DATA ───────────────────────────────────────────────────────────────────
 
 // icona + colori per i settori reali (chiave = slug dal DB)
 const SECTOR_ICONS = {
@@ -71,7 +71,7 @@ const AI_MSGS = [
   { u:false, t:"✅ Iscritto. 4t · Acido Citrico E330 · €0,99/kg all-in.\nTi avviso quando l'asta si completa. 🚀" },
 ];
 
-// ─── LOGO ICON ────────────────────────────────────────────────────────────────
+// ─── LOGO ICON ──────────────────────────────────────────────────────────────
 function BSIcon({ size = 36, uid = "a" }) {
   // Nuovo logo: 3 linee convergono su un punto (arancio) che "scende" in una base verde — clienti, fornitori e corrieri che si incontrano su BulkStrike.
   return (
@@ -87,7 +87,7 @@ function BSIcon({ size = 36, uid = "a" }) {
   );
 }
 
-// ─── MAIN ─────────────────────────────────────────────────────────────────────
+// ─── MAIN ───────────────────────────────────────────────────────────────────
 function CookieBanner() {
   const [show, setShow] = useState(false);
   useEffect(() => {
@@ -109,9 +109,8 @@ function CookieBanner() {
 }
 
 export default function BulkStrikeLight() {
-  const [searchCat, setSearchCat]   = useState("Tutte le categorie");
-  const [showCatDd, setShowCatDd]   = useState(false);
-  const [searchQ, setSearchQ]       = useState("");
+  const [sectorsExpanded, setSectorsExpanded] = useState(false); // solo mobile: mostra tutte le icone settore
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false); // menu a lineette, solo mobile
   const [activeChart, setActiveChart] = useState("Acido Citrico");
   const [activeTab, setActiveTab]   = useState("acquirente");
   const [chatOpen, setChatOpen]     = useState(false);
@@ -121,8 +120,6 @@ export default function BulkStrikeLight() {
   const [activeSector, setActiveSector]   = useState(null);
   const [sectorProducts, setSectorProducts] = useState([]);
   const [loadingProducts, setLoadingProducts] = useState(false);
-  const [searchResults, setSearchResults] = useState([]);
-  const [searchOpen, setSearchOpen]       = useState(false);
 
   useEffect(() => {
     const targets = { pools:142, materials:2400, countries:38, volume:12 };
@@ -146,21 +143,6 @@ export default function BulkStrikeLight() {
       .catch(() => setLoadingProducts(false));
   };
 
-  useEffect(() => {
-    const q = searchQ.trim();
-    if (q.length < 2) { setSearchResults([]); setSearchOpen(false); return; }
-    const t = setTimeout(() => {
-      searchProducts(q).then(rows => { setSearchResults(rows); setSearchOpen(true); }).catch(() => {});
-    }, 250);
-    return () => clearTimeout(t);
-  }, [searchQ]);
-
-  function runSearch() {
-    const q = searchQ.trim();
-    if (q.length < 2) { setSearchResults([]); setSearchOpen(false); return; }
-    searchProducts(q).then(rows => { setSearchResults(rows); setSearchOpen(true); }).catch(() => {});
-  }
-
   const C = { blue:"#0EA5E9", dark:"#0284C7", text:"#0F172A", muted:"#64748B", border:"#E2E8F0", bg:"#F8FAFE", green:"#059669", red:"#DC2626", amber:"#D97706" };
 
   return (
@@ -177,6 +159,7 @@ export default function BulkStrikeLight() {
         .bs-cats::-webkit-scrollbar { display:none; }
         .bs-cat { display:flex; flex-direction:column; align-items:center; gap:8px; cursor:pointer; flex-shrink:0; width:76px; transition:transform 0.15s; }
         .bs-cat:hover { transform:translateY(-2px); }
+        .bs-cat-label { text-align:center; line-height:1.25; }
         .bs-cat-icon { width:56px; height:56px; border-radius:14px; display:flex; align-items:center; justify-content:center; font-size:26px; border:1.5px solid; transition:all 0.15s; }
         .bs-cat.active .bs-cat-icon { outline:2px solid #0EA5E9; outline-offset:2px; }
         .bs-section { max-width:1280px; margin:0 auto; padding:64px 24px; }
@@ -194,17 +177,14 @@ export default function BulkStrikeLight() {
         .bs-h2 { font-size:34px; font-weight:800; letter-spacing:-0.02em; }
         .bs-progress { height:6px; background:#E2E8F0; border-radius:100px; overflow:hidden; }
         .bs-progress-bar { height:100%; border-radius:100px; transition:width 1.2s ease; }
-        .bs-search-wrap { display:flex; border:2px solid #0EA5E9; border-radius:10px; overflow:hidden; height:46px; flex:1; max-width:580px; background:#fff; }
-        .bs-search-cat { background:#F1F5F9; border:none; border-right:1px solid #E2E8F0; padding:0 14px; font-size:13px; font-weight:600; cursor:pointer; color:#475569; white-space:nowrap; display:flex; align-items:center; gap:6px; font-family:'Inter',system-ui; min-width:170px; }
-        .bs-search-input { flex:1; border:none; padding:0 16px; font-size:14px; outline:none; color:#0F172A; font-family:'Inter',system-ui; }
-        .bs-search-btn { background:#0EA5E9; border:none; padding:0 18px; cursor:pointer; display:flex; align-items:center; justify-content:center; }
-        .bs-cat-dd { position:absolute; top:100%; left:0; background:#fff; border:1px solid #E2E8F0; border-radius:8px; box-shadow:0 8px 24px rgba(0,0,0,0.1); z-index:100; min-width:200px; overflow:hidden; }
-        .bs-cat-dd-item { padding:9px 14px; font-size:13px; cursor:pointer; color:#374151; transition:background 0.1s; }
-        .bs-cat-dd-item:hover { background:#EFF6FF; color:#0EA5E9; }
         .bs-chatbot { position:fixed; bottom:24px; right:24px; z-index:1000; }
         .bs-chatbot-panel { position:absolute; bottom:70px; right:0; width:300px; background:#fff; border-radius:16px; border:1px solid #E2E8F0; box-shadow:0 20px 60px rgba(0,0,0,0.15); overflow:hidden; }
         .bs-chatbot-btn { width:56px; height:56px; border-radius:50%; background:#0EA5E9; border:3px solid #fff; cursor:pointer; display:flex; align-items:center; justify-content:center; box-shadow:0 4px 20px rgba(14,165,233,0.4); transition:transform 0.2s; }
         .bs-chatbot-btn:hover { transform:scale(1.08); }
+        .bs-hamburger-btn { display:none; background:none; border:none; cursor:pointer; padding:6px; margin:-6px; flex-shrink:0; }
+        .bs-search-mobile-row { display:none; }
+        .bs-mobile-menu-panel { display:none; }
+        .bs-cats-expand-btn { display:none; }
         @media (max-width:768px) {
           .bs-grid-2 { grid-template-columns:1fr !important; gap:32px !important; }
           .bs-grid-3 { grid-template-columns:1fr !important; }
@@ -213,67 +193,70 @@ export default function BulkStrikeLight() {
           .bs-hero-h1 { font-size:32px !important; }
           .bs-section { padding:48px 16px; }
           .bs-nav-links { display:none !important; }
-          .bs-search-wrap { max-width:100% !important; }
-          .bs-search-cat { min-width:120px !important; }
           .bs-cta-btns { flex-direction:column !important; }
           .bs-hero-grid { grid-template-columns:1fr !important; gap:32px !important; }
+          .bs-hamburger-btn { display:flex !important; align-items:center; justify-content:center; }
+          .bs-logo-wrap { flex:1 !important; display:flex !important; justify-content:center !important; }
+          .bs-search-desktop { display:none !important; }
+          .bs-search-mobile-row { display:block !important; padding:10px 16px 14px; border-top:1px solid ${C.border}; }
+          .bs-mobile-menu-panel { display:block !important; border-top:1px solid ${C.border}; background:#fff; }
+          .bs-cats { flex-wrap:wrap !important; overflow:hidden !important; max-height:140px; gap:8px !important; padding:16px 16px 0 16px !important; }
+          .bs-cats.expanded { max-height:none !important; }
+          .bs-cat { width:calc((100% - 24px) / 4) !important; }
+          .bs-cat-icon { width:100% !important; height:auto !important; aspect-ratio:1/1; font-size:22px !important; border-radius:12px !important; }
+          .bs-cat-label { font-size:10.5px !important; display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden; }
+          .bs-cats-expand-btn { display:flex !important; align-items:center; justify-content:center; width:100%; background:none; border:none; border-top:1px solid ${C.border}; padding:8px 0; cursor:pointer; }
         }
       `}</style>
 
       {/* ── NAVBAR ── */}
       <nav style={{ position:"sticky", top:0, zIndex:50, background:"rgba(255,255,255,0.96)", backdropFilter:"blur(12px)", borderBottom:`1px solid ${C.border}` }}>
         <div style={{ maxWidth:1280, margin:"0 auto", padding:"0 24px", height:68, display:"flex", alignItems:"center", gap:20 }}>
-          {/* Logo */}
-          <div onClick={() => { window.location.href = "/"; }} style={{ display:"flex", alignItems:"center", gap:10, flexShrink:0, cursor:"pointer" }}>
-            <BSIcon size={36} uid="nav" />
-            <div style={{ display:"flex", alignItems:"baseline", fontFamily:"Inter,system-ui,sans-serif" }}>
-              <span style={{ fontSize:20, fontWeight:900, color:C.text, letterSpacing:"-0.03em" }}>Bulk</span>
-              <span style={{ fontSize:20, fontWeight:900, letterSpacing:"-0.03em", background:"linear-gradient(90deg,#0EA5E9,#22D3EE)", WebkitBackgroundClip:"text", backgroundClip:"text", color:"transparent" }}>Strike</span>
-            </div>
-          </div>
+          {/* Menu a lineette — solo mobile */}
+          <button className="bs-hamburger-btn" onClick={() => setMobileMenuOpen(o => !o)} aria-label="Menu">
+            {mobileMenuOpen ? <X size={22} color={C.text}/> : <Menu size={22} color={C.text}/>}
+          </button>
 
-          {/* Search bar */}
-          <div style={{ position:"relative", flex:1, display:"flex", justifyContent:"center" }}>
-            <div className="bs-search-wrap">
-              <div className="bs-search-cat" onClick={() => setShowCatDd(!showCatDd)}>
-                <span style={{ overflow:"hidden", textOverflow:"ellipsis", maxWidth:110 }}>{searchCat}</span>
-                <ChevronDown size={14} color="#64748B" />
+          {/* Logo — su mobile il wrapper prende lo spazio centrale tra menu e carrello/profilo, così è bilanciato */}
+          <div className="bs-logo-wrap" style={{ flexShrink:0 }}>
+            <div onClick={() => { window.location.href = "/"; }} style={{ display:"flex", alignItems:"center", gap:10, cursor:"pointer" }}>
+              <BSIcon size={36} uid="nav" />
+              <div style={{ display:"flex", alignItems:"baseline", fontFamily:"Inter,system-ui,sans-serif" }}>
+                <span style={{ fontSize:20, fontWeight:900, color:C.text, letterSpacing:"-0.03em" }}>Bulk</span>
+                <span style={{ fontSize:20, fontWeight:900, letterSpacing:"-0.03em", background:"linear-gradient(90deg,#0EA5E9,#22D3EE)", WebkitBackgroundClip:"text", backgroundClip:"text", color:"transparent" }}>Strike</span>
               </div>
-              {showCatDd && (
-                <div className="bs-cat-dd" style={{ top:46 }}>
-                  {SEARCH_CATS.map(c => (
-                    <div key={c} className="bs-cat-dd-item" onClick={() => { setSearchCat(c); setShowCatDd(false); }}>{c}</div>
-                  ))}
-                </div>
-              )}
-              <input className="bs-search-input" placeholder="Cerca materie prime, fornitori, specifiche..." value={searchQ} onChange={e => setSearchQ(e.target.value)} onKeyDown={e => { if (e.key === "Enter") runSearch(); }} />
-              <button className="bs-search-btn" onClick={runSearch}><Search size={20} color="white" /></button>
-              {searchOpen && searchResults.length > 0 && (
-                <div style={{ position:"absolute", top:46, left:0, right:0, background:"#fff", border:`1px solid ${C.border}`, borderRadius:10, boxShadow:"0 12px 30px rgba(0,0,0,0.12)", zIndex:60, maxHeight:340, overflowY:"auto" }}>
-                  {searchResults.map(p => (
-                    <div key={p.id} onClick={() => { window.location.href = `/prodotto?id=${p.id}`; }} style={{ padding:"10px 14px", cursor:"pointer", borderBottom:`1px solid ${C.border}`, display:"flex", justifyContent:"space-between", gap:10 }}>
-                      <span style={{ fontSize:14, color:C.text }}>{p.canonical_name}</span>
-                      <span style={{ fontSize:12, color:C.muted, whiteSpace:"nowrap" }}>{p.e_number || p.cas_number || ""}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-              {searchOpen && searchResults.length === 0 && searchQ.trim().length >= 2 && (
-                <div style={{ position:"absolute", top:46, left:0, right:0, background:"#fff", border:`1px solid ${C.border}`, borderRadius:10, padding:"12px 14px", zIndex:60, fontSize:13, color:C.muted }}>Nessun prodotto trovato per “{searchQ}”.</div>
-              )}
             </div>
           </div>
 
-          {/* Nav right */}
-          <div style={{ display:"flex", alignItems:"center", gap:20, flexShrink:0 }}>
+          {/* Barra di ricerca con autocomplete — qui solo su desktop, su mobile scende sotto in una riga a parte */}
+          <div className="bs-search-desktop" style={{ flex:1, display:"flex", justifyContent:"center" }}>
+            <ProductSearch height={46} maxWidth={580} placeholder="Cerca materie prime, CAS, E-number..." />
+          </div>
+
+          {/* Nav right — su mobile, margin-left:auto lo spinge a destra del logo dato che la ricerca qui sopra è nascosta */}
+          <div style={{ display:"flex", alignItems:"center", gap:20, flexShrink:0, marginLeft:"auto" }}>
             <div className="bs-nav-links" style={{ display:"flex", gap:20 }}>
-              {[["Aste attive","/pool"],["Prodotti","/catalogo"],["Fornitori","/fornitori"],["Corrieri","/corriere"],["Come funziona","#come-funziona"]].map(([l,href]) => (
+              {[["Aste attive","/pool"],["Prodotti","/catalogo"],["Fornitori","/fornitori"],["Corrieri","/corrieri"],["Come funziona","#come-funziona"]].map(([l,href]) => (
                 <span key={l} onClick={() => { window.location.href = href; }} style={{ fontSize:14, color:C.muted, cursor:"pointer", fontWeight:500, whiteSpace:"nowrap" }}>{l}</span>
               ))}
             </div>
             <NavAuth />
           </div>
         </div>
+
+        {/* Barra di ricerca — solo mobile, riga a parte sotto il logo/menu */}
+        <div className="bs-search-mobile-row">
+          <ProductSearch height={46} placeholder="Cerca materie prime, CAS, E-number..." />
+        </div>
+
+        {/* Menu a lineette aperto — solo mobile */}
+        {mobileMenuOpen && (
+          <div className="bs-mobile-menu-panel">
+            {[["Aste attive","/pool"],["Prodotti","/catalogo"],["Fornitori","/fornitori"],["Corrieri","/corrieri"],["Come funziona","#come-funziona"]].map(([l,href]) => (
+              <div key={l} onClick={() => { window.location.href = href; }} style={{ padding:"13px 20px", fontSize:15, fontWeight:600, color:C.text, borderBottom:`1px solid ${C.border}`, cursor:"pointer" }}>{l}</div>
+            ))}
+          </div>
+        )}
       </nav>
 
       {/* ── TICKER TAPE ── */}
@@ -298,7 +281,7 @@ export default function BulkStrikeLight() {
       <div style={{ borderBottom:`1px solid ${C.border}`, background:"#fff" }}>
         <div style={{ maxWidth:1280, margin:"0 auto" }}>
           {/* livello 1: macro-aree */}
-          <div className="bs-cats">
+          <div className={`bs-cats${sectorsExpanded ? " expanded" : ""}`}>
             {macros.map(m => {
               const on = activeMacro?.id === m.id;
               return (
@@ -307,13 +290,17 @@ export default function BulkStrikeLight() {
                   <div className="bs-cat-icon" style={{ background:on?"#EFF6FF":"#F1F5F9", borderColor:on?"#0EA5E9":"#E2E8F0" }}>
                     {m.icon || "📦"}
                   </div>
-                  <span style={{ fontSize:11, color:on?"#0EA5E9":C.muted, textAlign:"center", lineHeight:1.2, fontWeight:on?700:400 }}>
+                  <span className="bs-cat-label" style={{ fontSize:11, color:on?"#0EA5E9":C.muted, textAlign:"center", lineHeight:1.2, fontWeight:on?700:400 }}>
                     {m.name}
                   </span>
                 </div>
               );
             })}
           </div>
+          {/* freccia per espandere tutte le categorie — solo mobile */}
+          <button className="bs-cats-expand-btn" onClick={() => setSectorsExpanded(e => !e)}>
+            <ChevronDown size={18} color={C.muted} style={{ transform: sectorsExpanded ? "rotate(180deg)" : "none", transition:"transform 0.2s" }}/>
+          </button>
 
           {/* livello 2: sotto-aree della macro selezionata */}
           {activeMacro && (
