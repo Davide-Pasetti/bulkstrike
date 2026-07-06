@@ -11,7 +11,7 @@
 
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
-import { createClient } from '@/utils/supabase/client';
+import { createClient } from '@/lib/supabase/client';
 import { RICEVUTA_EMITTENTE, PAYMENT_CONFIG } from '@/lib/payments/paymentConfig';
 
 const eur = (n) =>
