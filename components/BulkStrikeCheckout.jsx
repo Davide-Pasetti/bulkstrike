@@ -488,6 +488,7 @@ export default function CheckoutPage() {
                           </div>
                         </div>
                       </div>
+                      </div>
                     );
                   }
                   const sorted = [...q.quotes].sort((a, b) => {
