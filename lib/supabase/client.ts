@@ -10,8 +10,14 @@
 // NB: esisteva anche un client.js accanto a questo file: la risoluzione dei
 // moduli preferisce .ts, quindi il .js non veniva mai usato ed è stato
 // rimosso per eliminare l'ambiguità.
+import { createBrowserClient } from "@supabase/ssr";
 import { supabase } from "@/lib/supabase";
 
-export function createClient() {
-  return supabase;
+// Il singleton è un Proxy definito in JS: TypeScript lo vede come `{}`.
+// Il cast al tipo di createBrowserClient restituisce ai consumer .tsx
+// (form auth dello starter) il tipo SupabaseClient corretto.
+type BrowserClient = ReturnType<typeof createBrowserClient>;
+
+export function createClient(): BrowserClient {
+  return supabase as BrowserClient;
 }
