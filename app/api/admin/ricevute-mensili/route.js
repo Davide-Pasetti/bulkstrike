@@ -18,31 +18,37 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { PAYMENT_CONFIG, RICEVUTA_EMITTENTE } from '@/lib/payments/paymentConfig';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY // service role: bypassa RLS, solo server-side
-);
+// Client creato al primo utilizzo (non al caricamento del modulo): durante
+// "Collecting page data" in build Next.js valuta il modulo senza che le env
+// var server-side siano necessariamente pronte, e createClient() a livello
+// top-level lanciava "supabaseKey is required" e faceva fallire il build.
+let _supabase = null;
+function getSupabase() {
+  if (!_supabase) {
+    _supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL,
+      process.env.SUPABASE_SERVICE_ROLE_KEY // service role: bypassa RLS, solo server-side
+    );
+  }
+  return _supabase;
+}
 
 async function assertAdmin(request) {
+  const supabase = getSupabase();
   const token = request.headers.get('authorization')?.replace('Bearer ', '');
   if (!token) return null;
   const { data: { user } } = await supabase.auth.getUser(token);
   if (!user) return null;
   const { data: profile } = await supabase
     .from('profiles')
-    .select('company_id')
+    .select('role')
     .eq('id', user.id)
     .single();
-  if (!profile?.company_id) return null;
-  const { data: company } = await supabase
-    .from('companies')
-    .select('is_platform_admin')
-    .eq('id', profile.company_id)
-    .single();
-  return company?.is_platform_admin ? user : null;
+  return profile?.role === 'admin' ? user : null;
 }
 
 export async function POST(request) {
+  const supabase = getSupabase();
   const admin = await assertAdmin(request);
   if (!admin) {
     return NextResponse.json({ error: 'Non autorizzato' }, { status: 403 });
@@ -158,6 +164,7 @@ export async function POST(request) {
 }
 
 export async function GET(request) {
+  const supabase = getSupabase();
   const admin = await assertAdmin(request);
   if (!admin) {
     return NextResponse.json({ error: 'Non autorizzato' }, { status: 403 });
@@ -167,7 +174,7 @@ export async function GET(request) {
 
   const { data, error } = await supabase
     .from('ricevute')
-    .select('*, companies:carrier_id (legal_name)')
+    .select('*, companies:carrier_id (name)')
     .eq('anno', year)
     .order('numero', { ascending: true });
 
