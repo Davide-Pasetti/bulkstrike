@@ -9,7 +9,7 @@
 // il carrello → pagina "Pagamento eseguito".
 // Il pagamento chiude il checkout: non è più un passo separato successivo.
 import { useState, useEffect, useMemo } from "react";
-import { ShieldCheck, ArrowRight, ArrowLeft, Check, ChevronRight, Package, FileText, AlertTriangle, MapPin, Mail, CreditCard, Truck, Zap, Clock3, PauseCircle, Plus, X, Receipt } from "lucide-react";
+import { ShieldCheck, ArrowRight, ArrowLeft, Check, ChevronRight, Package, FileText, AlertTriangle, MapPin, Mail, CreditCard, Truck, Clock3, PauseCircle, Plus, X, Receipt } from "lucide-react";
 import { getCart, checkoutCart, previewCheckout, getMyCompanyAddress, getShippingAddresses, addShippingAddress, getSession, poolErrorMessage, getShippingQuotes } from "@/lib/api";
 import NavAuth from "@/components/BulkStrikeNavAuth";
 

@@ -39,12 +39,21 @@ async function assertAdmin(request) {
   if (!token) return null;
   const { data: { user } } = await supabase.auth.getUser(token);
   if (!user) return null;
+  // Admin di PIATTAFORMA = companies.is_platform_admin.
+  // NB: profiles.role è il ruolo DENTRO l'azienda (owner/admin/member):
+  // usarlo qui darebbe accesso alle ricevute a qualsiasi admin aziendale.
   const { data: profile } = await supabase
     .from('profiles')
-    .select('role')
+    .select('company_id')
     .eq('id', user.id)
     .single();
-  return profile?.role === 'admin' ? user : null;
+  if (!profile?.company_id) return null;
+  const { data: company } = await supabase
+    .from('companies')
+    .select('is_platform_admin')
+    .eq('id', profile.company_id)
+    .single();
+  return company?.is_platform_admin ? user : null;
 }
 
 export async function POST(request) {
@@ -85,9 +94,29 @@ export async function POST(request) {
   const lastDay = new Date(year, month, 0).getDate();
   const periodoA = `${year}-${String(month).padStart(2, '0')}-${lastDay}`;
 
+  // Idempotenza: una doppia chiamata (doppio click, retry di rete) non deve
+  // generare ricevute duplicate. I corrieri già fatturati per questo periodo
+  // vengono saltati; il vincolo UNIQUE (anno, numero) resta l'ultima difesa
+  // contro la race sul progressivo (vedi retry più sotto).
+  const { data: esistenti, error: exErr } = await supabase
+    .from('ricevute')
+    .select('carrier_id')
+    .eq('anno', year)
+    .eq('periodo_da', periodoDa)
+    .neq('stato', 'annullata');
+  if (exErr) {
+    return NextResponse.json({ error: exErr.message }, { status: 500 });
+  }
+  const giaFatturati = new Set((esistenti ?? []).map((r) => r.carrier_id));
+
   const create = [];
+  const saltate = [];
 
   for (const agg of aggregati) {
+    if (giaFatturati.has(agg.carrier_id)) {
+      saltate.push(agg.carrier_name);
+      continue;
+    }
     const lordo = Number(agg.total_commission);
     const ritenuta = Math.round(lordo * PAYMENT_CONFIG.ritenutaAcconto * 100) / 100;
     const netto = Math.round((lordo - ritenuta) * 100) / 100;
@@ -97,29 +126,55 @@ export async function POST(request) {
     const bollo = marcaDaBollo ? PAYMENT_CONFIG.importoBollo : 0;
     const totaleDaBonificare = Math.round((netto + bollo) * 100) / 100;
 
-    // 3. Crea la ricevuta
-    const { data: ricevuta, error: recErr } = await supabase
-      .from('ricevute')
-      .insert({
-        numero: nextNumero,
-        anno: year,
-        carrier_id: agg.carrier_id,
-        periodo_da: periodoDa,
-        periodo_a: periodoA,
-        importo_lordo: lordo,
-        ritenuta_acconto: ritenuta,
-        importo_netto: netto,
-        marca_da_bollo: marcaDaBollo,
-        importo_bollo: bollo,
-        totale_da_bonificare: totaleDaBonificare,
-        stato: 'emessa',
-      })
-      .select()
-      .single();
+    // 3. Crea la ricevuta. Il progressivo è calcolato in JS (max+1), quindi
+    // due chiamate concorrenti possono collidere: il vincolo UNIQUE
+    // (anno, numero) fa fallire l'insert con 23505 e qui si ritenta
+    // rileggendo il massimo, invece di generare duplicati.
+    let ricevuta = null;
+    for (let tentativo = 0; tentativo < 3; tentativo++) {
+      const { data, error: recErr } = await supabase
+        .from('ricevute')
+        .insert({
+          numero: nextNumero,
+          anno: year,
+          carrier_id: agg.carrier_id,
+          periodo_da: periodoDa,
+          periodo_a: periodoA,
+          importo_lordo: lordo,
+          ritenuta_acconto: ritenuta,
+          importo_netto: netto,
+          marca_da_bollo: marcaDaBollo,
+          importo_bollo: bollo,
+          totale_da_bonificare: totaleDaBonificare,
+          stato: 'emessa',
+        })
+        .select()
+        .single();
 
-    if (recErr) {
+      if (!recErr) {
+        ricevuta = data;
+        break;
+      }
+      if (recErr.code === '23505') {
+        // progressivo già usato da una chiamata concorrente: rilegge il max
+        const { data: ultimo } = await supabase
+          .from('ricevute')
+          .select('numero')
+          .eq('anno', year)
+          .order('numero', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        nextNumero = (ultimo?.numero ?? 0) + 1;
+        continue;
+      }
       return NextResponse.json(
         { error: `Ricevuta per ${agg.carrier_name}: ${recErr.message}`, ricevute_create: create },
+        { status: 500 }
+      );
+    }
+    if (!ricevuta) {
+      return NextResponse.json(
+        { error: `Ricevuta per ${agg.carrier_name}: progressivo in conflitto dopo 3 tentativi`, ricevute_create: create },
         { status: 500 }
       );
     }
@@ -142,7 +197,7 @@ export async function POST(request) {
     }
 
     create.push({
-      numero: `${nextNumero}/${year}`,
+      numero: `${ricevuta.numero}/${year}`,
       corriere: agg.carrier_name,
       ordini: Number(agg.n_orders),
       spedizioni_totali: Number(agg.total_shipping),
@@ -158,8 +213,11 @@ export async function POST(request) {
   }
 
   return NextResponse.json({
-    message: `${create.length} ricevute generate per ${month}/${year}`,
+    message:
+      `${create.length} ricevute generate per ${month}/${year}` +
+      (saltate.length ? ` (${saltate.length} già emesse, saltate)` : ''),
     ricevute: create,
+    gia_emesse: saltate,
   });
 }
 
@@ -174,7 +232,9 @@ export async function GET(request) {
 
   const { data, error } = await supabase
     .from('ricevute')
-    .select('*, companies:carrier_id (name)')
+    // NB: la colonna si chiama legal_name ("name" non esiste su companies:
+    // con "name" PostgREST restituiva errore a runtime, mai in build)
+    .select('*, companies:carrier_id (legal_name)')
     .eq('anno', year)
     .order('numero', { ascending: true });
 
