@@ -150,8 +150,17 @@ export default function RicevutaPage() {
             <span>Ritenuta d'acconto 20% (art. 25 DPR 600/73)</span>
             <span>− {eur(ricevuta.ritenuta_acconto)}</span>
           </div>
+          <div className="riga">
+            <span>Netto</span><span>{eur(ricevuta.importo_netto)}</span>
+          </div>
+          {ricevuta.marca_da_bollo && (
+            <div className="riga">
+              <span>Rimborso imposta di bollo (a carico del committente)</span>
+              <span>+ {eur(ricevuta.importo_bollo)}</span>
+            </div>
+          )}
           <div className="riga finale">
-            <span>Netto a pagare</span><span>{eur(ricevuta.importo_netto)}</span>
+            <span>Totale da bonificare</span><span>{eur(ricevuta.totale_da_bonificare)}</span>
           </div>
         </div>
 
@@ -166,7 +175,7 @@ export default function RicevutaPage() {
           professioni. Il committente, in qualità di sostituto d'imposta, opererà la
           ritenuta d'acconto del 20% ai sensi dell'art. 25 del DPR 600/73 e ne verserà
           l'importo secondo i termini di legge.
-          {ricevuta.marca_da_bollo && ' Imposta di bollo da € 2,00 assolta sull\u2019originale.'}
+          {ricevuta.marca_da_bollo && ' Imposta di bollo da € 2,00 assolta sull\u2019originale e posta a carico del committente ai sensi di legge.'}
         </div>
       </div>
     </div>

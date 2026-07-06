@@ -79,6 +79,11 @@ export async function POST(request) {
     const lordo = Number(agg.total_commission);
     const ritenuta = Math.round(lordo * PAYMENT_CONFIG.ritenutaAcconto * 100) / 100;
     const netto = Math.round((lordo - ritenuta) * 100) / 100;
+    // Il bollo è un rimborso del costo del documento, non un compenso:
+    // non entra nel calcolo della ritenuta, si somma al netto da bonificare
+    const marcaDaBollo = lordo > PAYMENT_CONFIG.sogliaMarcaDaBollo;
+    const bollo = marcaDaBollo ? PAYMENT_CONFIG.importoBollo : 0;
+    const totaleDaBonificare = Math.round((netto + bollo) * 100) / 100;
 
     // 3. Crea la ricevuta
     const { data: ricevuta, error: recErr } = await supabase
@@ -92,7 +97,9 @@ export async function POST(request) {
         importo_lordo: lordo,
         ritenuta_acconto: ritenuta,
         importo_netto: netto,
-        marca_da_bollo: lordo > PAYMENT_CONFIG.sogliaMarcaDaBollo,
+        marca_da_bollo: marcaDaBollo,
+        importo_bollo: bollo,
+        totale_da_bonificare: totaleDaBonificare,
         stato: 'emessa',
       })
       .select()
@@ -130,7 +137,9 @@ export async function POST(request) {
       lordo,
       ritenuta_20: ritenuta,
       netto,
-      marca_da_bollo: lordo > PAYMENT_CONFIG.sogliaMarcaDaBollo,
+      marca_da_bollo: marcaDaBollo,
+      bollo_a_carico_corriere: bollo,
+      totale_da_bonificare: totaleDaBonificare,
       emittente: RICEVUTA_EMITTENTE.nome,
     });
     nextNumero += 1;
