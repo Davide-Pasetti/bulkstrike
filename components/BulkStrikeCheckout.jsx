@@ -9,7 +9,7 @@
 // il carrello → pagina "Pagamento eseguito".
 // Il pagamento chiude il checkout: non è più un passo separato successivo.
 import { useState, useEffect, useMemo } from "react";
-import { ShieldCheck, ArrowRight, ArrowLeft, Check, ChevronRight, Package, FileText, AlertTriangle, MapPin, Mail, CreditCard, Truck, Zap, Clock3, PauseCircle, Plus, X } from "lucide-react";
+import { ShieldCheck, ArrowRight, ArrowLeft, Check, ChevronRight, Package, FileText, AlertTriangle, MapPin, Mail, CreditCard, Truck, Zap, Clock3, PauseCircle, Plus, X, Receipt } from "lucide-react";
 import { getCart, checkoutCart, previewCheckout, getMyCompanyAddress, getShippingAddresses, addShippingAddress, getSession, poolErrorMessage, getShippingQuotes } from "@/lib/api";
 import NavAuth from "@/components/BulkStrikeNavAuth";
 
@@ -71,6 +71,7 @@ export default function CheckoutPage() {
   const [addresses, setAddresses] = useState([]);
   const [companyAddress, setCompanyAddress] = useState(null); // testo sede legale, o null se non impostata
   const [selectedAddressId, setSelectedAddressId] = useState(""); // "__legal__" | id salvato
+  const [billingAddressId, setBillingAddressId] = useState(""); // "__legal__" | id salvato — indipendente dalla consegna
   const [showAddForm, setShowAddForm] = useState(false);
   const [newAddrText, setNewAddrText] = useState("");
   const [newAddrLabel, setNewAddrLabel] = useState("");
@@ -102,6 +103,9 @@ export default function CheckoutPage() {
         setCompanyAddress(legalText);
 
         const def = (savedAddrs || []).find(a => a.is_default);
+        // Fatturazione: di default la sede legale (corretto per l'emissione fattura),
+        // altrimenti il primo indirizzo salvato. Selezione indipendente dalla consegna.
+        setBillingAddressId(legalText ? "__legal__" : (savedAddrs?.[0]?.id || ""));
         if (def) {
           setSelectedAddressId(def.id);
           setAddress(def.address);
@@ -158,10 +162,12 @@ export default function CheckoutPage() {
     return [...m.values()];
   }, [items]);
 
-  // Quando si entra nello step 2 (Pagamento): preventivi corriere per ogni fornitore, poi il
-  // riepilogo economico (che dipende dalle selezioni, quindi si ricalcola quando cambiano).
+  // Preventivi corriere per ogni fornitore: calcolati appena il carrello è noto (non solo
+  // entrando nello step 2), così i tempi di consegna sono già visibili nello step 1.
+  // get_shipping_quotes non dipende dall'indirizzo (solo fornitore + kg), quindi è sicuro
+  // calcolarli prima ancora che l'indirizzo di consegna sia stato scelto.
   useEffect(() => {
-    if (step !== 2 || suppliers.length === 0) return;
+    if (suppliers.length === 0) return;
     let cancelled = false;
     (async () => {
       const entries = await Promise.all(suppliers.map(async (s) => {
@@ -183,7 +189,25 @@ export default function CheckoutPage() {
       });
     })();
     return () => { cancelled = true; };
-  }, [step, suppliers]);
+  }, [suppliers]);
+
+  // Stima consegna per una riga del carrello: giorni di preparazione del fornitore +
+  // giorni di trasporto del corriere selezionato (o il più economico di default) =
+  // data di arrivo stimata dalla data dell'ordine (oggi).
+  function estimateDelivery(it) {
+    const prepDays = it.lead_time_days != null ? Number(it.lead_time_days) : 0;
+    const q = quotesBySupplier[it.supplier_company_id];
+    if (q === undefined) return { prepDays, label: "calcolo corriere…", dateLabel: null };
+    if (q === "none") return { prepDays, label: "nessun corriere sulla tratta", dateLabel: null };
+    const chosenId = selectedCarrier[it.supplier_company_id] || q.cheapest_id;
+    const chosen = (q.quotes || []).find(c => c.carrier_id === chosenId) || q.quotes[0];
+    const carrierDays = chosen?.lead_time_days != null ? Number(chosen.lead_time_days) : null;
+    if (carrierDays == null) return { prepDays, label: "tempi corriere variabili", dateLabel: null };
+    const d = new Date();
+    d.setDate(d.getDate() + prepDays + carrierDays);
+    const dateLabel = d.toLocaleDateString("it-IT", { day: "numeric", month: "long" });
+    return { prepDays, carrierDays, label: `+${carrierDays} gg trasporto`, dateLabel };
+  }
 
   // Riepilogo economico: dipende dalle selezioni corriere, si ricalcola quando cambiano.
   useEffect(() => {
@@ -199,6 +223,7 @@ export default function CheckoutPage() {
 
   const subtotal = useMemo(() => items.reduce((a, it) => a + (it.unit_price != null ? Number(it.unit_price) * Number(it.quantity_kg) : 0), 0), [items]);
   const hasIssues = useMemo(() => items.some(it => !it.offer_active || it.unit_price == null || (it.min_order_kg != null && Number(it.quantity_kg) < Number(it.min_order_kg))), [items]);
+  const billingAddressText = billingAddressId === "__legal__" ? (companyAddress || "") : (addresses.find(a => a.id === billingAddressId)?.address || companyAddress || "");
 
   // pronti a pagare solo quando: i preventivi sono tutti arrivati, e ogni fornitore CHE HA
   // corrieri disponibili ha una selezione fatta (i fornitori senza corrieri vanno in attesa da soli).
@@ -346,6 +371,22 @@ export default function CheckoutPage() {
             {step === 1 ? (
               <>
                 <div style={{ border: `1px solid ${C.border}`, borderRadius: 14, padding: 20, marginBottom: 18 }}>
+                  <div style={{ fontSize: 13, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: C.muted, marginBottom: 14, display: "flex", alignItems: "center", gap: 7 }}><Receipt size={15} /> Indirizzo di fatturazione</div>
+
+                  <label style={{ fontSize: 12.5, fontWeight: 600, color: C.muted, display: "block", marginBottom: 6 }}>Indirizzo di fatturazione *</label>
+                  <select className="co-input" value={billingAddressId} onChange={e => setBillingAddressId(e.target.value)} style={{ marginBottom: 8 }}>
+                    {companyAddress && <option value="__legal__">Sede legale — {companyAddress}</option>}
+                    {addresses.map(a => (
+                      <option key={a.id} value={a.id}>{a.label ? `${a.label} — ` : ""}{a.address}</option>
+                    ))}
+                    {!companyAddress && addresses.length === 0 && <option value="">Nessun indirizzo disponibile</option>}
+                  </select>
+                  <div style={{ fontSize: 11.5, color: C.muted }}>
+                    Usato per l'emissione della fattura. Di default è la sede legale — puoi scegliere un altro indirizzo salvato se la fattura va intestata altrove.
+                  </div>
+                </div>
+
+                <div style={{ border: `1px solid ${C.border}`, borderRadius: 14, padding: 20, marginBottom: 18 }}>
                   <div style={{ fontSize: 13, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: C.muted, marginBottom: 14, display: "flex", alignItems: "center", gap: 7 }}><MapPin size={15} /> Indirizzo di consegna</div>
 
                   <label style={{ fontSize: 12.5, fontWeight: 600, color: C.muted, display: "block", marginBottom: 6 }}>Indirizzo di consegna *</label>
@@ -385,19 +426,32 @@ export default function CheckoutPage() {
 
                 <div style={{ border: `1px solid ${C.border}`, borderRadius: 14, overflow: "hidden", marginBottom: 10 }}>
                   <div className="co-row" style={{ background: C.bg, fontSize: 11, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.04em", color: C.muted }}>
-                    <span>Prodotto / fornitore</span><span>Quantità</span><span>Giorni di preparazione ordine</span><span style={{ textAlign: "right" }}>Totale</span>
+                    <span>Prodotto / fornitore</span><span>Quantità</span><span>Preparazione e consegna</span><span style={{ textAlign: "right" }}>Totale</span>
                   </div>
-                  {items.map(it => (
-                    <div key={`${it.product_id}|${it.supplier_company_id}`} className="co-row">
-                      <div>
-                        <div style={{ fontWeight: 700 }}>{it.product_name}</div>
-                        <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>{it.supplier_name}</div>
+                  {items.map(it => {
+                    const est = estimateDelivery(it);
+                    return (
+                      <div key={`${it.product_id}|${it.supplier_company_id}`} className="co-row">
+                        <div>
+                          <div style={{ fontWeight: 700 }}>{it.product_name}</div>
+                          <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>{it.supplier_name}</div>
+                        </div>
+                        <span className="co-num">{Number(it.quantity_kg).toLocaleString("it-IT")} kg</span>
+                        <div>
+                          <div style={{ fontWeight: 600 }}>{it.lead_time_days != null ? `${it.lead_time_days} gg preparazione` : "—"}</div>
+                          <div style={{ fontSize: 11, color: C.muted, marginTop: 2, display: "flex", alignItems: "center", gap: 4 }}>
+                            <Truck size={11} /> {est.label}
+                          </div>
+                          {est.dateLabel && (
+                            <div style={{ fontSize: 11.5, fontWeight: 700, color: C.blue, marginTop: 2 }}>
+                              Arrivo stimato: {est.dateLabel}
+                            </div>
+                          )}
+                        </div>
+                        <span className="co-num" style={{ textAlign: "right", fontWeight: 700 }}>{it.unit_price != null ? eur(Number(it.unit_price) * Number(it.quantity_kg)) : "—"}</span>
                       </div>
-                      <span className="co-num">{Number(it.quantity_kg).toLocaleString("it-IT")} kg</span>
-                      <span>{it.lead_time_days != null ? `${it.lead_time_days} giorni` : "—"}</span>
-                      <span className="co-num" style={{ textAlign: "right", fontWeight: 700 }}>{it.unit_price != null ? eur(Number(it.unit_price) * Number(it.quantity_kg)) : "—"}</span>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
                 <div style={{ fontSize: 11.5, color: C.muted, marginBottom: 22 }}>* IVA e spese di spedizione escluse — le vedi nel riepilogo al passo successivo.</div>
 
@@ -431,7 +485,6 @@ export default function CheckoutPage() {
                             <div style={{ fontSize: 13.5, fontWeight: 700, color: "#9A3412", marginBottom: 4 }}>{s.name} — nessun corriere su questa tratta</div>
                             <div style={{ fontSize: 12.5, color: "#9A3412", lineHeight: 1.6 }}>
                               Il tuo ordine non può essere processato perché per questa spedizione non abbiamo ancora un corriere attivo sulla tratta {s.country || "—"} → {address || "—"}. Lo mettiamo in attesa: il nostro team logistico ti farà avere il costo di spedizione a breve, e completerai il pagamento solo a quel punto.
-                            </div>
                           </div>
                         </div>
                       </div>
@@ -478,6 +531,7 @@ export default function CheckoutPage() {
                 <div style={{ border: `1px solid ${C.border}`, borderRadius: 14, padding: 20, marginBottom: 18 }}>
                   <div style={{ fontSize: 13, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: C.muted, marginBottom: 14 }}>Riepilogo</div>
                   <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13.5, marginBottom: 8 }}><span style={{ color: C.muted }}>Righe</span><span className="co-num" style={{ fontWeight: 600 }}>{items.length}</span></div>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13.5, marginBottom: 8 }}><span style={{ color: C.muted }}>Fatturazione</span><span style={{ fontWeight: 600, textAlign: "right", maxWidth: 280 }}>{billingAddressText}</span></div>
                   <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13.5, marginBottom: 8 }}><span style={{ color: C.muted }}>Consegna</span><span style={{ fontWeight: 600, textAlign: "right", maxWidth: 280 }}>{address}</span></div>
                   <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13.5, marginBottom: 8 }}><span style={{ color: C.muted }}>Commissioni BulkStrike</span><span className="co-num" style={{ fontWeight: 700, color: C.green }}>€0,00</span></div>
 
