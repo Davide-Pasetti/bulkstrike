@@ -31,7 +31,7 @@ export default function RicevutaPage() {
     (async () => {
       const { data: r, error } = await supabase
         .from('ricevute')
-        .select('*, companies:carrier_id (name, vat_number, address)')
+        .select('*, companies:carrier_id (legal_name, vat, address)')
         .eq('id', id)
         .single();
       if (error) { setErrore('Ricevuta non trovata o accesso non consentito.'); return; }
@@ -110,9 +110,9 @@ export default function RicevutaPage() {
           </div>
           <div>
             <div className="etichetta">Committente</div>
-            <strong>{corriere?.name}</strong><br />
+            <strong>{corriere?.legal_name}</strong><br />
             {corriere?.address ?? ''}<br />
-            {corriere?.vat_number ? `P.IVA ${corriere.vat_number}` : ''}
+            {corriere?.vat ? `P.IVA ${corriere.vat}` : ''}
           </div>
         </div>
 

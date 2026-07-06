@@ -30,10 +30,16 @@ async function assertAdmin(request) {
   if (!user) return null;
   const { data: profile } = await supabase
     .from('profiles')
-    .select('role')
+    .select('company_id')
     .eq('id', user.id)
     .single();
-  return profile?.role === 'admin' ? user : null;
+  if (!profile?.company_id) return null;
+  const { data: company } = await supabase
+    .from('companies')
+    .select('is_platform_admin')
+    .eq('id', profile.company_id)
+    .single();
+  return company?.is_platform_admin ? user : null;
 }
 
 export async function POST(request) {
@@ -161,7 +167,7 @@ export async function GET(request) {
 
   const { data, error } = await supabase
     .from('ricevute')
-    .select('*, companies:carrier_id (name)')
+    .select('*, companies:carrier_id (legal_name)')
     .eq('anno', year)
     .order('numero', { ascending: true });
 

@@ -14,13 +14,16 @@
 //     onChange={(m) => setMetodo(subOrder.supplierId, m)}
 //   />
 //
+// subOrderTotal = orders.goods_subtotal + orders.shipping_amount
+// (imponibile, IVA esclusa — orders.vat_amount escluso dal confronto soglia)
+//
 // Usa la RPC get_available_payment_methods (migration
 // 20260706_payment_escrow_system.sql).
 // ============================================================
 'use client';
 
 import { useEffect, useState } from 'react';
-import { createClient } from '@/utils/supabase/client';
+import { createClient } from '@/lib/supabase/client';
 
 const ETICHETTE = {
   escrow_sepa: {
@@ -71,7 +74,7 @@ export default function PaymentMethodSelector({
       const { data, error } = await supabase.rpc('get_available_payment_methods', {
         p_buyer_id: buyerId,
         p_supplier_id: supplierId,
-        p_suborder_total: subOrderTotal,
+        p_order_total: subOrderTotal,
       });
       if (error) { setErrore('Impossibile caricare i metodi di pagamento. Riprova.'); return; }
       setMetodi(data);

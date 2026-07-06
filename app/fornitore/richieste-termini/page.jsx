@@ -33,13 +33,13 @@ export default function RichiesteTerminiPage() {
     const [{ data: r }, { data: w }] = await Promise.all([
       supabase
         .from('payment_terms_requests')
-        .select('*, buyer:buyer_id (name, vat_number)')
+        .select('*, buyer:buyer_id (legal_name, vat)')
         .eq('supplier_id', cid)
         .eq('status', 'pending')
         .order('created_at', { ascending: true }),
       supabase
         .from('supplier_trusted_buyers')
-        .select('*, buyer:buyer_id (name, vat_number)')
+        .select('*, buyer:buyer_id (legal_name, vat)')
         .eq('supplier_id', cid)
         .eq('status', 'active')
         .order('granted_at', { ascending: false }),
@@ -53,14 +53,14 @@ export default function RichiesteTerminiPage() {
     (async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-      const { data: membro } = await supabase
-        .from('company_members')
+      const { data: profilo } = await supabase
+        .from('profiles')
         .select('company_id')
-        .eq('user_id', user.id)
+        .eq('id', user.id)
         .single();
-      if (!membro) { setCaricamento(false); return; }
-      setCompanyId(membro.company_id);
-      carica(membro.company_id);
+      if (!profilo?.company_id) { setCaricamento(false); return; }
+      setCompanyId(profilo.company_id);
+      carica(profilo.company_id);
     })();
   }, []);
 
@@ -78,7 +78,7 @@ export default function RichiesteTerminiPage() {
   }
 
   async function revoca(riga) {
-    if (!window.confirm(`Revocare i termini a ${riga.buyer?.name}? Dai prossimi ordini non potrà più scegliere il pagamento dilazionato.`)) return;
+    if (!window.confirm(`Revocare i termini a ${riga.buyer?.legal_name}? Dai prossimi ordini non potrà più scegliere il pagamento dilazionato.`)) return;
     setInCorso(riga.id);
     const { error } = await supabase
       .from('supplier_trusted_buyers')
@@ -124,10 +124,10 @@ export default function RichiesteTerminiPage() {
       {richieste.map((r) => (
         <div className="rt-card" key={r.id}>
           <div className="chi">
-            <strong>{r.buyer?.name}</strong>
+            <strong>{r.buyer?.legal_name}</strong>
             <span className="rt-badge">{r.requested_terms_days} giorni</span>
             <div className="meta">
-              {r.buyer?.vat_number ? `P.IVA ${r.buyer.vat_number} · ` : ''}
+              {r.buyer?.vat ? `P.IVA ${r.buyer.vat} · ` : ''}
               richiesta del {dataIt(r.created_at)}
             </div>
             {r.message && <div className="rt-msg">“{r.message}”</div>}
@@ -148,10 +148,10 @@ export default function RichiesteTerminiPage() {
       {whitelist.map((w) => (
         <div className="rt-card" key={w.id}>
           <div className="chi">
-            <strong>{w.buyer?.name}</strong>
+            <strong>{w.buyer?.legal_name}</strong>
             <span className="rt-badge">{w.terms_days} giorni</span>
             <div className="meta">
-              {w.buyer?.vat_number ? `P.IVA ${w.buyer.vat_number} · ` : ''}
+              {w.buyer?.vat ? `P.IVA ${w.buyer.vat} · ` : ''}
               abilitato il {dataIt(w.granted_at)}
             </div>
           </div>
