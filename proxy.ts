@@ -7,6 +7,9 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
-"/((?!_next/static|_next/image|favicon.ico|api|welcome|registrati|pool|prodotto|fornitore|fornitori|dashboard|catalogo|corriere|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)"
+// NB: le esclusioni sono le rotte raggiungibili SENZA sessione (le pagine
+// gestiscono l'auth lato client). "corrieri" (directory pubblica) e "legale"
+// (termini) erano assenti: gli anonimi venivano rediretti a /auth/login.
+"/((?!_next/static|_next/image|favicon.ico|api|welcome|registrati|pool|prodotto|fornitore|fornitori|dashboard|catalogo|corriere|corrieri|legale|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)"
   ],
 };
