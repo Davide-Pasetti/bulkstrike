@@ -1,3 +1,4 @@
+import crypto from 'node:crypto'
 import { NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/whatsapp/supabaseAdmin'
 import { sendWhatsAppText } from '@/lib/whatsapp/send'
@@ -35,9 +36,38 @@ export async function GET(request) {
   return new Response('Forbidden', { status: 403 })
 }
 
+// --- Firma webhook (sicurezza) ---
+// Meta firma ogni POST con HMAC-SHA256 del body grezzo usando l'App Secret
+// (header x-hub-signature-256). Senza questa verifica chiunque conosca l'URL
+// può forgiare messaggi, far girare il modello con i tool e far inviare
+// risposte WhatsApp. Fail-open SOLO se WHATSAPP_APP_SECRET non è configurato,
+// per non rompere il webhook prima che il secret sia aggiunto alle env.
+function verifySignature(request, rawBody) {
+  const appSecret = process.env.WHATSAPP_APP_SECRET
+  if (!appSecret) {
+    console.warn('[whatsapp] WHATSAPP_APP_SECRET non configurato: firma webhook NON verificata')
+    return true
+  }
+  const header = request.headers.get('x-hub-signature-256') ?? ''
+  const expected =
+    'sha256=' + crypto.createHmac('sha256', appSecret).update(rawBody, 'utf8').digest('hex')
+  const a = Buffer.from(header)
+  const b = Buffer.from(expected)
+  return a.length === b.length && crypto.timingSafeEqual(a, b)
+}
+
 // --- Messaggi in arrivo ---
 export async function POST(request) {
-  const payload = await request.json()
+  const rawBody = await request.text()
+  if (!verifySignature(request, rawBody)) {
+    return new Response('Invalid signature', { status: 403 })
+  }
+  let payload
+  try {
+    payload = JSON.parse(rawBody)
+  } catch {
+    return NextResponse.json({ error: 'BAD_JSON' }, { status: 400 })
+  }
   const supabase = getSupabaseAdmin()
 
   const message = extractTextMessage(payload)

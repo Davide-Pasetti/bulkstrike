@@ -10,6 +10,9 @@ const compat = new FlatCompat({
 });
 
 const eslintConfig = [
+  // Senza questo, dopo una build locale `eslint .` linta anche l'output
+  // generato in .next/ (migliaia di falsi errori)
+  { ignores: [".next/**", "node_modules/**"] },
   ...compat.extends("next/core-web-vitals", "next/typescript"),
 ];
 
