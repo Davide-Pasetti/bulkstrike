@@ -7,6 +7,7 @@ import { Search, Star, ShieldCheck, MapPin, Phone, Globe, Mail, User, FileText, 
 import { getSupplierProfile, getSession, upsertCartItem, poolErrorMessage, getSupplierReviews, getReviewableOrders, submitReview, getCart } from "@/lib/api";
 import BulkStrikeNav from "@/components/BulkStrikeNav";
 import { BSIcon } from "@/components/BSLogo";
+import { IvaChip } from "@/components/BulkStrikeBadges";
 
 const C = { blue:"#0EA5E9", dark:"#0284C7", text:"#0F172A", muted:"#64748B", border:"#E2E8F0", bg:"#F8FAFE", green:"#059669", red:"#DC2626", amber:"#D97706", purple:"#7C3AED" };
 
@@ -319,9 +320,9 @@ export default function SupplierPage() {
 
               {/* intestazione tabella (solo desktop) */}
               <div className="sup-prow" style={{ background:C.bg, fontSize:11, fontWeight:800, textTransform:"uppercase", letterSpacing:"0.04em", color:C.muted }}>
-                <span>Prodotto</span><span>Grado / cert.</span><span>MOQ</span><span>Lead time</span><span style={{ textAlign:"right" }}>Prezzo & ordine *</span>
+                <span>Prodotto</span><span>Grado / cert.</span><span>MOQ</span><span>Preparazione</span><span style={{ textAlign:"right" }}>Prezzo & ordine</span>
               </div>
-              <div style={{ fontSize:10.5, color:C.muted, textAlign:"right", padding:"6px 20px 0" }}>* IVA esclusa — la vedi al checkout, dopo l'indirizzo. Spedizione stimata, inclusa nel totale.</div>
+              <div style={{ fontSize:10.5, color:C.muted, textAlign:"right", padding:"6px 20px 0" }}>L'IVA la vedi al checkout, dopo l'indirizzo. Spedizione stimata, inclusa nel totale.</div>
 
               <div style={{ maxHeight:560, overflowY:"auto" }}>
                 {filteredProducts.map(p => {
@@ -331,7 +332,7 @@ export default function SupplierPage() {
                       <div>
                         <div style={{ display:"flex", alignItems:"center", gap:6, flexWrap:"wrap" }}>
                           <span className="sup-plink" onClick={() => { window.location.href = `/prodotto?id=${p.product_id}`; }} style={{ fontSize:14 }}>{p.name}</span>
-                          {p.has_pool && <span style={{ display:"inline-flex", alignItems:"center", gap:3, fontSize:10, fontWeight:800, color:"#B45309", background:"#FEF3C7", borderRadius:100, padding:"2px 7px" }}><Flame size={10}/>POOL</span>}
+                          {p.has_pool && <span style={{ display:"inline-flex", alignItems:"center", gap:3, fontSize:10, fontWeight:800, color:"#B45309", background:"#FEF3C7", borderRadius:100, padding:"2px 7px" }}><Flame size={10}/>ASTA</span>}
                         </div>
                         <div style={{ fontSize:11.5, color:C.muted, marginTop:2 }}>{p.sector || "—"}{p.e_number ? ` · ${p.e_number}` : ""}{p.cas_number ? ` · CAS ${p.cas_number}` : ""}</div>
                       </div>
@@ -342,7 +343,7 @@ export default function SupplierPage() {
                       <div className="sup-num" style={{ fontSize:12.5 }}>{p.min_order_kg != null ? `${p.min_order_kg} kg` : "—"}</div>
                       <div className="sup-num" style={{ fontSize:12.5 }}>{p.lead_time_days != null ? `${p.lead_time_days} gg` : "—"}</div>
                       <div style={{ textAlign:"right" }}>
-                        <div className="sup-num" style={{ fontSize:16, fontWeight:800, color:C.blue, marginBottom:2 }}>{eurKg(p.best_price)}<span style={{ fontSize:11, fontWeight:400, color:C.muted }}>/kg</span></div>
+                        <div className="sup-num" style={{ fontSize:16, fontWeight:800, color:C.blue, marginBottom:2 }}>{eurKg(p.best_price)}<span style={{ fontSize:11, fontWeight:400, color:C.muted }}>/kg</span> <IvaChip style={{ verticalAlign:"1px" }} /></div>
                         {p.best_price != null && (() => {
                           const kg = qtyFor(p);
                           const ship = shipFor(profile.country);

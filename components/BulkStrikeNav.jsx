@@ -11,6 +11,7 @@ import { useState } from "react";
 import { Menu, X } from "lucide-react";
 import ProductSearch from "@/components/BulkStrikeProductSearch";
 import NavAuth from "@/components/BulkStrikeNavAuth";
+import MegaMenu, { MegaMenuMobile } from "@/components/BulkStrikeMegaMenu";
 import { BSIcon } from "@/components/BSLogo";
 
 const C = { border: "#E2E8F0", text: "#0F172A", muted: "#64748B" };
@@ -34,13 +35,16 @@ export default function BulkStrikeNav() {
         .bsnav-links { display:flex; gap:20px; }
         .bsnav-search-mobile { display:none; }
         .bsnav-menu-panel { display:none; }
-        @media (max-width:768px) {
+        @media (max-width:1080px) {
           .bsnav-links { display:none !important; }
+        }
+        @media (max-width:768px) {
           .bsnav-hamburger { display:flex !important; align-items:center; justify-content:center; }
           .bsnav-logo-wrap { flex:1 !important; display:flex !important; justify-content:center !important; }
           .bsnav-search-desktop { display:none !important; }
+          .bsnav-megamenu-desktop { display:none !important; }
           .bsnav-search-mobile { display:block !important; padding:10px 16px 14px; border-top:1px solid ${C.border}; }
-          .bsnav-menu-panel { display:block !important; border-top:1px solid ${C.border}; background:#fff; }
+          .bsnav-menu-panel { display:block !important; border-top:1px solid ${C.border}; background:#fff; max-height:calc(100vh - 70px); overflow-y:auto; }
         }
       `}</style>
 
@@ -62,7 +66,11 @@ export default function BulkStrikeNav() {
             </div>
           </div>
 
-          {/* Ricerca — desktop */}
+          {/* Mega menu categorie + ricerca — desktop. La barra di ricerca resta
+              prominente ACCANTO al selettore categorie, non dentro il menu. */}
+          <div className="bsnav-megamenu-desktop" style={{ flexShrink: 0 }}>
+            <MegaMenu />
+          </div>
           <div className="bsnav-search-desktop" style={{ flex: 1, display: "flex", justifyContent: "center" }}>
             <ProductSearch height={46} maxWidth={580} placeholder="Cerca materie prime, CAS, E-number..." />
           </div>
@@ -83,9 +91,10 @@ export default function BulkStrikeNav() {
           <ProductSearch height={46} placeholder="Cerca materie prime, CAS, E-number..." />
         </div>
 
-        {/* Menu mobile */}
+        {/* Menu mobile: prima le categorie (accordion tap-to-open), poi i link fissi */}
         {mobileMenuOpen && (
           <div className="bsnav-menu-panel">
+            <MegaMenuMobile />
             {LINKS.map(([l, href]) => (
               <div key={l} onClick={() => { window.location.href = href; }} style={{ padding: "13px 20px", fontSize: 15, fontWeight: 600, color: C.text, borderBottom: `1px solid ${C.border}`, cursor: "pointer" }}>{l}</div>
             ))}

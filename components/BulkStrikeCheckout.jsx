@@ -18,6 +18,7 @@ import { ArrowRight, ArrowLeft, Check, ChevronRight, Package, FileText, AlertTri
 import { getCart, checkoutCart, previewCheckout, getMyCompany, getMyCompanyAddress, getShippingAddresses, addShippingAddress, getSession, poolErrorMessage, getShippingQuotes, stampOrderPaymentMethods } from "@/lib/api";
 import BulkStrikeNav from "@/components/BulkStrikeNav";
 import PaymentMethodSelector from "@/components/checkout/PaymentMethodSelector";
+import { TrustBadge, IvaChip } from "@/components/BulkStrikeBadges";
 
 const C = { blue: "#0EA5E9", dark: "#0284C7", text: "#0F172A", muted: "#64748B", border: "#E2E8F0", bg: "#F8FAFE", green: "#059669", red: "#DC2626", amber: "#D97706" };
 const eur = (n) => n == null ? "—" : "€" + Number(n).toLocaleString("it-IT", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -737,7 +738,7 @@ export default function CheckoutPage() {
                             (l'IVA è recuperabile per la maggior parte delle aziende, quindi la mettiamo sotto
                             in piccolo — resta comunque il totale che verrà davvero addebitato). */}
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-                          <span style={{ fontSize: 14, fontWeight: 700 }}>Subtotale <span style={{ fontWeight: 500, color: C.muted }}>(IVA esclusa)</span></span>
+                          <span style={{ fontSize: 14, fontWeight: 700 }}>Subtotale <IvaChip style={{ verticalAlign: "baseline" }} /></span>
                           <span className="co-num" style={{ fontSize: 24, fontWeight: 800, color: C.blue }}>{eur(goodsForDisplay + (shippingForDisplay ?? 0))}</span>
                         </div>
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginTop: 4 }}>
@@ -782,12 +783,15 @@ export default function CheckoutPage() {
                   </div>
                 )}
 
-                <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
                   <button onClick={confirmPayment} disabled={submitting || !payReady || !allMethodsChosen}
                     style={{ background: C.blue, color: "#fff", border: "none", borderRadius: 10, padding: "14px 28px", fontSize: 15, fontWeight: 700, cursor: (submitting || !payReady || !allMethodsChosen) ? "default" : "pointer", opacity: (submitting || !payReady || !allMethodsChosen) ? 0.6 : 1, display: "inline-flex", alignItems: "center", gap: 8, fontFamily: "Inter,system-ui" }}>
                     {submitting ? "Pagamento in corso…" : !payReady ? "Calcolo totale…" : <>Paga {eur(grandTotalForDisplay)} e conferma ordine <ArrowRight size={17} /></>}
                   </button>
                   <button onClick={() => goToStep(3)} disabled={submitting} style={{ background: "transparent", color: C.muted, border: `1.5px solid ${C.border}`, borderRadius: 10, padding: "14px 20px", fontSize: 14, fontWeight: 600, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6, fontFamily: "Inter,system-ui" }}><ArrowLeft size={15} /> Indietro</button>
+                  {/* Badge fiducia compatto: mai un paragrafo (il testo esplicativo escrow
+                      è stato rimosso volutamente dal checkout) */}
+                  <TrustBadge />
                 </div>
               </>
             )}

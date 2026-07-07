@@ -13,6 +13,7 @@ import { ChevronRight, X, Flame, Package, SlidersHorizontal, ShieldCheck, Gavel,
 import { getCatalog, getMacroAreas } from "@/lib/api";
 import BulkStrikeNav from "@/components/BulkStrikeNav";
 import { BSIcon } from "@/components/BSLogo";
+import { IvaChip } from "@/components/BulkStrikeBadges";
 
 const C = { blue: "#0EA5E9", dark: "#0284C7", text: "#0F172A", muted: "#64748B", border: "#E2E8F0", bg: "#F8FAFE", green: "#059669", red: "#DC2626", amber: "#D97706", purple: "#7C3AED" };
 
@@ -224,7 +225,7 @@ export default function CatalogPage() {
                       <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, color: C.muted, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 100, padding: "3px 9px", maxWidth: "100%", overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>
                       <span>{activeSectorObj?.icon || p.primary_icon || "📦"}</span>{activeSectorObj?.name || p.primary_sector || "Materie prime"}
                       </span>
-                      {p.has_pool && <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 10, fontWeight: 800, color: "#B45309", background: "#FEF3C7", borderRadius: 100, padding: "3px 8px", flexShrink: 0 }}><Flame size={11} />POOL</span>}
+                      {p.has_pool && <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 10, fontWeight: 800, color: "#B45309", background: "#FEF3C7", borderRadius: 100, padding: "3px 8px", flexShrink: 0 }}><Flame size={11} />ASTA</span>}
                     </div>
                     <div style={{ fontSize: 15, fontWeight: 700, lineHeight: 1.25, flex: 1 }}>{p.name}</div>
                     {(p.cas_number || p.e_number) && (
@@ -233,7 +234,8 @@ export default function CatalogPage() {
                     <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 8, borderTop: `1px solid ${C.border}`, paddingTop: 10 }}>
                       <div>
                         <div style={{ fontSize: 10, color: C.muted }}>da</div>
-                        <div style={{ fontSize: 18, fontWeight: 900, color: C.blue, letterSpacing: "-0.02em", lineHeight: 1 }}>€{fmt(p.best_price)}<span style={{ fontSize: 11, color: C.muted, fontWeight: 600 }}>/kg*</span></div>
+                        <div style={{ fontSize: 18, fontWeight: 900, color: C.blue, letterSpacing: "-0.02em", lineHeight: 1 }}>€{fmt(p.best_price)}<span style={{ fontSize: 11, color: C.muted, fontWeight: 600 }}>/kg</span></div>
+                        <IvaChip style={{ marginTop: 4 }} />
                       </div>
                       <div style={{ fontSize: 11, color: C.muted, textAlign: "right" }}>{p.supplier_count} {p.supplier_count === 1 ? "fornitore" : "fornitori"}</div>
                     </div>

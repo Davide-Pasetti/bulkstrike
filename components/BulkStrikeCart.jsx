@@ -9,6 +9,7 @@ import { useState, useEffect, useMemo } from "react";
 import { ShoppingCart, Trash2, ArrowRight, AlertTriangle, Package, ChevronRight } from "lucide-react";
 import { getCart, upsertCartItem, removeCartItem, clearCart, getSession, poolErrorMessage, previewCheckout, getMyCompanyAddress, getShippingQuotes } from "@/lib/api";
 import BulkStrikeNav from "@/components/BulkStrikeNav";
+import { TrustBadge, IvaChip } from "@/components/BulkStrikeBadges";
 
 const C = { blue: "#0EA5E9", dark: "#0284C7", text: "#0F172A", muted: "#64748B", border: "#E2E8F0", bg: "#F8FAFE", green: "#059669", red: "#DC2626", amber: "#D97706" };
 const eur = (n) => n == null ? "—" : "€" + Number(n).toLocaleString("it-IT", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -174,11 +175,11 @@ export default function CartPage() {
                       {it.min_order_kg != null && <div style={{ fontSize: 10.5, color: C.muted, marginTop: 3 }}>MOQ {it.min_order_kg} kg</div>}
                     </div>
                     <div>
-                      <div style={{ fontSize: 11, color: C.muted, marginBottom: 3 }}>Prezzo unitario <span style={{ fontWeight: 400 }}>*</span></div>
+                      <div style={{ fontSize: 11, color: C.muted, marginBottom: 3 }}>Prezzo unitario <IvaChip /></div>
                       <div className="ct-num" style={{ fontSize: 15, fontWeight: 700, color: it.unit_price != null ? C.text : C.red }}>{it.unit_price != null ? `${eur(it.unit_price)}/kg` : "—"}</div>
                     </div>
                     <div>
-                      <div style={{ fontSize: 11, color: C.muted, marginBottom: 3 }}>Totale riga <span style={{ fontWeight: 400 }}>*</span></div>
+                      <div style={{ fontSize: 11, color: C.muted, marginBottom: 3 }}>Totale riga <IvaChip /></div>
                       <div className="ct-num" style={{ fontSize: 16, fontWeight: 800, color: C.blue }}>{it.unit_price != null ? eur(Number(it.unit_price) * Number(it.quantity_kg)) : "—"}</div>
                     </div>
                     <button onClick={() => removeLine(it)} disabled={busy} title="Rimuovi"
@@ -189,7 +190,7 @@ export default function CartPage() {
                 );
               })}
               <button onClick={emptyAll} style={{ background: "transparent", border: "none", color: C.muted, fontSize: 12.5, cursor: "pointer", textDecoration: "underline", fontFamily: "Inter,system-ui", padding: "4px 0" }}>Svuota carrello</button>
-              <div style={{ fontSize: 11.5, color: C.muted, marginTop: 10 }}>* Prezzo unitario e totale riga: IVA esclusa (spedizione stimata sull'indirizzo aziendale nel riepilogo qui a fianco)</div>
+              <div style={{ fontSize: 11.5, color: C.muted, marginTop: 10 }}>Spedizione stimata sull'indirizzo aziendale nel riepilogo qui a fianco.</div>
             </div>
 
             {/* RIEPILOGO */}
@@ -238,6 +239,11 @@ export default function CartPage() {
                 style={{ width: "100%", justifyContent: "center", background: C.blue, color: "#fff", border: "none", borderRadius: 10, padding: "13px", fontSize: 14.5, fontWeight: 700, cursor: issues.length > 0 ? "default" : "pointer", opacity: issues.length > 0 ? 0.5 : 1, display: "flex", alignItems: "center", gap: 8, fontFamily: "Inter,system-ui" }}>
                 Confronta i costi di spedizione <ArrowRight size={16} />
               </button>
+              {/* Badge fiducia compatto (icona + 2 parole) — NON il paragrafo escrow
+                  rimosso in precedenza: qui solo il segnale visivo, mai testo lungo. */}
+              <div style={{ display: "flex", justifyContent: "center", marginTop: 12 }}>
+                <TrustBadge />
+              </div>
             </div>
           </div>
         )}

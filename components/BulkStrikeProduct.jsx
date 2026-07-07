@@ -5,6 +5,7 @@ import { getProduct, getOpenPoolForProduct, getPriceReference, getProductBreadcr
 import BulkStrikeNav from "@/components/BulkStrikeNav";
 import BulkStrikeChatWidget from "@/components/BulkStrikeChatWidget";
 import { BSIcon } from "@/components/BSLogo";
+import { IvaChip } from "@/components/BulkStrikeBadges";
 
 // ─── PALETTE (matches homepage) ───────────────────────────────────────────────
 const C = { blue:"#0EA5E9", dark:"#0284C7", text:"#0F172A", muted:"#64748B", border:"#E2E8F0", bg:"#F8FAFE", green:"#059669", red:"#DC2626", amber:"#D97706", purple:"#7C3AED" };
@@ -451,10 +452,10 @@ export default function ProductPage() {
             <p style={{ fontSize:14, color:C.muted }}>{product.form} · Purezza {product.purityRange} · CAS {product.cas}</p>
           </div>
           <div style={{ textAlign:"right" }}>
-            <div style={{ fontSize:12, color:C.muted }}>Prezzo indicativo da <span title="Materia prima + spedizione, IVA esclusa">*</span></div>
-            <div className="bs-num" style={{ fontSize:28, fontWeight:800, color:C.blue }}>{eurKg(ranked[0].calc.preVatKg)}<span style={{ fontSize:14, fontWeight:400, color:C.muted }}>/kg</span></div>
+            <div style={{ fontSize:12, color:C.muted }}>Prezzo indicativo da</div>
+            <div className="bs-num" style={{ fontSize:28, fontWeight:800, color:C.blue }}>{eurKg(ranked[0].calc.preVatKg)}<span style={{ fontSize:14, fontWeight:400, color:C.muted }}>/kg</span> <IvaChip style={{ verticalAlign: "2px" }} /></div>
             <div style={{ display:"flex", alignItems:"center", gap:4, justifyContent:"flex-end", fontSize:12, color:C.green }}><TrendingDown size={12}/> -15,6% da gennaio</div>
-            <div style={{ fontSize:10.5, color:C.muted, marginTop:2 }}>* Spedizione inclusa, IVA esclusa</div>
+            <div style={{ fontSize:10.5, color:C.muted, marginTop:2 }}>Spedizione inclusa</div>
           </div>
         </div>
 
@@ -656,16 +657,16 @@ export default function ProductPage() {
                       <div style={{ fontSize:11, color:C.green, fontWeight:700, display:"flex", alignItems:"center", gap:4 }}><Check size={11}/> Si unisce alla spedizione di ciò che hai già nel carrello da questo fornitore</div>
                     )}
                     <div style={{ borderTop:`1px solid ${C.border}`, marginTop:4, paddingTop:9, display:"flex", justifyContent:"space-between", alignItems:"baseline" }}>
-                      <span style={{ fontSize:14, fontWeight:700 }}>Totale <span style={{ fontWeight:500, color:C.muted }}>(IVA esclusa)</span></span>
+                      <span style={{ fontSize:14, fontWeight:700 }}>Totale <IvaChip style={{ verticalAlign: "baseline" }} /></span>
                       <span className="bs-num" style={{ fontSize:24, fontWeight:800, color:C.text }}>{eur(featured.calc.preVat)}</span>
                     </div>
                   </div>
-                  <div style={{ fontSize:11, color:C.muted, marginTop:8 }}>* IVA esclusa — la vedi nel riepilogo al checkout, dopo aver scelto l'indirizzo.</div>
+                  <div style={{ fontSize:11, color:C.muted, marginTop:8 }}>L'IVA la vedi nel riepilogo al checkout, dopo aver scelto l'indirizzo.</div>
                 </div>
                 <div style={{ textAlign:"center" }}>
                   <div style={{ fontSize:12, color:C.muted }}>Costo</div>
                   <div className="bs-num" style={{ fontSize:40, fontWeight:800, color:C.blue, lineHeight:1.1 }}>{eurKg(featured.calc.preVatKg)}</div>
-                  <div style={{ fontSize:13, color:C.muted, marginBottom:14 }}>/kg · spedizione inclusa, IVA esclusa</div>
+                  <div style={{ fontSize:13, color:C.muted, marginBottom:14 }}>/kg · spedizione inclusa <IvaChip /></div>
                   <button className="bs-btn" onClick={handleBuyNow} disabled={busy || !featured} style={{ width:"100%", fontSize:16, padding:"14px", opacity:(busy||!featured)?0.6:1, cursor:(busy||!featured)?"default":"pointer" }}>Acquista ora <ArrowRight size={18}/></button>
                   <button onClick={handleAddToCart} disabled={busy || !featured} style={{ width:"100%", marginTop:8, background:"transparent", color:C.blue, border:`1.5px solid ${C.blue}`, borderRadius:10, padding:"12px", fontSize:14.5, fontWeight:700, cursor:(busy||!featured)?"default":"pointer", opacity:(busy||!featured)?0.6:1, display:"flex", alignItems:"center", justifyContent:"center", gap:8, fontFamily:"Inter,system-ui" }}><ShoppingCart size={16}/> Aggiungi al carrello</button>
                   {cartOk && <div style={{ marginTop:8, fontSize:12.5, color:C.green, fontWeight:700, display:"flex", alignItems:"center", gap:5 }}><Check size={13}/> Aggiunto! <span onClick={() => { window.location.href = "/carrello"; }} style={{ cursor:"pointer", textDecoration:"underline" }}>Vai al carrello</span></div>}
@@ -673,7 +674,7 @@ export default function ProductPage() {
                   {pool.exists && (
                   <div style={{ marginTop:10, fontSize:13 }}>
                     <span style={{ color:C.muted }}>oppure </span>
-                    <span onClick={goToPool} style={{ color:C.purple, fontWeight:600, cursor:"pointer" }}>c'è un pool attivo: ora {eurKg(pool.bestPrice)}/kg →</span>
+                    <span onClick={goToPool} style={{ color:C.purple, fontWeight:600, cursor:"pointer" }}>c'è un'asta a ribasso attiva: ora {eurKg(pool.bestPrice)}/kg →</span>
                   </div>
                   )}
                 </div>
