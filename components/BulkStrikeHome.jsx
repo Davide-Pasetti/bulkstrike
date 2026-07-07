@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { Bot, ArrowRight, Check, Clock, ChevronRight, TrendingDown, X, ChevronDown } from "lucide-react";
-import { getMacroAreas, getSectorProducts } from "@/lib/api";
+import { getMacroAreas, getSectorProducts, streamAiAssistant } from "@/lib/api";
 import BulkStrikeNav from "@/components/BulkStrikeNav";
 import { BSIcon } from "@/components/BSLogo";
 
@@ -97,7 +97,66 @@ export default function BulkStrikeLight() {
   const [activeChart, setActiveChart] = useState("Acido Citrico");
   const [activeTab, setActiveTab]   = useState("acquirente");
   const [chatOpen, setChatOpen]     = useState(false);
+  // Widget di supporto (mode="support"): cronologia effimera lato client, come da design.
+  const [chatMsgs, setChatMsgs]     = useState([{ role:"assistant", content:"Ciao! Sono l'assistente virtuale (AI) di BulkStrike — non una persona. Posso aiutarti a trovare materie prime, confrontare fornitori o unirti a un'asta a ribasso. Per parlare con una persona, scrivi a davide@bulkstrike.com. Come posso aiutarti?" }]);
+  const [chatInput, setChatInput]   = useState("");
+  const [chatBusy, setChatBusy]     = useState(false);
   const [count, setCount]           = useState({ pools:0, materials:0, countries:0, volume:0 });
+
+  async function sendChat() {
+    const text = chatInput.trim();
+    if (!text || chatBusy) return;
+    // client_history = i turni finora (esclusa la risposta in costruzione)
+    const history = chatMsgs.map(m => ({ role: m.role, content: m.content }));
+    setChatMsgs(prev => [...prev, { role:"user", content:text }, { role:"assistant", content:"" }]);
+    setChatInput("");
+    setChatBusy(true);
+    let gotText = false;
+    try {
+      await streamAiAssistant({
+        mode: "support",
+        message: text,
+        clientHistory: history,
+        onEvent: (ev) => {
+          if (ev.type === "text") {
+            gotText = true;
+            setChatMsgs(prev => {
+              const c = [...prev];
+              c[c.length-1] = { ...c[c.length-1], content: c[c.length-1].content + ev.delta };
+              return c;
+            });
+          } else if (ev.type === "error") {
+            setChatMsgs(prev => {
+              const c = [...prev];
+              c[c.length-1] = { role:"assistant", content:"Si è verificato un errore. Riprova tra poco." };
+              return c;
+            });
+          }
+          // "tool"/"conversation"/"done" ignorati: il supporto è sola lettura ed effimero
+        },
+      });
+      // Se lo stream si chiude senza testo (es. rate limit già gestito come error), lascia un messaggio
+      if (!gotText) {
+        setChatMsgs(prev => {
+          const c = [...prev];
+          if (c[c.length-1]?.role === "assistant" && !c[c.length-1].content) {
+            c[c.length-1] = { role:"assistant", content:"Non ho ricevuto una risposta. Riprova tra poco." };
+          }
+          return c;
+        });
+      }
+    } catch (e) {
+      setChatMsgs(prev => {
+        const c = [...prev];
+        if (c[c.length-1]?.role === "assistant" && !c[c.length-1].content) {
+          c[c.length-1] = { role:"assistant", content:"Non riesco a rispondere ora. Riprova tra poco." };
+        }
+        return c;
+      });
+    } finally {
+      setChatBusy(false);
+    }
+  }
   const [macros, setMacros]               = useState([]);
   const [activeMacro, setActiveMacro]     = useState(null);
   const [activeSector, setActiveSector]   = useState(null);
@@ -626,15 +685,26 @@ export default function BulkStrikeLight() {
               </button>
             </div>
             <div style={{ padding:12, display:"flex", flexDirection:"column", gap:8, maxHeight:180, overflowY:"auto" }}>
-              <div style={{ background:C.bg, borderRadius:"12px 12px 12px 4px", padding:"10px 12px", fontSize:13, maxWidth:"85%", color:C.text, lineHeight:1.5 }}>
-                Ciao! Sono l'assistente virtuale (AI) di BulkStrike — non una persona. Posso aiutarti a trovare materie prime, confrontare fornitori o unirti a un'asta a ribasso. Per parlare con una persona, scrivi a davide@bulkstrike.com. Come posso aiutarti?
-              </div>
+              {chatMsgs.map((m, i) => (
+                m.role === "user" ? (
+                  <div key={i} style={{ alignSelf:"flex-end", background:C.blue, color:"white", borderRadius:"12px 12px 4px 12px", padding:"10px 12px", fontSize:13, maxWidth:"85%", lineHeight:1.5, whiteSpace:"pre-wrap" }}>{m.content}</div>
+                ) : (
+                  <div key={i} style={{ alignSelf:"flex-start", background:C.bg, color:C.text, borderRadius:"12px 12px 12px 4px", padding:"10px 12px", fontSize:13, maxWidth:"85%", lineHeight:1.5, whiteSpace:"pre-wrap" }}>{m.content || (chatBusy ? "…" : "")}</div>
+                )
+              ))}
             </div>
             <div style={{ borderTop:`1px solid ${C.border}` }}>
               <div style={{ padding:"6px 12px 0", fontSize:10, color:C.muted, textAlign:"center" }}>Risposte generate da intelligenza artificiale</div>
               <div style={{ padding:10, display:"flex", gap:8 }}>
-                <input placeholder="Scrivi un messaggio..." style={{ flex:1, border:`1px solid ${C.border}`, borderRadius:8, padding:"8px 12px", fontSize:13, outline:"none", fontFamily:"Inter,system-ui" }} />
-                <button style={{ background:C.blue, border:"none", borderRadius:8, width:34, cursor:"pointer", color:"white", fontWeight:700, flexShrink:0, fontFamily:"Inter,system-ui" }}>↑</button>
+                <input
+                  value={chatInput}
+                  onChange={e => setChatInput(e.target.value)}
+                  onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendChat(); } }}
+                  disabled={chatBusy}
+                  placeholder="Scrivi un messaggio..."
+                  style={{ flex:1, border:`1px solid ${C.border}`, borderRadius:8, padding:"8px 12px", fontSize:13, outline:"none", fontFamily:"Inter,system-ui" }}
+                />
+                <button onClick={sendChat} disabled={chatBusy || !chatInput.trim()} style={{ background:C.blue, border:"none", borderRadius:8, width:34, cursor:(chatBusy || !chatInput.trim())?"default":"pointer", opacity:(chatBusy || !chatInput.trim())?0.5:1, color:"white", fontWeight:700, flexShrink:0, fontFamily:"Inter,system-ui" }}>↑</button>
               </div>
             </div>
           </div>
