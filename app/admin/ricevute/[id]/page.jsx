@@ -12,7 +12,7 @@
 import { Suspense, useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
-import { RICEVUTA_EMITTENTE, PAYMENT_CONFIG } from '@/lib/payments/paymentConfig';
+import { PAYMENT_CONFIG } from '@/lib/payments/paymentConfig';
 
 const eur = (n) =>
   new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(n);
@@ -37,24 +37,30 @@ function RicevutaContent() {
   const supabase = createClient();
   const [ricevuta, setRicevuta] = useState(null);
   const [righe, setRighe] = useState([]);
+  const [emittente, setEmittente] = useState(null);
   const [errore, setErrore] = useState(null);
 
+  // I dati arrivano dall'API admin (service role + companies.is_platform_admin):
+  // la RLS su ricevute consente la lettura diretta solo al corriere
+  // intestatario, e i dati emittente (CF/IBAN) sono server-only — non devono
+  // comparire nel bundle client.
   useEffect(() => {
     (async () => {
-      const { data: r, error } = await supabase
-        .from('ricevute')
-        .select('*, companies:carrier_id (legal_name, vat, address)')
-        .eq('id', id)
-        .single();
-      if (error) { setErrore('Ricevuta non trovata o accesso non consentito.'); return; }
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) { setErrore('Accesso non consentito.'); return; }
+      const resp = await fetch(`/api/admin/ricevute-mensili?id=${encodeURIComponent(id)}`, {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      if (!resp.ok) {
+        setErrore(resp.status === 403
+          ? 'Accesso non consentito (solo admin piattaforma).'
+          : 'Ricevuta non trovata.');
+        return;
+      }
+      const { ricevuta: r, righe: l, emittente: e } = await resp.json();
       setRicevuta(r);
-
-      const { data: l } = await supabase
-        .from('commission_ledger')
-        .select('order_id, shipping_amount, commission_amount, accrued_at')
-        .eq('ricevuta_id', id)
-        .order('accrued_at');
       setRighe(l ?? []);
+      setEmittente(e);
     })();
   }, [id]);
 
@@ -115,10 +121,16 @@ function RicevutaContent() {
         <div className="parti">
           <div>
             <div className="etichetta">Prestatore</div>
-            <strong>{RICEVUTA_EMITTENTE.nome}</strong><br />
-            Nato a {RICEVUTA_EMITTENTE.natoA} il {RICEVUTA_EMITTENTE.natoIl}<br />
-            {RICEVUTA_EMITTENTE.residenza}<br />
-            C.F. {RICEVUTA_EMITTENTE.codiceFiscale}
+            {emittente?.completo ? (
+              <>
+                <strong>{emittente.nome}</strong><br />
+                Nato a {emittente.natoA} il {emittente.natoIl}<br />
+                {emittente.residenza}<br />
+                C.F. {emittente.codiceFiscale}
+              </>
+            ) : (
+              <em>Dati emittente non configurati (env RICEVUTA_* mancanti)</em>
+            )}
           </div>
           <div>
             <div className="etichetta">Committente</div>
@@ -178,7 +190,7 @@ function RicevutaContent() {
 
         <div className="pagamento">
           <strong>Modalità di pagamento:</strong> bonifico bancario<br />
-          Intestatario: {RICEVUTA_EMITTENTE.nome} — IBAN: {RICEVUTA_EMITTENTE.iban}
+          Intestatario: {emittente?.nome ?? '—'} — IBAN: {emittente?.iban ?? '—'}
         </div>
 
         <div className="note">

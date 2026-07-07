@@ -16,7 +16,8 @@
 
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { PAYMENT_CONFIG, RICEVUTA_EMITTENTE } from '@/lib/payments/paymentConfig';
+import { PAYMENT_CONFIG } from '@/lib/payments/paymentConfig';
+import { getRicevutaEmittente } from '@/lib/payments/emittente';
 
 // Client creato al primo utilizzo (non al caricamento del modulo): durante
 // "Collecting page data" in build Next.js valuta il modulo senza che le env
@@ -207,7 +208,7 @@ export async function POST(request) {
       marca_da_bollo: marcaDaBollo,
       bollo_a_carico_corriere: bollo,
       totale_da_bonificare: totaleDaBonificare,
-      emittente: RICEVUTA_EMITTENTE.nome,
+      emittente: getRicevutaEmittente().nome ?? 'BulkStrike',
     });
     nextNumero += 1;
   }
@@ -228,7 +229,36 @@ export async function GET(request) {
     return NextResponse.json({ error: 'Non autorizzato' }, { status: 403 });
   }
 
-  const year = new URL(request.url).searchParams.get('year') ?? new Date().getFullYear();
+  const params = new URL(request.url).searchParams;
+
+  // Dettaglio singola ricevuta (?id=...): usato dalla pagina stampabile
+  // /admin/ricevute/[id]. Passa da qui (service role + check admin) sia
+  // perché la RLS su ricevute consente la lettura solo al corriere
+  // intestatario, sia perché i dati emittente (CF/IBAN) sono server-only
+  // e non devono stare nel bundle client.
+  const id = params.get('id');
+  if (id) {
+    const { data: ricevuta, error: recErr } = await supabase
+      .from('ricevute')
+      .select('*, companies:carrier_id (legal_name, vat, address)')
+      .eq('id', id)
+      .single();
+    if (recErr) {
+      return NextResponse.json({ error: 'Ricevuta non trovata' }, { status: 404 });
+    }
+    const { data: righe } = await supabase
+      .from('commission_ledger')
+      .select('order_id, shipping_amount, commission_amount, accrued_at')
+      .eq('ricevuta_id', id)
+      .order('accrued_at');
+    return NextResponse.json({
+      ricevuta,
+      righe: righe ?? [],
+      emittente: getRicevutaEmittente(),
+    });
+  }
+
+  const year = params.get('year') ?? new Date().getFullYear();
 
   const { data, error } = await supabase
     .from('ricevute')
