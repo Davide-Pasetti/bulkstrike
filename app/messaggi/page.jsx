@@ -1,5 +1,10 @@
+import ProfileShell from "@/components/BulkStrikeProfileShell";
 import BulkStrikeMessages from "@/components/BulkStrikeMessages";
 
 export default function Page() {
-  return <BulkStrikeMessages />;
+  return (
+    <ProfileShell active="messaggi">
+      <BulkStrikeMessages inShell />
+    </ProfileShell>
+  );
 }

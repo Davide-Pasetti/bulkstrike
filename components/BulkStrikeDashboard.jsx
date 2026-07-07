@@ -4,8 +4,8 @@ import {
   getWatchedMaterials, addWatchedMaterial, removeWatchedMaterial, updateMaterialAlert,
   getNotifications, markNotificationRead, markAllNotificationsRead, subscribeNotifications,
 } from "@/lib/api";
-import { Bell, Search, Plus, TrendingDown, Zap, Factory, Check, X, Gavel, LayoutGrid, Inbox, Clock, Boxes, ChevronRight, Settings, Trophy, Send, Package, Truck, LogOut, AlertTriangle, ShoppingBag, Shield } from "lucide-react";
-import { BSIcon } from "@/components/BSLogo";
+import { Bell, Search, Plus, TrendingDown, Zap, Factory, Check, X, Gavel, Inbox, Clock, Boxes, ChevronRight, Trophy, Send, Package, Truck, LogOut, AlertTriangle } from "lucide-react";
+import ProfileShell from "@/components/BulkStrikeProfileShell";
 
 const C = { blue:"#0EA5E9", dark:"#0284C7", text:"#0F172A", muted:"#64748B", border:"#E2E8F0", bg:"#F8FAFE", green:"#059669", amber:"#D97706", red:"#DC2626", purple:"#7C3AED" };
 
@@ -292,90 +292,29 @@ export default function Dashboard() {
   const searchHits = query ? ALL_MATERIALS.filter(m=>m.toLowerCase().includes(query)) : [];
   const exact = query && ALL_MATERIALS.some(m=>m.toLowerCase()===query);
 
-  // Sidebar unica e ordinata: "section" = cambio sezione in-component (setSection),
-  // "route" = navigazione a un'altra pagina (window.location.href). Le voci con
-  // show:false sono nascoste per il ruolo corrente.
-  const SIDEBAR = [
-    { type:"section", id:"overview", label:"Panoramica",             icon:LayoutGrid },
-    { type:"section", id:"alerts",   label:"Avvisi & materie prime", icon:Bell, badge:true },
-    { type:"route",   href:"/ordini", label:"Ordini",                icon:ShoppingBag },
-    { type:"section", id:"pools",    label:"Aste attive",            icon:Gavel },
-    { type:"route",   href:"/i-miei-prodotti", label:"Listino prodotti", icon:Package, show: !!company?.is_supplier },
-    { type:"route",   href:"/corriere",        label:"Listino servizi", icon:Truck,   show: !!company?.is_carrier },
-    { type:"route",   href:"/admin/prodotti",  label:"Admin",           icon:Shield,  show: !!company?.is_platform_admin },
-    { type:"section", id:"account",  label:"Account",                icon:Settings },
-  ];
+  // La sidebar e l'header sono ora forniti da BulkStrikeProfileShell (shell
+  // condivisa da TUTTE le voci del profilo: la sidebar resta ferma, cambia solo
+  // il contenuto). Qui resta solo il toggle ruolo, passato all'header della
+  // shell: visibile in demo (nessun account reale) o per un account che è
+  // davvero sia cliente sia fornitore.
+  const roleToggle = (!company || (company.is_buyer && company.is_supplier)) ? (
+    <div style={{ display:"flex", background:C.bg, border:`1px solid ${C.border}`, borderRadius:9, padding:3 }}>
+      {[["buyer","Acquirente"],["supplier","Fornitore"]].map(([id,lab])=>(
+        <button key={id} onClick={()=>setRole(id)} style={{ padding:"6px 14px", borderRadius:7, border:"none", cursor:"pointer", fontSize:13, fontWeight:700, fontFamily:"Inter,system-ui", background:role===id?"#fff":"transparent", color:role===id?C.blue:C.muted, boxShadow:role===id?"0 1px 3px rgba(0,0,0,0.08)":"none" }}>{lab}</button>
+      ))}
+    </div>
+  ) : null;
 
   return (
-    <div style={{ background:C.bg, color:C.text, fontFamily:"'Inter',system-ui,sans-serif", minHeight:"100vh" }}>
+    <ProfileShell active={section} headerCenter={roleToggle}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap');
-        * { box-sizing:border-box; }
         .bs-num { font-family:'JetBrains Mono',monospace; }
         input:focus { border-color:#0EA5E9 !important; }
         .bs-card { background:#fff; border:1px solid #E2E8F0; border-radius:14px; }
-        .bs-nav { display:flex; align-items:center; gap:11px; padding:10px 12px; border-radius:10px; cursor:pointer; font-size:14px; font-weight:600; font-family:'Inter',system-ui; transition:all 0.15s; }
-        @media (max-width:820px){ .bs-shell { grid-template-columns:1fr !important; } .bs-side { position:static !important; flex-direction:row !important; overflow-x:auto; } .bs-side .bs-nav span { display:none; } .bs-stats4 { grid-template-columns:repeat(2,1fr) !important; } .bs-2col { grid-template-columns:1fr !important; } .bs-form2 { grid-template-columns:1fr !important; } }
+        @media (max-width:820px){ .bs-stats4 { grid-template-columns:repeat(2,1fr) !important; } .bs-2col { grid-template-columns:1fr !important; } .bs-form2 { grid-template-columns:1fr !important; } }
       `}</style>
+      <>
 
-      {/* HEADER */}
-      <header style={{ background:"#fff", borderBottom:`1px solid ${C.border}`, position:"sticky", top:0, zIndex:50 }}>
-        <div style={{ maxWidth:1180, margin:"0 auto", padding:"0 20px", height:62, display:"flex", alignItems:"center", gap:16 }}>
-          <div onClick={() => { window.location.href = "/"; }} style={{ display:"flex", alignItems:"center", gap:9, cursor:"pointer" }}>
-            <BSIcon size={32} uid="nav"/>
-            <div style={{ display:"flex", alignItems:"baseline" }}>
-              <span style={{ fontSize:18, fontWeight:900, letterSpacing:"-0.03em" }}>Bulk</span>
-              <span style={{ fontSize:18, fontWeight:900, letterSpacing:"-0.03em", background:"linear-gradient(90deg,#0EA5E9,#22D3EE)", WebkitBackgroundClip:"text", backgroundClip:"text", color:"transparent" }}>Strike</span>
-            </div>
-          </div>
-
-          {/* role toggle: visibile in demo (nessun account reale) oppure per un account che è davvero sia cliente sia fornitore */}
-          {(!company || (company.is_buyer && company.is_supplier)) ? (
-            <div style={{ marginLeft:"auto", display:"flex", background:C.bg, border:`1px solid ${C.border}`, borderRadius:9, padding:3 }}>
-              {[["buyer","Acquirente"],["supplier","Fornitore"]].map(([id,lab])=>(
-                <button key={id} onClick={()=>setRole(id)} style={{ padding:"6px 14px", borderRadius:7, border:"none", cursor:"pointer", fontSize:13, fontWeight:700, fontFamily:"Inter,system-ui", background:role===id?"#fff":"transparent", color:role===id?C.blue:C.muted, boxShadow:role===id?"0 1px 3px rgba(0,0,0,0.08)":"none" }}>{lab}</button>
-              ))}
-            </div>
-          ) : <div style={{ marginLeft:"auto" }}/>}
-
-          {/* bell */}
-          <button onClick={()=>setSection("alerts")} style={{ position:"relative", width:40, height:40, borderRadius:10, border:`1px solid ${C.border}`, background:"#fff", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>
-            <Bell size={18} color={C.text}/>
-            {unread>0 && <span style={{ position:"absolute", top:-5, right:-5, minWidth:18, height:18, padding:"0 4px", borderRadius:9, background:C.red, color:"#fff", fontSize:10, fontWeight:800, display:"flex", alignItems:"center", justifyContent:"center", border:"2px solid #fff" }}>{unread}</span>}
-          </button>
-
-          {/* avatar */}
-          <div style={{ display:"flex", alignItems:"center", gap:9 }}>
-            <div style={{ width:38, height:38, borderRadius:10, background:"linear-gradient(135deg,#0D2137,#0C4A6E)", color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:800 }}>CP</div>
-          </div>
-        </div>
-      </header>
-
-      <div className="bs-shell" style={{ maxWidth:1180, margin:"0 auto", padding:"22px 20px 60px", display:"grid", gridTemplateColumns:"230px 1fr", gap:22, alignItems:"start" }}>
-        {/* SIDEBAR */}
-        <aside className="bs-side" style={{ position:"sticky", top:84, display:"flex", flexDirection:"column", gap:4 }}>
-          {SIDEBAR.map(item=>{
-            if (item.show === false) return null;
-            const Ico=item.icon;
-            if (item.type==="route") {
-              return (
-                <div key={item.label} className="bs-nav" onClick={() => { window.location.href = item.href; }} style={{ background:"transparent", color:C.muted }}>
-                  <Ico size={18}/><span>{item.label}</span>
-                </div>
-              );
-            }
-            const on=section===item.id;
-            return (
-              <div key={item.id} className="bs-nav" onClick={()=>setSection(item.id)} style={{ background:on?"#EFF6FF":"transparent", color:on?C.blue:C.muted }}>
-                <Ico size={18}/><span>{item.label}</span>
-                {item.badge && unread>0 && <span style={{ marginLeft:"auto", minWidth:18, height:18, padding:"0 5px", borderRadius:9, background:C.red, color:"#fff", fontSize:10, fontWeight:800, display:"flex", alignItems:"center", justifyContent:"center" }}>{unread}</span>}
-              </div>
-            );
-          })}
-        </aside>
-
-        {/* MAIN */}
-        <main>
           {/* ===== OVERVIEW ===== */}
           {section==="overview" && (
             <>
@@ -714,8 +653,7 @@ export default function Dashboard() {
               </div>
             </>
           )}
-        </main>
-      </div>
-    </div>
+      </>
+    </ProfileShell>
   );
 }

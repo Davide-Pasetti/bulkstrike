@@ -13,7 +13,7 @@ const C = { blue: "#0EA5E9", text: "#0F172A", muted: "#64748B", border: "#E2E8F0
 const TYPE_LABEL = { producer: "Produttore", distributor: "Distributore" };
 const flagFor = (country) => ({ Italia: "🇮🇹", Germania: "🇩🇪", Francia: "🇫🇷", Spagna: "🇪🇸", "Paesi Bassi": "🇳🇱", Belgio: "🇧🇪", Austria: "🇦🇹", Polonia: "🇵🇱" }[country] || "🌍");
 
-export default function FollowedSuppliersPage() {
+export default function FollowedSuppliersPage({ inShell = false }) {
   const [loading, setLoading] = useState(true);
   const [needLogin, setNeedLogin] = useState(false);
   const [err, setErr] = useState("");
@@ -51,7 +51,7 @@ export default function FollowedSuppliersPage() {
         .fav-unfollow:focus-visible { outline:2px solid ${C.blue}; outline-offset:2px; }
       `}</style>
 
-      <BulkStrikeNav />
+      {!inShell && <BulkStrikeNav />}
 
       <div style={{ maxWidth: 1100, margin: "0 auto", padding: "22px 20px 60px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: C.muted, marginBottom: 16 }}>

@@ -1,5 +1,10 @@
+import ProfileShell from "@/components/BulkStrikeProfileShell";
 import BulkStrikeFollowedSuppliers from "@/components/BulkStrikeFollowedSuppliers";
 
 export default function Page() {
-  return <BulkStrikeFollowedSuppliers />;
+  return (
+    <ProfileShell active="preferiti">
+      <BulkStrikeFollowedSuppliers inShell />
+    </ProfileShell>
+  );
 }

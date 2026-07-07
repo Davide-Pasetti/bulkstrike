@@ -35,7 +35,7 @@ const emptyFormat = () => ({ label:"sacco", size_kg:25 });
 const emptyAttr = () => ({ key:"", value:"" });
 const emptyTier = () => ({ min_kg:"", max_kg:"", price_per_kg:"" });
 
-export default function MyProductsPage() {
+export default function MyProductsPage({ inShell = false }) {
   const [loading, setLoading] = useState(true);
   const [needLogin, setNeedLogin] = useState(false);
   const [notSupplier, setNotSupplier] = useState(false);
@@ -330,7 +330,7 @@ export default function MyProductsPage() {
         @media (max-width:700px) { .mp-row-grid { grid-template-columns:1fr 1fr !important; } .mp-nav-links { display:none !important; } }
       `}</style>
 
-      <BulkStrikeNav />
+      {!inShell && <BulkStrikeNav />}
 
       <div style={{ maxWidth:1100, margin:"0 auto", padding:"22px 20px 60px" }}>
         <div style={{ display:"flex", alignItems:"center", gap:8, fontSize:13, color:C.muted, marginBottom:18 }}>

@@ -70,7 +70,7 @@ function RegionPicker({ value, onChange }) {
   );
 }
 
-export default function CarrierProfilePage() {
+export default function CarrierProfilePage({ inShell = false }) {
   const [loading, setLoading] = useState(true);
   const [needLogin, setNeedLogin] = useState(false);
   const [profile, setProfile] = useState(null);
@@ -238,7 +238,7 @@ export default function CarrierProfilePage() {
         @media (max-width:820px) { .cp-rate-row { grid-template-columns:1fr 1fr; } }
       `}</style>
 
-      <BulkStrikeNav />
+      {!inShell && <BulkStrikeNav />}
 
       <div style={{ maxWidth: 960, margin: "0 auto", padding: "22px 20px 60px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: C.muted, marginBottom: 18 }}>

@@ -1,3 +1,10 @@
-"use client";
-import App from "@/components/BulkStrikeAdminProducts";
-export default App;
+import ProfileShell from "@/components/BulkStrikeProfileShell";
+import AdminProductsPage from "@/components/BulkStrikeAdminProducts";
+
+export default function Page() {
+  return (
+    <ProfileShell active="admin">
+      <AdminProductsPage inShell />
+    </ProfileShell>
+  );
+}

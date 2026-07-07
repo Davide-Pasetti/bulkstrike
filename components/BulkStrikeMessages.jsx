@@ -27,7 +27,7 @@ const fmtTime = (d) => {
     : dt.toLocaleDateString("it-IT", { day: "numeric", month: "short" });
 };
 
-export default function MessagesPage() {
+export default function MessagesPage({ inShell = false }) {
   const [loading, setLoading] = useState(true);
   const [needLogin, setNeedLogin] = useState(false);
   const [err, setErr] = useState("");
@@ -132,7 +132,7 @@ export default function MessagesPage() {
         }
       `}</style>
 
-      <BulkStrikeNav />
+      {!inShell && <BulkStrikeNav />}
 
       <div style={{ maxWidth: 1100, margin: "0 auto", padding: "22px 20px 60px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: C.muted, marginBottom: 16 }}>

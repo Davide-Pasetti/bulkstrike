@@ -23,7 +23,7 @@ const STATUS = {
 };
 const statusOf = (s) => STATUS[s] || { label:s, fg:C.muted, bg:C.bg };
 
-export default function OrdersPage() {
+export default function OrdersPage({ inShell = false }) {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [needLogin, setNeedLogin] = useState(false);
@@ -79,7 +79,7 @@ export default function OrdersPage() {
       `}</style>
 
       {/* NAVBAR */}
-      <BulkStrikeNav />
+      {!inShell && <BulkStrikeNav />}
 
       <div style={{ maxWidth:1200, margin:"0 auto", padding:"22px 20px 60px" }}>
         {/* BREADCRUMB */}

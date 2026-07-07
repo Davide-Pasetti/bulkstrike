@@ -14,7 +14,7 @@ import BulkStrikeNav from "@/components/BulkStrikeNav";
 const C = { blue: "#0EA5E9", text: "#0F172A", muted: "#64748B", border: "#E2E8F0", bg: "#F8FAFE", green: "#059669", red: "#DC2626", amber: "#D97706", purple: "#7C3AED" };
 const kg = (n) => n == null ? "—" : Number(n).toLocaleString("it-IT") + " kg";
 
-export default function AdminProductsPage() {
+export default function AdminProductsPage({ inShell = false }) {
   const [loading, setLoading] = useState(true);
   const [needLogin, setNeedLogin] = useState(false);
   const [notAdmin, setNotAdmin] = useState(false);
@@ -65,7 +65,7 @@ export default function AdminProductsPage() {
 
   const wrap = (children) => (
     <div style={{ background: "#fff", color: C.text, fontFamily: "'Inter',system-ui,sans-serif", minHeight: "100vh", colorScheme: "light" }}>
-      <BulkStrikeNav />
+      {!inShell && <BulkStrikeNav />}
       <div style={{ maxWidth: 900, margin: "0 auto", padding: "26px 20px 80px" }}>{children}</div>
     </div>
   );
