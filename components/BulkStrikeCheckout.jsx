@@ -2,8 +2,10 @@
 // BulkStrikeCheckout — checkout in 4 step (/checkout; il Carrello resta una
 // pagina a sé, prima del checkout):
 // 1) Indirizzo di consegna — fatturazione + consegna da rubrica salvata (o
-//    aggiunto al volo) + note, righe carrello con stima consegna.
-// 2) Confronta spedizione — preventivi corriere per fornitore, selezione.
+//    aggiunto al volo) + note. Nessuna tabella prodotti qui.
+// 2) Confronta spedizione — righe carrello con stima consegna (le colonne
+//    Consegna/Data stimata dipendono dal corriere) + preventivi corriere
+//    per fornitore, selezione.
 // 3) Metodo di pagamento — selettore per fornitore (soglia €10.000 per sub-ordine).
 // 4) Riepilogo e conferma — riepilogo economico REALE (preview_checkout:
 //    spedizione + IVA 22% server-side) + eventuali costi di servizio escrow,
@@ -531,6 +533,19 @@ export default function CheckoutPage() {
                   <div style={{ fontSize: 11.5, color: C.muted, marginTop: 8 }}>L'indirizzo selezionato viene salvato tra quelli della tua azienda per i prossimi ordini.</div>
                 </div>
 
+                <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                  <button onClick={goToShipping} disabled={hasIssues}
+                    style={{ background: C.blue, color: "#fff", border: "none", borderRadius: 10, padding: "13px 26px", fontSize: 14.5, fontWeight: 700, cursor: hasIssues ? "default" : "pointer", opacity: hasIssues ? 0.5 : 1, display: "inline-flex", alignItems: "center", gap: 8, fontFamily: "Inter,system-ui" }}>
+                    Confronta le spedizioni <ArrowRight size={16} />
+                  </button>
+                  <button onClick={() => { window.location.href = "/carrello"; }} style={{ background: "transparent", color: C.muted, border: `1.5px solid ${C.border}`, borderRadius: 10, padding: "13px 20px", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "Inter,system-ui" }}>Torna al carrello</button>
+                </div>
+              </>
+            ) : step === 2 ? (
+              <>
+                {/* STEP 2 — CONFRONTA SPEDIZIONE. In alto le righe del carrello: le colonne
+                    Consegna/Data stimata dipendono dal corriere selezionato qui sotto e si
+                    aggiornano live cambiando selezione nelle card dei preventivi. */}
                 <div className="co-table" style={{ border: `1px solid ${C.border}`, borderRadius: 14, marginBottom: 10 }}>
                   <div className="co-row" style={{ background: C.bg, fontSize: 11, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.04em", color: C.muted }}>
                     <span>Prodotto / fornitore</span><span>Quantità</span><span>Preparazione</span><span>Consegna</span><span>Data stimata</span><span style={{ textAlign: "right" }}>Totale</span>
@@ -556,17 +571,7 @@ export default function CheckoutPage() {
                 </div>
                 <div style={{ fontSize: 11.5, color: C.muted, marginBottom: 22 }}>* IVA e spese di spedizione escluse — le vedi nel riepilogo prima della conferma.</div>
 
-                <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                  <button onClick={goToShipping} disabled={hasIssues}
-                    style={{ background: C.blue, color: "#fff", border: "none", borderRadius: 10, padding: "13px 26px", fontSize: 14.5, fontWeight: 700, cursor: hasIssues ? "default" : "pointer", opacity: hasIssues ? 0.5 : 1, display: "inline-flex", alignItems: "center", gap: 8, fontFamily: "Inter,system-ui" }}>
-                    Confronta le spedizioni <ArrowRight size={16} />
-                  </button>
-                  <button onClick={() => { window.location.href = "/carrello"; }} style={{ background: "transparent", color: C.muted, border: `1.5px solid ${C.border}`, borderRadius: 10, padding: "13px 20px", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "Inter,system-ui" }}>Torna al carrello</button>
-                </div>
-              </>
-            ) : step === 2 ? (
-              <>
-                {/* STEP 2 — CONFRONTA SPEDIZIONE: un preventivo per fornitore. "La più economica" e
+                {/* Preventivi corriere: un preventivo per fornitore. "La più economica" e
                     "La più rapida" sempre per prime, poi le altre ordinate per punteggio prezzo/velocità (70/30). */}
                 {suppliers.map(s => {
                   const q = quotesBySupplier[s.id];
