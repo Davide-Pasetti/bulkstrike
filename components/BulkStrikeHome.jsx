@@ -203,7 +203,7 @@ export default function BulkStrikeLight() {
           .bs-cats { flex-wrap:wrap !important; overflow:hidden !important; max-height:140px; gap:8px !important; padding:16px 16px 0 16px !important; }
           .bs-cats.expanded { max-height:none !important; }
           .bs-cat { width:calc((100% - 24px) / 4) !important; }
-          .bs-cat-icon { width:100% !important; height:auto !important; aspect-ratio:1/1; font-size:22px !important; border-radius:12px !important; }
+          .bs-cat-icon { width:100% !important; height:auto !important; aspect-ratio:1/1; font-size:38px !important; border-radius:12px !important; }
           .bs-cat-label { font-size:10.5px !important; display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden; }
           .bs-cats-expand-btn { display:flex !important; align-items:center; justify-content:center; width:100%; background:none; border:none; border-top:1px solid ${C.border}; padding:8px 0; cursor:pointer; }
         }
