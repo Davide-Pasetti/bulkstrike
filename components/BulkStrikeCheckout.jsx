@@ -9,7 +9,7 @@
 // il carrello → pagina "Pagamento eseguito".
 // Il pagamento chiude il checkout: non è più un passo separato successivo.
 import { useState, useEffect, useMemo } from "react";
-import { ShieldCheck, ArrowRight, ArrowLeft, Check, ChevronRight, Package, FileText, AlertTriangle, MapPin, Mail, CreditCard, Truck, Clock3, PauseCircle, Plus, X, Receipt } from "lucide-react";
+import { ArrowRight, ArrowLeft, Check, ChevronRight, Package, FileText, AlertTriangle, MapPin, Mail, CreditCard, Truck, Clock3, PauseCircle, Plus, X, Receipt } from "lucide-react";
 import { getCart, checkoutCart, previewCheckout, getMyCompany, getMyCompanyAddress, getShippingAddresses, addShippingAddress, getSession, poolErrorMessage, getShippingQuotes } from "@/lib/api";
 import BulkStrikeNav from "@/components/BulkStrikeNav";
 
@@ -522,7 +522,7 @@ export default function CheckoutPage() {
                           </div>
                         ))}
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: 12.5, fontWeight: 700, marginTop: 8, gap: 10 }}>
-                          <span>Commissioni BulkStrike sulle materie prime</span>
+                          <span style={{ color: C.green }}>Commissioni BulkStrike sulle materie prime</span>
                           <span className="co-num" style={{ whiteSpace: "nowrap", color: C.green }}>€0,00</span>
                         </div>
                         <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, fontWeight: 700, marginTop: 6 }}>
@@ -569,11 +569,6 @@ export default function CheckoutPage() {
                       </div>
                     </>
                   )}
-                </div>
-
-                <div style={{ display: "flex", gap: 8, alignItems: "flex-start", fontSize: 12.5, color: C.muted, background: C.bg, borderRadius: 10, padding: "12px 14px", marginBottom: 22, lineHeight: 1.6 }}>
-                  <ShieldCheck size={15} color={C.green} style={{ marginTop: 1, flexShrink: 0 }} />
-                  <span>Pagamento protetto in <b>escrow</b>: resta in deposito su BulkStrike finché la consegna non viene confermata (automaticamente 7 giorni dopo la spedizione, o subito se confermi tu prima). Ambiente dimostrativo: il versamento è simulato in attesa dell'integrazione con il gestore di pagamento.</span>
                 </div>
 
                 <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
