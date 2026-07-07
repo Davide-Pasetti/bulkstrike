@@ -419,6 +419,24 @@ export default function OrderPage() {
                     <span style={{ fontSize:14, fontWeight:700 }}>Totale merce</span>
                     <span className="od-num" style={{ fontSize:22, fontWeight:800, color:C.blue }}>{eur(order.goods_subtotal)}</span>
                   </div>
+
+                  {/* Costi di servizio (es. "Costi di servizio escrow" €0,35) — voci accessorie
+                      su order_service_charges NON incluse in total_amount. Il totale finale
+                      mostrato al cliente è grand_total (total_amount + service charges). */}
+                  {Array.isArray(order.service_charges) && order.service_charges.length > 0 && (
+                    <>
+                      {order.service_charges.map((sc, i) => (
+                        <div key={i} style={{ display:"flex", justifyContent:"space-between", fontSize:13, marginTop:8, gap:10 }}>
+                          <span style={{ color:C.muted }}>{sc.service_name}</span>
+                          <span className="od-num" style={{ fontWeight:600, whiteSpace:"nowrap" }}>{eur(sc.fee)}</span>
+                        </div>
+                      ))}
+                      <div style={{ borderTop:`1px solid ${C.border}`, margin:"12px 0 0", paddingTop:12, display:"flex", justifyContent:"space-between", alignItems:"baseline" }}>
+                        <span style={{ fontSize:14, fontWeight:700 }}>Totale finale</span>
+                        <span className="od-num" style={{ fontSize:22, fontWeight:800, color:C.text }}>{eur(order.grand_total ?? order.total_amount)}</span>
+                      </div>
+                    </>
+                  )}
                 </div>
                 <div className="od-card" style={{ background:C.bg }}>
                   <div style={{ display:"flex", gap:8, alignItems:"flex-start", fontSize:12.5, color:C.muted, lineHeight:1.6 }}>

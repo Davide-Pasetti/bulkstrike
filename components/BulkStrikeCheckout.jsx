@@ -234,6 +234,18 @@ export default function CheckoutPage() {
   const totalForDisplay = preview?.total ?? null;
   const payReady = quotesReady && selectionsComplete && !previewLoading && !previewErr && preview != null;
 
+  // Costi di servizio escrow (€0,35 fissi per sub-ordine escrow_sepa con imponibile
+  // <= 10.000€): lo stesso costo che il trigger DB applica su order_service_charges,
+  // NON incluso in total_amount. Lo anticipiamo qui nel riepilogo così il totale
+  // mostrato coincide con quello davvero addebitato. Una voce per fornitore idoneo.
+  const ESCROW_SERVICE_FEE = 0.35;
+  const ESCROW_FEE_THRESHOLD = 10000;
+  const escrowFeeCount = (preview?.by_supplier || []).filter(
+    (s) => methodBySupplier[s.supplier_company_id] === "escrow_sepa" && subOrderTotal(s) <= ESCROW_FEE_THRESHOLD
+  ).length;
+  const escrowFeeTotal = escrowFeeCount * ESCROW_SERVICE_FEE;
+  const grandTotalForDisplay = totalForDisplay != null ? totalForDisplay + escrowFeeTotal : null;
+
   function goToPayment() {
     setErr("");
     if (!address.trim()) { setErr("Seleziona o aggiungi l'indirizzo di spedizione."); return; }
@@ -322,7 +334,7 @@ export default function CheckoutPage() {
                 : "Il tuo ordine è registrato, in attesa del costo di spedizione."}
             </p>
             {done.total_paid != null && done.total_paid > 0 && (
-              <p style={{ fontSize: 13.5, color: C.muted, marginBottom: 6 }}>Totale pagato (IVA e spedizione incluse): <b style={{ color: C.text }}>{eur(done.total_paid)}</b></p>
+              <p style={{ fontSize: 13.5, color: C.muted, marginBottom: 6 }}>Totale pagato (IVA e spedizione incluse): <b style={{ color: C.text }}>{eur(done.total_paid + escrowFeeTotal)}</b>{escrowFeeTotal > 0 && <span style={{ fontSize: 12, color: C.muted }}> (inclusi {eur(escrowFeeTotal)} di costi di servizio escrow)</span>}</p>
             )}
             <p style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, fontSize: 13, color: C.muted, marginBottom: 26 }}>
               <Mail size={14} /> Conferma inviata a <b style={{ color: C.text }}>{buyerEmail}</b>
@@ -636,9 +648,18 @@ export default function CheckoutPage() {
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginTop: 4 }}>
                           <span style={{ fontSize: 12, color: C.muted, fontWeight: 400 }}>di cui spedizione {eur(shippingForDisplay)}</span>
                         </div>
+                        {escrowFeeCount > 0 && (
+                          <>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginTop: 8, gap: 10 }}>
+                              <span style={{ fontSize: 12.5, color: C.text, fontWeight: 600 }}>Costi di servizio escrow{escrowFeeCount > 1 ? ` (${escrowFeeCount} × €0,35)` : ""}</span>
+                              <span className="co-num" style={{ whiteSpace: "nowrap", fontSize: 13, fontWeight: 700 }}>{escrowFeeCount === 1 ? "€0,35" : eur(escrowFeeTotal)}</span>
+                            </div>
+                            <div style={{ fontSize: 11, color: C.muted, marginTop: 3, lineHeight: 1.5 }}>Costo fisso di transazione SEPA del provider di pagamento, non una commissione BulkStrike.</div>
+                          </>
+                        )}
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginTop: 8 }}>
                           <span style={{ fontSize: 12, color: C.muted, fontWeight: 400 }}>Totale da pagare <span style={{ color: "#94A3B8" }}>(IVA 22% inclusa, {eur(vatForDisplay)})</span></span>
-                          <span className="co-num" style={{ fontSize: 13, fontWeight: 500, color: C.muted }}>{totalForDisplay != null ? eur(totalForDisplay) : "—"}</span>
+                          <span className="co-num" style={{ fontSize: 13, fontWeight: 500, color: C.muted }}>{grandTotalForDisplay != null ? eur(grandTotalForDisplay) : "—"}</span>
                         </div>
                       </div>
                     </>
@@ -669,7 +690,7 @@ export default function CheckoutPage() {
                 <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
                   <button onClick={confirmPayment} disabled={submitting || !payReady || !allMethodsChosen}
                     style={{ background: C.blue, color: "#fff", border: "none", borderRadius: 10, padding: "14px 28px", fontSize: 15, fontWeight: 700, cursor: (submitting || !payReady || !allMethodsChosen) ? "default" : "pointer", opacity: (submitting || !payReady || !allMethodsChosen) ? 0.6 : 1, display: "inline-flex", alignItems: "center", gap: 8, fontFamily: "Inter,system-ui" }}>
-                    {submitting ? "Pagamento in corso…" : !payReady ? "Calcolo totale…" : <>Paga {eur(totalForDisplay)} e conferma ordine <ArrowRight size={17} /></>}
+                    {submitting ? "Pagamento in corso…" : !payReady ? "Calcolo totale…" : <>Paga {eur(grandTotalForDisplay)} e conferma ordine <ArrowRight size={17} /></>}
                   </button>
                   <button onClick={() => setStep(1)} disabled={submitting} style={{ background: "transparent", color: C.muted, border: `1.5px solid ${C.border}`, borderRadius: 10, padding: "14px 20px", fontSize: 14, fontWeight: 600, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6, fontFamily: "Inter,system-ui" }}><ArrowLeft size={15} /> Indietro</button>
                 </div>
