@@ -1,13 +1,16 @@
 "use client";
-// BulkStrikeCheckout — checkout in 2 step (/checkout):
-// 1) Spedizione — indirizzo scelto da una rubrica salvata (o aggiunto al volo e
-// salvato per i prossimi ordini) + note, riepilogo di ogni riga (fornitore,
-// quantità, lead time), prezzi IVA/spedizione esclusi.
-// 2) Pagamento — riepilogo economico REALE (preview_checkout: spedizione stimata +
-// IVA 22% calcolate server-side ora che l'indirizzo è noto), conferma → checkout_cart
-// crea gli ordini GIÀ PAGATI (DEMO) con spedizione+IVA salvate sull'ordine, e svuota
-// il carrello → pagina "Pagamento eseguito".
-// Il pagamento chiude il checkout: non è più un passo separato successivo.
+// BulkStrikeCheckout — checkout in 4 step (/checkout; il Carrello resta una
+// pagina a sé, prima del checkout):
+// 1) Indirizzo di consegna — fatturazione + consegna da rubrica salvata (o
+//    aggiunto al volo) + note, righe carrello con stima consegna.
+// 2) Confronta spedizione — preventivi corriere per fornitore, selezione.
+// 3) Metodo di pagamento — selettore per fornitore (soglia €10.000 per sub-ordine).
+// 4) Riepilogo e conferma — riepilogo economico REALE (preview_checkout:
+//    spedizione + IVA 22% server-side) + eventuali costi di servizio escrow,
+//    conferma → checkout_cart crea gli ordini GIÀ PAGATI (DEMO) e svuota il
+//    carrello → pagina "Pagamento eseguito".
+// Lo Stepper in alto è cliccabile SOLO all'indietro (per tornare a uno step già
+// completato senza perdere i dati inseriti); mai in avanti.
 import { useState, useEffect, useMemo } from "react";
 import { ArrowRight, ArrowLeft, Check, ChevronRight, Package, FileText, AlertTriangle, MapPin, Mail, CreditCard, Truck, Clock3, PauseCircle, Plus, X, Receipt } from "lucide-react";
 import { getCart, checkoutCart, previewCheckout, getMyCompany, getMyCompanyAddress, getShippingAddresses, addShippingAddress, getSession, poolErrorMessage, getShippingQuotes, stampOrderPaymentMethods } from "@/lib/api";
@@ -17,22 +20,38 @@ import PaymentMethodSelector from "@/components/checkout/PaymentMethodSelector";
 const C = { blue: "#0EA5E9", dark: "#0284C7", text: "#0F172A", muted: "#64748B", border: "#E2E8F0", bg: "#F8FAFE", green: "#059669", red: "#DC2626", amber: "#D97706" };
 const eur = (n) => n == null ? "—" : "€" + Number(n).toLocaleString("it-IT", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-function Stepper({ step }) {
-  const steps = [["Spedizione", MapPin], ["Pagamento", CreditCard]];
+// Stepper del checkout: un pallino per step. I pallini degli step GIÀ COMPLETATI
+// (n < step) sono cliccabili per tornare indietro a quel passo — lo stato React
+// (indirizzo, corrieri, metodi) resta com'era, nessun dato perso. Gli step non
+// ancora raggiunti non sono cliccabili: in avanti si va solo con i bottoni,
+// che applicano le validazioni.
+function Stepper({ step, onStepClick }) {
+  const steps = [
+    ["Indirizzo di consegna", MapPin],
+    ["Confronta spedizione", Truck],
+    ["Metodo di pagamento", CreditCard],
+    ["Riepilogo e conferma", Receipt],
+  ];
   return (
-    <div style={{ display: "flex", alignItems: "center", marginBottom: 28, maxWidth: 360 }}>
+    <div style={{ display: "flex", alignItems: "center", marginBottom: 28, maxWidth: 640 }}>
       {steps.map(([label, Icon], i) => {
         const n = i + 1;
         const activeOrDone = n <= step;
+        const clickable = n < step; // solo indietro, mai avanti
         return (
           <div key={label} style={{ display: "flex", alignItems: "center", flex: i === 0 ? "0 0 auto" : 1 }}>
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", width: 88 }}>
+            {i > 0 && <div style={{ flex: 1, height: 2, background: step > i ? C.blue : C.border, marginTop: -17, minWidth: 26 }} />}
+            <div
+              onClick={clickable ? () => onStepClick(n) : undefined}
+              role={clickable ? "button" : undefined}
+              title={clickable ? `Torna a: ${label}` : undefined}
+              style={{ display: "flex", flexDirection: "column", alignItems: "center", width: 96, cursor: clickable ? "pointer" : "default" }}
+            >
               <div style={{ width: 34, height: 34, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", background: activeOrDone ? C.blue : "#fff", border: `2px solid ${activeOrDone ? C.blue : C.border}`, color: activeOrDone ? "#fff" : C.muted }}>
                 {n < step ? <Check size={16} /> : <Icon size={15} />}
               </div>
-              <span style={{ fontSize: 12, fontWeight: activeOrDone ? 700 : 500, color: activeOrDone ? C.text : C.muted, marginTop: 5 }}>{label}</span>
+              <span style={{ fontSize: 11.5, fontWeight: activeOrDone ? 700 : 500, color: activeOrDone ? C.text : C.muted, marginTop: 5, textAlign: "center", lineHeight: 1.25, minHeight: 29 }}>{label}</span>
             </div>
-            {i === 0 && <div style={{ flex: 1, height: 2, background: step > 1 ? C.blue : C.border, marginTop: -17, minWidth: 40 }} />}
           </div>
         );
       })}
@@ -205,9 +224,11 @@ export default function CheckoutPage() {
     return { prepDays, carrierDays, label: `+${carrierDays} gg trasporto`, dateLabel };
   }
 
-  // Riepilogo economico: dipende dalle selezioni corriere, si ricalcola quando cambiano.
+  // Riepilogo economico: dipende dalle selezioni corriere, si ricalcola quando
+  // cambiano. Serve dallo step 2 in poi (lo step 3 usa preview.by_supplier per i
+  // selettori metodo, lo step 4 per il riepilogo).
   useEffect(() => {
-    if (step !== 2) return;
+    if (step < 2) return;
     let cancelled = false;
     setPreview(null); setPreviewErr(""); setPreviewLoading(true);
     previewCheckout(address, selectedCarrier)
@@ -262,7 +283,13 @@ export default function CheckoutPage() {
 
   const grandTotalForDisplay = totalForDisplay != null ? totalForDisplay + escrowFeeTotal + premiumFeeTotal : null;
 
-  function goToPayment() {
+  // Navigazione step: indietro sempre libera (dati conservati nello stato React),
+  // avanti solo dai bottoni con le rispettive validazioni.
+  function goToStep(n) {
+    setErr("");
+    setStep(n);
+  }
+  function goToShipping() {
     setErr("");
     if (!address.trim()) { setErr("Seleziona o aggiungi l'indirizzo di spedizione."); return; }
     setStep(2);
@@ -438,7 +465,7 @@ export default function CheckoutPage() {
         ) : (
           <>
             <h1 style={{ fontSize: 26, fontWeight: 800, letterSpacing: "-0.02em", marginBottom: 6 }}>Checkout</h1>
-            <Stepper step={step} />
+            <Stepper step={step} onStepClick={goToStep} />
 
             {hasIssues && (
               <div style={{ display: "flex", gap: 8, alignItems: "flex-start", fontSize: 13, color: "#9A3412", background: "#FFF7ED", border: "1px solid #FED7AA", borderRadius: 10, padding: "11px 14px", marginBottom: 18 }}>
@@ -527,20 +554,20 @@ export default function CheckoutPage() {
                     );
                   })}
                 </div>
-                <div style={{ fontSize: 11.5, color: C.muted, marginBottom: 22 }}>* IVA e spese di spedizione escluse — le vedi nel riepilogo al passo successivo.</div>
+                <div style={{ fontSize: 11.5, color: C.muted, marginBottom: 22 }}>* IVA e spese di spedizione escluse — le vedi nel riepilogo prima della conferma.</div>
 
                 <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                  <button onClick={goToPayment} disabled={hasIssues}
+                  <button onClick={goToShipping} disabled={hasIssues}
                     style={{ background: C.blue, color: "#fff", border: "none", borderRadius: 10, padding: "13px 26px", fontSize: 14.5, fontWeight: 700, cursor: hasIssues ? "default" : "pointer", opacity: hasIssues ? 0.5 : 1, display: "inline-flex", alignItems: "center", gap: 8, fontFamily: "Inter,system-ui" }}>
-                    Continua al pagamento <ArrowRight size={16} />
+                    Confronta le spedizioni <ArrowRight size={16} />
                   </button>
                   <button onClick={() => { window.location.href = "/carrello"; }} style={{ background: "transparent", color: C.muted, border: `1.5px solid ${C.border}`, borderRadius: 10, padding: "13px 20px", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "Inter,system-ui" }}>Torna al carrello</button>
                 </div>
               </>
-            ) : (
+            ) : step === 2 ? (
               <>
-                {/* CORRIERE — un preventivo per fornitore. "La più economica" e "La più rapida" sempre
-                    per prime, poi le altre opzioni ordinate per punteggio prezzo/velocità (70/30). */}
+                {/* STEP 2 — CONFRONTA SPEDIZIONE: un preventivo per fornitore. "La più economica" e
+                    "La più rapida" sempre per prime, poi le altre ordinate per punteggio prezzo/velocità (70/30). */}
                 {suppliers.map(s => {
                   const q = quotesBySupplier[s.id];
                   if (q === undefined) {
@@ -603,6 +630,53 @@ export default function CheckoutPage() {
                   );
                 })}
 
+                <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 6 }}>
+                  <button onClick={() => goToStep(3)} disabled={!quotesReady || !selectionsComplete}
+                    style={{ background: C.blue, color: "#fff", border: "none", borderRadius: 10, padding: "13px 26px", fontSize: 14.5, fontWeight: 700, cursor: (!quotesReady || !selectionsComplete) ? "default" : "pointer", opacity: (!quotesReady || !selectionsComplete) ? 0.5 : 1, display: "inline-flex", alignItems: "center", gap: 8, fontFamily: "Inter,system-ui" }}>
+                    {!quotesReady ? "Calcolo corrieri…" : <>Scegli il metodo di pagamento <ArrowRight size={16} /></>}
+                  </button>
+                  <button onClick={() => goToStep(1)} style={{ background: "transparent", color: C.muted, border: `1.5px solid ${C.border}`, borderRadius: 10, padding: "13px 20px", fontSize: 14, fontWeight: 600, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6, fontFamily: "Inter,system-ui" }}><ArrowLeft size={15} /> Indietro</button>
+                </div>
+              </>
+            ) : step === 3 ? (
+              <>
+                {/* STEP 3 — METODO DI PAGAMENTO: uno per fornitore (la soglia €10.000 è per sub-ordine).
+                    I selettori usano preview.by_supplier, quindi attendono il primo preview. */}
+                {previewLoading && !preview ? (
+                  <div style={{ border: `1px solid ${C.border}`, borderRadius: 14, padding: 18, marginBottom: 14, fontSize: 13, color: C.muted }}>Preparazione metodi di pagamento…</div>
+                ) : previewErr ? (
+                  <div style={{ marginBottom: 14, padding: "11px 14px", background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 10, fontSize: 13, color: C.red }}>{previewErr}</div>
+                ) : (preview?.by_supplier || []).length > 0 && (
+                  <div style={{ marginBottom: 18 }}>
+                    <div style={{ fontSize: 13, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: C.muted, marginBottom: 12 }}>Metodo di pagamento</div>
+                    {preview.by_supplier.map(s => (
+                      <PaymentMethodSelector
+                        key={s.supplier_company_id}
+                        buyerId={buyerCompanyId}
+                        supplierId={s.supplier_company_id}
+                        supplierName={s.supplier_name}
+                        subOrderTotal={subOrderTotal(s)}
+                        value={methodBySupplier[s.supplier_company_id]}
+                        onChange={(m) => setMethodBySupplier(prev => ({ ...prev, [s.supplier_company_id]: m }))}
+                      />
+                    ))}
+                    {!allMethodsChosen && (
+                      <div style={{ fontSize: 12.5, color: C.amber, marginTop: 2 }}>Scegli un metodo di pagamento per ogni fornitore per proseguire.</div>
+                    )}
+                  </div>
+                )}
+
+                <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                  <button onClick={() => goToStep(4)} disabled={!allMethodsChosen || !preview}
+                    style={{ background: C.blue, color: "#fff", border: "none", borderRadius: 10, padding: "13px 26px", fontSize: 14.5, fontWeight: 700, cursor: (!allMethodsChosen || !preview) ? "default" : "pointer", opacity: (!allMethodsChosen || !preview) ? 0.5 : 1, display: "inline-flex", alignItems: "center", gap: 8, fontFamily: "Inter,system-ui" }}>
+                    Vai al riepilogo <ArrowRight size={16} />
+                  </button>
+                  <button onClick={() => goToStep(2)} style={{ background: "transparent", color: C.muted, border: `1.5px solid ${C.border}`, borderRadius: 10, padding: "13px 20px", fontSize: 14, fontWeight: 600, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6, fontFamily: "Inter,system-ui" }}><ArrowLeft size={15} /> Indietro</button>
+                </div>
+              </>
+            ) : (
+              <>
+                {/* STEP 4 — RIEPILOGO E CONFERMA */}
                 <div style={{ border: `1px solid ${C.border}`, borderRadius: 14, padding: 20, marginBottom: 18 }}>
                   <div style={{ fontSize: 13, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: C.muted, marginBottom: 14 }}>Riepilogo</div>
                   <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13.5, marginBottom: 8 }}><span style={{ color: C.muted }}>Righe</span><span className="co-num" style={{ fontWeight: 600 }}>{items.length}</span></div>
@@ -691,24 +765,15 @@ export default function CheckoutPage() {
                   )}
                 </div>
 
-                {/* METODO DI PAGAMENTO — uno per fornitore (la soglia €10.000 è per sub-ordine) */}
+                {/* Promemoria metodi scelti (si cambiano tornando allo step 3) */}
                 {(preview?.by_supplier || []).length > 0 && (
-                  <div style={{ marginBottom: 18 }}>
-                    <div style={{ fontSize: 13, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: C.muted, marginBottom: 12 }}>Metodo di pagamento</div>
+                  <div style={{ fontSize: 12.5, color: C.muted, marginBottom: 16, lineHeight: 1.6 }}>
                     {preview.by_supplier.map(s => (
-                      <PaymentMethodSelector
-                        key={s.supplier_company_id}
-                        buyerId={buyerCompanyId}
-                        supplierId={s.supplier_company_id}
-                        supplierName={s.supplier_name}
-                        subOrderTotal={subOrderTotal(s)}
-                        value={methodBySupplier[s.supplier_company_id]}
-                        onChange={(m) => setMethodBySupplier(prev => ({ ...prev, [s.supplier_company_id]: m }))}
-                      />
+                      <div key={s.supplier_company_id}>
+                        <b style={{ color: C.text }}>{s.supplier_name}</b>: {({ escrow_sepa: "Pagamento in garanzia (SEPA)", escrow_premium: "Pagamento in garanzia premium (carta)", bonifico_anticipato: "Bonifico bancario anticipato", termini_dilazionati: "Pagamento dilazionato" })[methodBySupplier[s.supplier_company_id]] || "—"}
+                      </div>
                     ))}
-                    {!allMethodsChosen && (
-                      <div style={{ fontSize: 12.5, color: C.amber, marginTop: 2 }}>Scegli un metodo di pagamento per ogni fornitore per proseguire.</div>
-                    )}
+                    <span onClick={() => goToStep(3)} style={{ fontWeight: 700, cursor: "pointer", textDecoration: "underline" }}>Cambia metodo di pagamento</span>
                   </div>
                 )}
 
@@ -717,7 +782,7 @@ export default function CheckoutPage() {
                     style={{ background: C.blue, color: "#fff", border: "none", borderRadius: 10, padding: "14px 28px", fontSize: 15, fontWeight: 700, cursor: (submitting || !payReady || !allMethodsChosen) ? "default" : "pointer", opacity: (submitting || !payReady || !allMethodsChosen) ? 0.6 : 1, display: "inline-flex", alignItems: "center", gap: 8, fontFamily: "Inter,system-ui" }}>
                     {submitting ? "Pagamento in corso…" : !payReady ? "Calcolo totale…" : <>Paga {eur(grandTotalForDisplay)} e conferma ordine <ArrowRight size={17} /></>}
                   </button>
-                  <button onClick={() => setStep(1)} disabled={submitting} style={{ background: "transparent", color: C.muted, border: `1.5px solid ${C.border}`, borderRadius: 10, padding: "14px 20px", fontSize: 14, fontWeight: 600, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6, fontFamily: "Inter,system-ui" }}><ArrowLeft size={15} /> Indietro</button>
+                  <button onClick={() => goToStep(3)} disabled={submitting} style={{ background: "transparent", color: C.muted, border: `1.5px solid ${C.border}`, borderRadius: 10, padding: "14px 20px", fontSize: 14, fontWeight: 600, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6, fontFamily: "Inter,system-ui" }}><ArrowLeft size={15} /> Indietro</button>
                 </div>
               </>
             )}

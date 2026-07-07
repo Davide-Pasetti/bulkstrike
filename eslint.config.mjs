@@ -11,8 +11,11 @@ const compat = new FlatCompat({
 
 const eslintConfig = [
   // Senza questo, dopo una build locale `eslint .` linta anche l'output
-  // generato in .next/ (migliaia di falsi errori)
-  { ignores: [".next/**", "node_modules/**"] },
+  // generato in .next/ (migliaia di falsi errori). I glob **/ coprono anche
+  // i worktree degli agent sotto .claude/worktrees/.
+  // supabase/functions/** è codice Deno (edge functions): fuori dal build Next,
+  // la config next/typescript non gli si applica (21 falsi no-explicit-any).
+  { ignores: ["**/.next/**", "**/node_modules/**", ".claude/**", "supabase/functions/**"] },
   ...compat.extends("next/core-web-vitals", "next/typescript"),
 ];
 
