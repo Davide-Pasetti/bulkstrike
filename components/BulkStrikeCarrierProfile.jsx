@@ -11,27 +11,12 @@
 import { useState, useEffect, useRef } from "react";
 import { Truck, MapPin, Plus, Trash2, Copy, ChevronRight, ShieldCheck, Clock, AlertTriangle, Info, Upload, FileText, Check, LogOut, Package } from "lucide-react";
 import { getSession, getMyCarrierProfile, upsertCarrierProfile, upsertCarrierRate, deleteCarrierRate, upsertCarrierServiceFee, deleteCarrierServiceFee, parseCarrierPriceListPdf, poolErrorMessage } from "@/lib/api";
-import NavAuth from "@/components/BulkStrikeNavAuth";
+import BulkStrikeNav from "@/components/BulkStrikeNav";
 
 const C = { blue: "#0EA5E9", dark: "#0284C7", text: "#0F172A", muted: "#64748B", border: "#E2E8F0", bg: "#F8FAFE", green: "#059669", red: "#DC2626", amber: "#D97706", purple: "#7C3AED" };
 const eur = (n) => n == null ? "—" : "€" + Number(n).toLocaleString("it-IT", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-function BSIcon({ size = 36, uid = "a" }) {
-  // Logo: 3 parti (clienti, fornitori, corrieri) che convergono su un unico punto — l'incontro su BulkStrike.
-  return (
-    <svg width={size} height={size} viewBox="0 0 120 120">
-      <rect x="0" y="0" width="120" height="120" fill="#0D1F35"/>
-      <line x1="26" y1="18" x2="60" y2="78" stroke="#6B94B8" strokeWidth="7" strokeLinecap="round"/>
-      <line x1="60" y1="10" x2="60" y2="78" stroke="#6B94B8" strokeWidth="7" strokeLinecap="round"/>
-      <line x1="94" y1="18" x2="60" y2="78" stroke="#6B94B8" strokeWidth="7" strokeLinecap="round"/>
-      <line x1="60" y1="78" x2="60" y2="98" stroke="#34D399" strokeWidth="7" strokeLinecap="round"/>
-      <line x1="40" y1="100" x2="80" y2="100" stroke="#34D399" strokeWidth="8" strokeLinecap="round"/>
-      <circle cx="60" cy="78" r="8" fill="#F5A623"/>
-    </svg>
-  );
-}
-
-const EU = ["Francia", "Germania", "Spagna", "Polonia", "Paesi Bassi", "Portogallo", "Belgio", "Austria"];
+const EU =["Francia", "Germania", "Spagna", "Polonia", "Paesi Bassi", "Portogallo", "Belgio", "Austria"];
 const REGIONI_IT = ["Abruzzo", "Basilicata", "Calabria", "Campania", "Emilia-Romagna", "Friuli-Venezia Giulia", "Lazio", "Liguria", "Lombardia", "Marche", "Molise", "Piemonte", "Puglia", "Sardegna", "Sicilia", "Toscana", "Trentino-Alto Adige", "Umbria", "Valle d'Aosta", "Veneto"];
 const COUNTRIES = ["Italia", ...EU, "Altro extra-UE"];
 
@@ -253,18 +238,7 @@ export default function CarrierProfilePage() {
         @media (max-width:820px) { .cp-rate-row { grid-template-columns:1fr 1fr; } }
       `}</style>
 
-      <nav style={{ position: "sticky", top: 0, zIndex: 50, background: "rgba(255,255,255,0.96)", backdropFilter: "blur(12px)", borderBottom: `1px solid ${C.border}` }}>
-        <div style={{ maxWidth: 960, margin: "0 auto", padding: "0 20px", height: 64, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
-          <div onClick={() => { window.location.href = "/"; }} style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}>
-            <BSIcon size={34} uid="nav" />
-            <div style={{ display: "flex", alignItems: "baseline" }}>
-              <span style={{ fontSize: 19, fontWeight: 900, letterSpacing: "-0.03em" }}>Bulk</span>
-              <span style={{ fontSize: 19, fontWeight: 900, letterSpacing: "-0.03em", background: "linear-gradient(90deg,#0EA5E9,#22D3EE)", WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" }}>Strike</span>
-            </div>
-          </div>
-          <NavAuth />
-        </div>
-      </nav>
+      <BulkStrikeNav />
 
       <div style={{ maxWidth: 960, margin: "0 auto", padding: "22px 20px 60px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: C.muted, marginBottom: 18 }}>

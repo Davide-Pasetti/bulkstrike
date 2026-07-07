@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Globe, Check, X, Shield, Cookie, SlidersHorizontal, ChevronRight } from "lucide-react";
+import { BSIcon } from "@/components/BSLogo";
 
 const C = { blue:"#0EA5E9", dark:"#0284C7", text:"#0F172A", muted:"#64748B", border:"#E2E8F0", bg:"#F8FAFE", green:"#059669", amber:"#D97706", purple:"#7C3AED" };
 
@@ -67,24 +68,6 @@ const T = {
     confirmTitle:"偏好已保存", confirmText:"您可以随时在页脚更改。", reopen:"再次显示横幅",
     chosen:"您的设置" },
 };
-
-function BSIcon({ size = 36, uid = "a" }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 56 56" fill="none">
-      <defs>
-        <linearGradient id={`bg${uid}`} x1="0" y1="0" x2="56" y2="56" gradientUnits="userSpaceOnUse"><stop offset="0%" stopColor="#0D2137"/><stop offset="100%" stopColor="#0C4A6E"/></linearGradient>
-        <linearGradient id={`ar${uid}`} x1="42" y1="12" x2="42" y2="40" gradientUnits="userSpaceOnUse"><stop offset="0%" stopColor="#38BDF8"/><stop offset="100%" stopColor="#22D3EE"/></linearGradient>
-      </defs>
-      <rect width="56" height="56" rx="13" fill={`url(#bg${uid})`}/>
-      <rect x="10" y="14" width="22" height="5.5" rx="2.75" fill="white"/>
-      <rect x="10" y="23" width="16" height="5.5" rx="2.75" fill="white" fillOpacity="0.65"/>
-      <rect x="10" y="32" width="10" height="5.5" rx="2.75" fill="white" fillOpacity="0.35"/>
-      <rect x="36" y="12" width="1" height="32" fill="white" fillOpacity="0.07"/>
-      <path d="M42 12 L42 34" stroke={`url(#ar${uid})`} strokeWidth="3.5" strokeLinecap="round"/>
-      <path d="M35.5 28.5 L42 38 L48.5 28.5" stroke={`url(#ar${uid})`} strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
-    </svg>
-  );
-}
 
 function Toggle({ on, disabled, onClick }) {
   return (

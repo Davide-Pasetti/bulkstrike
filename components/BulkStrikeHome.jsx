@@ -1,9 +1,9 @@
 import { useState, useEffect } from "react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
-import { Bot, ArrowRight, Check, Clock, ChevronRight, TrendingDown, X, ChevronDown, Menu } from "lucide-react";
+import { Bot, ArrowRight, Check, Clock, ChevronRight, TrendingDown, X, ChevronDown } from "lucide-react";
 import { getMacroAreas, getSectorProducts } from "@/lib/api";
-import NavAuth from "@/components/BulkStrikeNavAuth";
-import ProductSearch from "@/components/BulkStrikeProductSearch";
+import BulkStrikeNav from "@/components/BulkStrikeNav";
+import { BSIcon } from "@/components/BSLogo";
 
 // ─── DATA ───────────────────────────────────────────────────────────────────
 
@@ -71,22 +71,6 @@ const AI_MSGS = [
   { u:false, t:"✅ Iscritto. 4t · Acido Citrico E330 · €0,99/kg all-in.\nTi avviso quando l'asta si completa. 🚀" },
 ];
 
-// ─── LOGO ICON ──────────────────────────────────────────────────────────────
-function BSIcon({ size = 36, uid = "a" }) {
-  // Nuovo logo: 3 linee convergono su un punto (arancio) che "scende" in una base verde — clienti, fornitori e corrieri che si incontrano su BulkStrike.
-  return (
-    <svg width={size} height={size} viewBox="0 0 120 120">
-      <rect x="0" y="0" width="120" height="120" fill="#0D1F35"/>
-      <line x1="26" y1="18" x2="60" y2="78" stroke="#6B94B8" strokeWidth="7" strokeLinecap="round"/>
-      <line x1="60" y1="10" x2="60" y2="78" stroke="#6B94B8" strokeWidth="7" strokeLinecap="round"/>
-      <line x1="94" y1="18" x2="60" y2="78" stroke="#6B94B8" strokeWidth="7" strokeLinecap="round"/>
-      <line x1="60" y1="78" x2="60" y2="98" stroke="#34D399" strokeWidth="7" strokeLinecap="round"/>
-      <line x1="40" y1="100" x2="80" y2="100" stroke="#34D399" strokeWidth="8" strokeLinecap="round"/>
-      <circle cx="60" cy="78" r="8" fill="#F5A623"/>
-    </svg>
-  );
-}
-
 // ─── MAIN ───────────────────────────────────────────────────────────────────
 function CookieBanner() {
   const [show, setShow] = useState(false);
@@ -110,7 +94,6 @@ function CookieBanner() {
 
 export default function BulkStrikeLight() {
   const [sectorsExpanded, setSectorsExpanded] = useState(false); // solo mobile: mostra tutte le icone settore
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false); // menu a lineette, solo mobile
   const [activeChart, setActiveChart] = useState("Acido Citrico");
   const [activeTab, setActiveTab]   = useState("acquirente");
   const [chatOpen, setChatOpen]     = useState(false);
@@ -210,54 +193,7 @@ export default function BulkStrikeLight() {
       `}</style>
 
       {/* ── NAVBAR ── */}
-      <nav style={{ position:"sticky", top:0, zIndex:50, background:"rgba(255,255,255,0.96)", backdropFilter:"blur(12px)", borderBottom:`1px solid ${C.border}` }}>
-        <div style={{ maxWidth:1280, margin:"0 auto", padding:"0 24px", height:68, display:"flex", alignItems:"center", gap:20 }}>
-          {/* Menu a lineette — solo mobile */}
-          <button className="bs-hamburger-btn" onClick={() => setMobileMenuOpen(o => !o)} aria-label="Menu">
-            {mobileMenuOpen ? <X size={22} color={C.text}/> : <Menu size={22} color={C.text}/>}
-          </button>
-
-          {/* Logo — su mobile il wrapper prende lo spazio centrale tra menu e carrello/profilo, così è bilanciato */}
-          <div className="bs-logo-wrap" style={{ flexShrink:0 }}>
-            <div onClick={() => { window.location.href = "/"; }} style={{ display:"flex", alignItems:"center", gap:10, cursor:"pointer" }}>
-              <BSIcon size={36} uid="nav" />
-              <div style={{ display:"flex", alignItems:"baseline", fontFamily:"Inter,system-ui,sans-serif" }}>
-                <span style={{ fontSize:20, fontWeight:900, color:C.text, letterSpacing:"-0.03em" }}>Bulk</span>
-                <span style={{ fontSize:20, fontWeight:900, letterSpacing:"-0.03em", background:"linear-gradient(90deg,#0EA5E9,#22D3EE)", WebkitBackgroundClip:"text", backgroundClip:"text", color:"transparent" }}>Strike</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Barra di ricerca con autocomplete — qui solo su desktop, su mobile scende sotto in una riga a parte */}
-          <div className="bs-search-desktop" style={{ flex:1, display:"flex", justifyContent:"center" }}>
-            <ProductSearch height={46} maxWidth={580} placeholder="Cerca materie prime, CAS, E-number..." />
-          </div>
-
-          {/* Nav right — su mobile, margin-left:auto lo spinge a destra del logo dato che la ricerca qui sopra è nascosta */}
-          <div style={{ display:"flex", alignItems:"center", gap:20, flexShrink:0, marginLeft:"auto" }}>
-            <div className="bs-nav-links" style={{ display:"flex", gap:20 }}>
-              {[["Aste attive","/pool"],["Prodotti","/catalogo"],["Fornitori","/fornitori"],["Corrieri","/corrieri"],["Come funziona","#come-funziona"]].map(([l,href]) => (
-                <span key={l} onClick={() => { window.location.href = href; }} style={{ fontSize:14, color:C.muted, cursor:"pointer", fontWeight:500, whiteSpace:"nowrap" }}>{l}</span>
-              ))}
-            </div>
-            <NavAuth />
-          </div>
-        </div>
-
-        {/* Barra di ricerca — solo mobile, riga a parte sotto il logo/menu */}
-        <div className="bs-search-mobile-row">
-          <ProductSearch height={46} placeholder="Cerca materie prime, CAS, E-number..." />
-        </div>
-
-        {/* Menu a lineette aperto — solo mobile */}
-        {mobileMenuOpen && (
-          <div className="bs-mobile-menu-panel">
-            {[["Aste attive","/pool"],["Prodotti","/catalogo"],["Fornitori","/fornitori"],["Corrieri","/corrieri"],["Come funziona","#come-funziona"]].map(([l,href]) => (
-              <div key={l} onClick={() => { window.location.href = href; }} style={{ padding:"13px 20px", fontSize:15, fontWeight:600, color:C.text, borderBottom:`1px solid ${C.border}`, cursor:"pointer" }}>{l}</div>
-            ))}
-          </div>
-        )}
-      </nav>
+      <BulkStrikeNav />
 
       {/* ── TICKER TAPE ── */}
       <div style={{ background:"#07111E", borderBottom:`1px solid #1A3454`, padding:"10px 0" }}>

@@ -1,10 +1,20 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="240" height="240">
-<rect x="0" y="0" width="120" height="120" fill="#0D1F35"/>
-<line x1="26" y1="18" x2="60" y2="78" stroke="#6B94B8" stroke-width="7" stroke-linecap="round"/>
-<line x1="60" y1="10" x2="60" y2="78" stroke="#6B94B8" stroke-width="7" stroke-linecap="round"/>
-<line x1="94" y1="18" x2="60" y2="78" stroke="#6B94B8" stroke-width="7" stroke-linecap="round"/>
-<line x1="60" y1="78" x2="60" y2="98" stroke="#34D399" stroke-width="7" stroke-linecap="round"/>
-<line x1="40" y1="100" x2="80" y2="100" stroke="#34D399" stroke-width="8" stroke-linecap="round"/>
-<circle cx="60" cy="78" r="8" fill="#F5A623"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 56 56" width="240" height="240" fill="none">
+  <defs>
+    <linearGradient id="bsbg" x1="0" y1="0" x2="56" y2="56" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#0D2137"/>
+      <stop offset="100%" stop-color="#0C4A6E"/>
+    </linearGradient>
+    <linearGradient id="bsar" x1="42" y1="12" x2="42" y2="40" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#38BDF8"/>
+      <stop offset="100%" stop-color="#22D3EE"/>
+    </linearGradient>
+  </defs>
+  <rect width="56" height="56" rx="13" fill="url(#bsbg)"/>
+  <rect x="10" y="14" width="22" height="5.5" rx="2.75" fill="white"/>
+  <rect x="10" y="23" width="16" height="5.5" rx="2.75" fill="white" fill-opacity="0.65"/>
+  <rect x="10" y="32" width="10" height="5.5" rx="2.75" fill="white" fill-opacity="0.35"/>
+  <rect x="36" y="12" width="1" height="32" fill="white" fill-opacity="0.07"/>
+  <path d="M42 12 L42 34" stroke="url(#bsar)" stroke-width="3.5" stroke-linecap="round"/>
+  <path d="M35.5 28.5 L42 38 L48.5 28.5" stroke="url(#bsar)" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
 </svg>

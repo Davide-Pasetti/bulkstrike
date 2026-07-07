@@ -2,7 +2,8 @@ import { useState, useMemo, useEffect } from "react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { Search, Bot, ArrowRight, Check, Clock, ChevronDown, ChevronRight, ChevronUp, Star, Shield, Truck, FileText, Download, Plus, Minus, X, Beaker, TrendingDown, Users, Gavel, Info, ShoppingCart } from "lucide-react";
 import { getProduct, getOpenPoolForProduct, getPriceReference, getProductBreadcrumb, getSession, openPool, upsertCartItem, poolErrorMessage, searchProducts, getCart } from "@/lib/api";
-import NavAuth from "@/components/BulkStrikeNavAuth";
+import BulkStrikeNav from "@/components/BulkStrikeNav";
+import { BSIcon } from "@/components/BSLogo";
 
 // ─── PALETTE (matches homepage) ───────────────────────────────────────────────
 const C = { blue:"#0EA5E9", dark:"#0284C7", text:"#0F172A", muted:"#64748B", border:"#E2E8F0", bg:"#F8FAFE", green:"#059669", red:"#DC2626", amber:"#D97706", purple:"#7C3AED" };
@@ -47,22 +48,6 @@ const SEED_QA = [
   { q:"Qual è la differenza tra naturale e sintetico per l'uso enologico?", a:"L'acido tartarico naturale (da fecce o uva) è la forma L(+) destrogira identica a quella dell'uva. Il sintetico è chimicamente equivalente come E334 ma alcune denominazioni e produzioni biologiche richiedono il naturale." },
   { q:"Che packaging è disponibile per grandi volumi?", a:"Sacchi da 25 kg su pallet, big bag da 500 e 1000 kg. Oltre le 20 tonnellate la maggior parte dei fornitori quota in big bag." },
 ];
-
-// ─── LOGO ─────────────────────────────────────────────────────────────────────
-function BSIcon({ size = 36, uid = "a" }) {
-  // Nuovo logo: 3 linee convergono su un punto (arancio) che "scende" in una base verde — clienti, fornitori e corrieri che si incontrano su BulkStrike.
-  return (
-    <svg width={size} height={size} viewBox="0 0 120 120">
-      <rect x="0" y="0" width="120" height="120" fill="#0D1F35"/>
-      <line x1="26" y1="18" x2="60" y2="78" stroke="#6B94B8" strokeWidth="7" strokeLinecap="round"/>
-      <line x1="60" y1="10" x2="60" y2="78" stroke="#6B94B8" strokeWidth="7" strokeLinecap="round"/>
-      <line x1="94" y1="18" x2="60" y2="78" stroke="#6B94B8" strokeWidth="7" strokeLinecap="round"/>
-      <line x1="60" y1="78" x2="60" y2="98" stroke="#34D399" strokeWidth="7" strokeLinecap="round"/>
-      <line x1="40" y1="100" x2="80" y2="100" stroke="#34D399" strokeWidth="8" strokeLinecap="round"/>
-      <circle cx="60" cy="78" r="8" fill="#F5A623"/>
-    </svg>
-  );
-}
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
 const VAT = 0.22;
@@ -421,42 +406,7 @@ export default function ProductPage() {
       `}</style>
 
       {/* NAVBAR */}
-      <nav style={{ position:"sticky", top:0, zIndex:50, background:"rgba(255,255,255,0.96)", backdropFilter:"blur(12px)", borderBottom:`1px solid ${C.border}` }}>
-        <div style={{ maxWidth:1200, margin:"0 auto", padding:"0 20px", height:64, display:"flex", alignItems:"center", gap:18 }}>
-          <div onClick={() => { window.location.href = "/"; }} style={{ display:"flex", alignItems:"center", gap:9, flexShrink:0, cursor:"pointer" }}>
-            <BSIcon size={34} uid="nav" />
-            <div style={{ display:"flex", alignItems:"baseline" }}>
-              <span style={{ fontSize:19, fontWeight:900, letterSpacing:"-0.03em" }}>Bulk</span>
-              <span style={{ fontSize:19, fontWeight:900, letterSpacing:"-0.03em", background:"linear-gradient(90deg,#0EA5E9,#22D3EE)", WebkitBackgroundClip:"text", backgroundClip:"text", color:"transparent" }}>Strike</span>
-            </div>
-          </div>
-          <div style={{ flex:1, display:"flex", justifyContent:"center" }}>
-            <div style={{ position:"relative", flex:1, maxWidth:520 }}>
-              <div className="bs-search-wrap" style={{ maxWidth:"100%" }}>
-                <input className="bs-search-input" placeholder="Cerca materie prime, fornitori, specifiche..." value={searchQ} onChange={e => setSearchQ(e.target.value)} onKeyDown={e => { if (e.key === "Enter") runSearch(); }} />
-                <button style={{ background:C.blue, border:"none", padding:"0 16px", cursor:"pointer" }} onClick={runSearch}><Search size={18} color="#fff" /></button>
-              </div>
-              {searchOpen && searchResults.length > 0 && (
-                <div style={{ position:"absolute", top:48, left:0, right:0, background:"#fff", border:`1px solid ${C.border}`, borderRadius:10, boxShadow:"0 12px 30px rgba(0,0,0,0.12)", zIndex:60, maxHeight:340, overflowY:"auto" }}>
-                  {searchResults.map(p => (
-                    <div key={p.id} onClick={() => { window.location.href = `/prodotto?id=${p.id}`; }} style={{ padding:"10px 14px", cursor:"pointer", borderBottom:`1px solid ${C.border}`, display:"flex", justifyContent:"space-between", gap:10 }}>
-                      <span style={{ fontSize:14, color:C.text }}>{p.canonical_name}</span>
-                      {p.e_number && <span style={{ fontSize:12, color:C.muted }}>{p.e_number}</span>}
-                    </div>
-                  ))}
-                </div>
-              )}
-              {searchOpen && searchResults.length === 0 && searchQ.trim().length >= 2 && (
-                <div style={{ position:"absolute", top:48, left:0, right:0, background:"#fff", border:`1px solid ${C.border}`, borderRadius:10, padding:"12px 14px", zIndex:60, fontSize:13, color:C.muted }}>Nessun prodotto trovato per "{searchQ}".</div>
-              )}
-            </div>
-          </div>
-          <div className="bs-nav-links" style={{ display:"flex", gap:18, alignItems:"center" }}>
-            {[["Aste a ribasso","/pool"],["Prodotti","/catalogo"],["Fornitori","/registrati"]].map(([l,href]) => <span key={l} onClick={() => { window.location.href = href; }} style={{ fontSize:14, color:C.muted, cursor:"pointer", fontWeight:500 }}>{l}</span>)}
-            <NavAuth />
-          </div>
-        </div>
-      </nav>
+      <BulkStrikeNav />
 
       {/* TICKER */}
       <div style={{ background:"#07111E", padding:"9px 0" }}>

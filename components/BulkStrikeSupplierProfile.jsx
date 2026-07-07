@@ -5,7 +5,8 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { Search, Star, ShieldCheck, MapPin, Phone, Globe, Mail, User, FileText, Package, Layers, Award, Clock, ChevronRight, ArrowRight, Flame, Building2, Truck, ExternalLink, Check, X, MessageSquare, Send, ShoppingCart } from "lucide-react";
 import { getSupplierProfile, getSession, upsertCartItem, poolErrorMessage, getSupplierReviews, getReviewableOrders, submitReview, getCart } from "@/lib/api";
-import NavAuth from "@/components/BulkStrikeNavAuth";
+import BulkStrikeNav from "@/components/BulkStrikeNav";
+import { BSIcon } from "@/components/BSLogo";
 
 const C = { blue:"#0EA5E9", dark:"#0284C7", text:"#0F172A", muted:"#64748B", border:"#E2E8F0", bg:"#F8FAFE", green:"#059669", red:"#DC2626", amber:"#D97706", purple:"#7C3AED" };
 
@@ -20,24 +21,6 @@ function shipFor(country) {
   const eu = ["Francia","Germania","Spagna","Polonia","Paesi Bassi","Portogallo","Belgio","Austria"];
   if (eu.includes(country)) return { shipBase:100, shipKg:0.06 };
   return { shipBase:180, shipKg:0.12 }; // extra-UE
-}
-
-function BSIcon({ size = 36, uid = "a" }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 56 56" fill="none">
-      <defs>
-        <linearGradient id={`bg${uid}`} x1="0" y1="0" x2="56" y2="56" gradientUnits="userSpaceOnUse"><stop offset="0%" stopColor="#0D2137"/><stop offset="100%" stopColor="#0C4A6E"/></linearGradient>
-        <linearGradient id={`ar${uid}`} x1="42" y1="12" x2="42" y2="40" gradientUnits="userSpaceOnUse"><stop offset="0%" stopColor="#38BDF8"/><stop offset="100%" stopColor="#22D3EE"/></linearGradient>
-      </defs>
-      <rect width="56" height="56" rx="13" fill={`url(#bg${uid})`}/>
-      <rect x="10" y="14" width="22" height="5.5" rx="2.75" fill="white"/>
-      <rect x="10" y="23" width="16" height="5.5" rx="2.75" fill="white" fillOpacity="0.65"/>
-      <rect x="10" y="32" width="10" height="5.5" rx="2.75" fill="white" fillOpacity="0.35"/>
-      <rect x="36" y="12" width="1" height="32" fill="white" fillOpacity="0.07"/>
-      <path d="M42 12 L42 34" stroke={`url(#ar${uid})`} strokeWidth="3.5" strokeLinecap="round"/>
-      <path d="M35.5 28.5 L42 38 L48.5 28.5" stroke={`url(#ar${uid})`} strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
-    </svg>
-  );
 }
 
 function Stars({ value = 0 }) {
@@ -221,23 +204,7 @@ export default function SupplierPage() {
       `}</style>
 
       {/* NAVBAR */}
-      <nav style={{ position:"sticky", top:0, zIndex:50, background:"rgba(255,255,255,0.96)", backdropFilter:"blur(12px)", borderBottom:`1px solid ${C.border}` }}>
-        <div style={{ maxWidth:1200, margin:"0 auto", padding:"0 20px", height:64, display:"flex", alignItems:"center", justifyContent:"space-between", gap:16 }}>
-          <div onClick={() => { window.location.href = "/"; }} style={{ display:"flex", alignItems:"center", gap:10, cursor:"pointer" }}>
-            <BSIcon size={34} uid="nav" />
-            <div style={{ display:"flex", alignItems:"baseline" }}>
-              <span style={{ fontSize:19, fontWeight:900, letterSpacing:"-0.03em" }}>Bulk</span>
-              <span style={{ fontSize:19, fontWeight:900, letterSpacing:"-0.03em", background:"linear-gradient(90deg,#0EA5E9,#22D3EE)", WebkitBackgroundClip:"text", backgroundClip:"text", color:"transparent" }}>Strike</span>
-            </div>
-          </div>
-          <div style={{ display:"flex", alignItems:"center", gap:18 }}>
-            <div className="sup-nav-links" style={{ display:"flex", gap:18 }}>
-              {[["Catalogo","/catalogo"],["Fornitori","/fornitori"],["Carrello","/carrello"],["Ordini","/ordini"]].map(([l,href]) => <span key={l} onClick={() => { window.location.href = href; }} style={{ fontSize:14, color:C.muted, cursor:"pointer", fontWeight:500 }}>{l}</span>)}
-            </div>
-            <NavAuth />
-          </div>
-        </div>
-      </nav>
+      <BulkStrikeNav />
 
       <div style={{ maxWidth:1200, margin:"0 auto", padding:"20px 20px 60px" }}>
 

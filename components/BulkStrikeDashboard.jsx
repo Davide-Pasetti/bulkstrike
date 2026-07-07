@@ -5,6 +5,7 @@ import {
   getNotifications, markNotificationRead, markAllNotificationsRead, subscribeNotifications,
 } from "@/lib/api";
 import { Bell, Search, Plus, TrendingDown, Zap, Factory, Check, X, Gavel, LayoutGrid, Inbox, Clock, Boxes, ChevronRight, Settings, Trophy, Send, Package, Truck, LogOut, AlertTriangle } from "lucide-react";
+import { BSIcon } from "@/components/BSLogo";
 
 const C = { blue:"#0EA5E9", dark:"#0284C7", text:"#0F172A", muted:"#64748B", border:"#E2E8F0", bg:"#F8FAFE", green:"#059669", amber:"#D97706", red:"#DC2626", purple:"#7C3AED" };
 
@@ -73,21 +74,6 @@ const NOTIF_STYLE = {
   request:  { icon:Search,       color:C.blue,   bg:"#EFF6FF" },
   outbid:   { icon:Zap,          color:C.red,    bg:"#FEF2F2" },
 };
-
-function BSIcon({ size = 36, uid = "a" }) {
-  // Nuovo logo: 3 linee convergono su un punto (arancio) che "scende" in una base verde — clienti, fornitori e corrieri che si incontrano su BulkStrike.
-  return (
-    <svg width={size} height={size} viewBox="0 0 120 120">
-      <rect x="0" y="0" width="120" height="120" fill="#0D1F35"/>
-      <line x1="26" y1="18" x2="60" y2="78" stroke="#6B94B8" strokeWidth="7" strokeLinecap="round"/>
-      <line x1="60" y1="10" x2="60" y2="78" stroke="#6B94B8" strokeWidth="7" strokeLinecap="round"/>
-      <line x1="94" y1="18" x2="60" y2="78" stroke="#6B94B8" strokeWidth="7" strokeLinecap="round"/>
-      <line x1="60" y1="78" x2="60" y2="98" stroke="#34D399" strokeWidth="7" strokeLinecap="round"/>
-      <line x1="40" y1="100" x2="80" y2="100" stroke="#34D399" strokeWidth="8" strokeLinecap="round"/>
-      <circle cx="60" cy="78" r="8" fill="#F5A623"/>
-    </svg>
-  );
-}
 
 const chipStyle = (on) => ({ padding:"7px 13px", borderRadius:100, border:`1.5px solid ${on?C.blue:C.border}`, background:on?"#EFF6FF":"#fff", color:on?C.blue:C.muted, fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:"Inter,system-ui", display:"flex", alignItems:"center", gap:5 });
 
