@@ -10,7 +10,7 @@
 // Il pagamento chiude il checkout: non è più un passo separato successivo.
 import { useState, useEffect, useMemo } from "react";
 import { ShieldCheck, ArrowRight, ArrowLeft, Check, ChevronRight, Package, FileText, AlertTriangle, MapPin, Mail, CreditCard, Truck, Clock3, PauseCircle, Plus, X, Receipt } from "lucide-react";
-import { getCart, checkoutCart, previewCheckout, getMyCompanyAddress, getShippingAddresses, addShippingAddress, getSession, poolErrorMessage, getShippingQuotes } from "@/lib/api";
+import { getCart, checkoutCart, previewCheckout, getMyCompany, getMyCompanyAddress, getShippingAddresses, addShippingAddress, getSession, poolErrorMessage, getShippingQuotes } from "@/lib/api";
 import NavAuth from "@/components/BulkStrikeNavAuth";
 
 const C = { blue: "#0EA5E9", dark: "#0284C7", text: "#0F172A", muted: "#64748B", border: "#E2E8F0", bg: "#F8FAFE", green: "#059669", red: "#DC2626", amber: "#D97706" };
@@ -70,6 +70,7 @@ export default function CheckoutPage() {
   // disponibile, non richiede salvataggio) + form per aggiungerne uno nuovo.
   const [addresses, setAddresses] = useState([]);
   const [companyAddress, setCompanyAddress] = useState(null); // testo sede legale, o null se non impostata
+  const [companyName, setCompanyName] = useState(null); // ragione sociale azienda loggata (per la riga Fatturazione)
   const [selectedAddressId, setSelectedAddressId] = useState(""); // "__legal__" | id salvato
   const [billingAddressId, setBillingAddressId] = useState(""); // "__legal__" | id salvato — indipendente dalla consegna
   const [showAddForm, setShowAddForm] = useState(false);
@@ -92,13 +93,15 @@ export default function CheckoutPage() {
       if (!session) { setNeedLogin(true); setLoading(false); return; }
       setBuyerEmail(session.user?.email || "");
       try {
-        const [cart, savedAddrs, companyAddr] = await Promise.all([
+        const [cart, savedAddrs, companyAddr, company] = await Promise.all([
           getCart(),
           getShippingAddresses().catch(() => []),
           getMyCompanyAddress().catch(() => null),
+          getMyCompany().catch(() => null),
         ]);
         setItems(cart);
         setAddresses(savedAddrs || []);
+        setCompanyName(company?.legal_name || null);
         const legalText = companyAddr ? [companyAddr.address, companyAddr.city, companyAddr.country].filter(Boolean).join(", ") : null;
         setCompanyAddress(legalText);
 
@@ -527,9 +530,8 @@ export default function CheckoutPage() {
                 <div style={{ border: `1px solid ${C.border}`, borderRadius: 14, padding: 20, marginBottom: 18 }}>
                   <div style={{ fontSize: 13, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: C.muted, marginBottom: 14 }}>Riepilogo</div>
                   <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13.5, marginBottom: 8 }}><span style={{ color: C.muted }}>Righe</span><span className="co-num" style={{ fontWeight: 600 }}>{items.length}</span></div>
-                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13.5, marginBottom: 8 }}><span style={{ color: C.muted }}>Fatturazione</span><span style={{ fontWeight: 600, textAlign: "right", maxWidth: 280 }}>{billingAddressText}</span></div>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13.5, marginBottom: 8 }}><span style={{ color: C.muted }}>Fatturazione</span><span style={{ fontWeight: 600, textAlign: "right", maxWidth: 280 }}>{companyName || billingAddressText}</span></div>
                   <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13.5, marginBottom: 8 }}><span style={{ color: C.muted }}>Consegna</span><span style={{ fontWeight: 600, textAlign: "right", maxWidth: 280 }}>{address}</span></div>
-                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13.5, marginBottom: 8 }}><span style={{ color: C.muted }}>Commissioni BulkStrike</span><span className="co-num" style={{ fontWeight: 700, color: C.green }}>€0,00</span></div>
 
                   {previewLoading ? (
                     <div style={{ fontSize: 13, color: C.muted, padding: "10px 0" }}>Calcolo spedizione e IVA…</div>
@@ -545,7 +547,11 @@ export default function CheckoutPage() {
                             <span className="co-num" style={{ whiteSpace: "nowrap" }}>{it.unit_price != null ? eur(Number(it.unit_price) * Number(it.quantity_kg)) : "—"}</span>
                           </div>
                         ))}
-                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, fontWeight: 700, marginTop: 8 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: 12.5, fontWeight: 700, marginTop: 8, gap: 10 }}>
+                          <span>Commissioni BulkStrike sulle materie prime</span>
+                          <span className="co-num" style={{ whiteSpace: "nowrap", color: C.green }}>€0,00</span>
+                        </div>
+                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, fontWeight: 700, marginTop: 6 }}>
                           <span>Subtotale materia prima</span>
                           <span className="co-num" style={{ whiteSpace: "nowrap" }}>{eur(goodsForDisplay)}</span>
                         </div>
