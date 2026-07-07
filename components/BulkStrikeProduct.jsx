@@ -1,8 +1,9 @@
 import { useState, useMemo, useEffect } from "react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
-import { Search, Bot, ArrowRight, Check, Clock, ChevronDown, ChevronRight, ChevronUp, Star, Shield, Truck, FileText, Download, Plus, Minus, X, Beaker, TrendingDown, Users, Gavel, Info, ShoppingCart } from "lucide-react";
+import { Search, ArrowRight, Check, Clock, ChevronDown, ChevronRight, ChevronUp, Star, Shield, Truck, FileText, Download, Plus, Minus, Beaker, TrendingDown, Users, Gavel, Info, ShoppingCart } from "lucide-react";
 import { getProduct, getOpenPoolForProduct, getPriceReference, getProductBreadcrumb, getSession, openPool, upsertCartItem, poolErrorMessage, searchProducts, getCart } from "@/lib/api";
 import BulkStrikeNav from "@/components/BulkStrikeNav";
+import BulkStrikeChatWidget from "@/components/BulkStrikeChatWidget";
 import { BSIcon } from "@/components/BSLogo";
 
 // ─── PALETTE (matches homepage) ───────────────────────────────────────────────
@@ -156,7 +157,6 @@ export default function ProductPage() {
   const [selectedFormatIdx, setSelectedFormatIdx] = useState(0); // indice del formato scelto tra quelli del fornitore in evidenza
   const [showSpecs, setShowSpecs] = useState(false);
   const [openQa, setOpenQa] = useState(null);
-  const [chatOpen, setChatOpen] = useState(false);
 
   // ── stato data-driven (default = demo SEED; /prodotto senza id resta la demo)
   // loading parte SEMPRE true: durante l'SSR window non esiste e non possiamo
@@ -893,32 +893,7 @@ export default function ProductPage() {
       </div>
 
       {/* CHATBOT */}
-      <div style={{ position:"fixed", bottom:24, right:24, zIndex:1000 }}>
-        {chatOpen && (
-          <div style={{ position:"absolute", bottom:70, right:0, width:300, background:"#fff", borderRadius:16, border:`1px solid ${C.border}`, boxShadow:"0 20px 60px rgba(0,0,0,0.15)", overflow:"hidden" }}>
-            <div style={{ background:C.blue, padding:"14px 16px", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
-              <div style={{ display:"flex", alignItems:"center", gap:9 }}>
-                <Bot size={18} color="#fff"/>
-                <div><div style={{ fontSize:13, fontWeight:700, color:"#fff" }}>BulkStrike AI</div><div style={{ fontSize:11, color:"rgba(255,255,255,0.8)" }}>Assistente virtuale AI · ● Online</div></div>
-              </div>
-              <button onClick={() => setChatOpen(false)} style={{ background:"none", border:"none", cursor:"pointer" }}><X size={16} color="#fff"/></button>
-            </div>
-            <div style={{ padding:12 }}>
-              <div style={{ background:C.bg, borderRadius:"12px 12px 12px 4px", padding:"10px 12px", fontSize:13, color:C.text, lineHeight:1.5 }}>
-                Sono l'assistente virtuale (AI) di BulkStrike, non una persona. Stai guardando l'Acido Tartarico: vuoi che ti trovi il prezzo migliore per la tua quantità o che ti unisca all'asta a ribasso attiva? Per parlare con una persona, scrivi a davide@bulkstrike.com.
-              </div>
-            </div>
-            <div style={{ borderTop:`1px solid ${C.border}` }}>
-              <div style={{ padding:"6px 12px 0", fontSize:10, color:C.muted, textAlign:"center" }}>Risposte generate da intelligenza artificiale</div>
-              <div style={{ padding:10, display:"flex", gap:8 }}>
-                <input placeholder="Scrivi un messaggio..." style={{ flex:1, border:`1px solid ${C.border}`, borderRadius:8, padding:"8px 12px", fontSize:13, outline:"none", fontFamily:"Inter,system-ui" }}/>
-                <button style={{ background:C.blue, border:"none", borderRadius:8, width:34, cursor:"pointer", color:"#fff", fontWeight:700 }}>→</button>
-              </div>
-            </div>
-          </div>
-        )}
-        <button className="bs-chatbot-btn" onClick={() => setChatOpen(!chatOpen)}>{chatOpen ? <X size={22} color="#fff"/> : <Bot size={24} color="#fff"/>}</button>
-      </div>
+      <BulkStrikeChatWidget accent={C.blue} />
     </div>
   );
 }

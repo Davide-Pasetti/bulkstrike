@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
 import { getPoolDetail, getPoolBids, getPoolParticipants, getPoolTargetJoins, joinPool, joinPoolAtTarget, getMyTargetJoin, cancelTargetJoin, poolErrorMessage } from "@/lib/api";
 import BulkStrikeNav from "@/components/BulkStrikeNav";
+import BulkStrikeChatWidget from "@/components/BulkStrikeChatWidget";
 import { BSIcon } from "@/components/BSLogo";
-import { Search, Bot, ArrowRight, Check, Clock, ChevronRight, Shield, Users, TrendingDown, X, Plus, Minus, Info, Gavel, Award } from "lucide-react";
+import { Search, ArrowRight, Check, Clock, ChevronRight, Shield, Users, TrendingDown, Plus, Minus, Info, Gavel, Award } from "lucide-react";
 
 const C = { blue:"#0EA5E9", dark:"#0284C7", text:"#0F172A", muted:"#64748B", border:"#E2E8F0", bg:"#F8FAFE", green:"#059669", red:"#DC2626", amber:"#D97706", purple:"#7C3AED" };
 
@@ -75,7 +76,6 @@ export default function PoolAuctionPage() {
   const [joinMsg, setJoinMsg] = useState(null);
   const [userQty, setUserQty] = useState(2000);
   const [qtyMode, setQtyMode] = useState("pallet");
-  const [chatOpen, setChatOpen] = useState(false);
   const [acceptTerms, setAcceptTerms] = useState(false);
   const [secs, setSecs] = useState(pool.secondsLeft);
   const [joined, setJoined] = useState(false);
@@ -637,33 +637,7 @@ export default function PoolAuctionPage() {
       </div>
 
       {/* CHATBOT */}
-      <div style={{ position:"fixed", bottom:24, right:24, zIndex:1000 }}>
-        {chatOpen && (
-          <div style={{ position:"absolute", bottom:70, right:0, width:300, background:"#fff", borderRadius:16, border:`1px solid ${C.border}`, boxShadow:"0 20px 60px rgba(0,0,0,0.15)", overflow:"hidden" }}>
-            <div style={{ background:C.purple, padding:"14px 16px", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
-              <div style={{ display:"flex", alignItems:"center", gap:9 }}>
-                <Bot size={18} color="#fff"/><div><div style={{ fontSize:13, fontWeight:700, color:"#fff" }}>BulkStrike AI</div><div style={{ fontSize:11, color:"rgba(255,255,255,0.8)" }}>Assistente virtuale AI · ● Online</div></div>
-              </div>
-              <button onClick={() => setChatOpen(false)} style={{ background:"none", border:"none", cursor:"pointer" }}><X size={16} color="#fff"/></button>
-            </div>
-            <div style={{ padding:12 }}>
-              <div style={{ background:C.bg, borderRadius:"12px 12px 12px 4px", padding:"10px 12px", fontSize:13, color:C.text, lineHeight:1.5 }}>
-                Sono l'assistente virtuale (AI) di BulkStrike, non una persona. Questa è un'asta a ribasso: il prezzo ora è €2,27/kg e può solo scendere fino alla chiusura. Vuoi che ti spieghi la differenza con l'Acquisto Rapido? Per parlare con una persona, scrivi a davide@bulkstrike.com.
-              </div>
-            </div>
-            <div style={{ borderTop:`1px solid ${C.border}` }}>
-              <div style={{ padding:"6px 12px 0", fontSize:10, color:C.muted, textAlign:"center" }}>Risposte generate da intelligenza artificiale</div>
-              <div style={{ padding:10, display:"flex", gap:8 }}>
-                <input placeholder="Scrivi un messaggio..." style={{ flex:1, border:`1px solid ${C.border}`, borderRadius:8, padding:"8px 12px", fontSize:13, outline:"none", fontFamily:"Inter,system-ui" }}/>
-                <button style={{ background:C.purple, border:"none", borderRadius:8, width:34, cursor:"pointer", color:"#fff", fontWeight:700 }}>→</button>
-              </div>
-            </div>
-          </div>
-        )}
-        <button onClick={() => setChatOpen(!chatOpen)} style={{ width:56, height:56, borderRadius:"50%", background:C.purple, border:"3px solid #fff", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", boxShadow:"0 4px 20px rgba(124,58,237,0.4)" }}>
-          {chatOpen ? <X size={22} color="#fff"/> : <Bot size={24} color="#fff"/>}
-        </button>
-      </div>
+      <BulkStrikeChatWidget accent={C.purple} />
     </div>
   );
 }

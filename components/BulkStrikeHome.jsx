@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
-import { Bot, ArrowRight, Check, Clock, ChevronRight, TrendingDown, X, ChevronDown } from "lucide-react";
-import { getMacroAreas, getSectorProducts, streamAiAssistant } from "@/lib/api";
+import { Bot, ArrowRight, Check, Clock, ChevronRight, TrendingDown, ChevronDown } from "lucide-react";
+import { getMacroAreas, getSectorProducts } from "@/lib/api";
 import BulkStrikeNav from "@/components/BulkStrikeNav";
+import BulkStrikeChatWidget from "@/components/BulkStrikeChatWidget";
 import { BSIcon } from "@/components/BSLogo";
 
 // ─── DATA ───────────────────────────────────────────────────────────────────
@@ -96,67 +97,8 @@ export default function BulkStrikeLight() {
   const [sectorsExpanded, setSectorsExpanded] = useState(false); // solo mobile: mostra tutte le icone settore
   const [activeChart, setActiveChart] = useState("Acido Citrico");
   const [activeTab, setActiveTab]   = useState("acquirente");
-  const [chatOpen, setChatOpen]     = useState(false);
-  // Widget di supporto (mode="support"): cronologia effimera lato client, come da design.
-  const [chatMsgs, setChatMsgs]     = useState([{ role:"assistant", content:"Ciao! Sono l'assistente virtuale (AI) di BulkStrike — non una persona. Posso aiutarti a trovare materie prime, confrontare fornitori o unirti a un'asta a ribasso. Per parlare con una persona, scrivi a davide@bulkstrike.com. Come posso aiutarti?" }]);
-  const [chatInput, setChatInput]   = useState("");
-  const [chatBusy, setChatBusy]     = useState(false);
   const [count, setCount]           = useState({ pools:0, materials:0, countries:0, volume:0 });
 
-  async function sendChat() {
-    const text = chatInput.trim();
-    if (!text || chatBusy) return;
-    // client_history = i turni finora (esclusa la risposta in costruzione)
-    const history = chatMsgs.map(m => ({ role: m.role, content: m.content }));
-    setChatMsgs(prev => [...prev, { role:"user", content:text }, { role:"assistant", content:"" }]);
-    setChatInput("");
-    setChatBusy(true);
-    let gotText = false;
-    try {
-      await streamAiAssistant({
-        mode: "support",
-        message: text,
-        clientHistory: history,
-        onEvent: (ev) => {
-          if (ev.type === "text") {
-            gotText = true;
-            setChatMsgs(prev => {
-              const c = [...prev];
-              c[c.length-1] = { ...c[c.length-1], content: c[c.length-1].content + ev.delta };
-              return c;
-            });
-          } else if (ev.type === "error") {
-            setChatMsgs(prev => {
-              const c = [...prev];
-              c[c.length-1] = { role:"assistant", content:"Si è verificato un errore. Riprova tra poco." };
-              return c;
-            });
-          }
-          // "tool"/"conversation"/"done" ignorati: il supporto è sola lettura ed effimero
-        },
-      });
-      // Se lo stream si chiude senza testo (es. rate limit già gestito come error), lascia un messaggio
-      if (!gotText) {
-        setChatMsgs(prev => {
-          const c = [...prev];
-          if (c[c.length-1]?.role === "assistant" && !c[c.length-1].content) {
-            c[c.length-1] = { role:"assistant", content:"Non ho ricevuto una risposta. Riprova tra poco." };
-          }
-          return c;
-        });
-      }
-    } catch (e) {
-      setChatMsgs(prev => {
-        const c = [...prev];
-        if (c[c.length-1]?.role === "assistant" && !c[c.length-1].content) {
-          c[c.length-1] = { role:"assistant", content:"Non riesco a rispondere ora. Riprova tra poco." };
-        }
-        return c;
-      });
-    } finally {
-      setChatBusy(false);
-    }
-  }
   const [macros, setMacros]               = useState([]);
   const [activeMacro, setActiveMacro]     = useState(null);
   const [activeSector, setActiveSector]   = useState(null);
@@ -669,51 +611,8 @@ export default function BulkStrikeLight() {
       </div>
 
       {/* ── CHATBOT FISSO ── */}
-      <div className="bs-chatbot">
-        {chatOpen && (
-          <div className="bs-chatbot-panel">
-            <div style={{ background:C.blue, padding:"14px 16px", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
-              <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-                <Bot size={18} color="white" />
-                <div>
-                  <div style={{ fontSize:13, fontWeight:700, color:"white" }}>BulkStrike AI</div>
-                  <div style={{ fontSize:11, color:"rgba(255,255,255,0.8)" }}>Assistente virtuale AI · ● Online</div>
-                </div>
-              </div>
-              <button onClick={() => setChatOpen(false)} style={{ background:"none", border:"none", cursor:"pointer", color:"rgba(255,255,255,0.7)", display:"flex" }}>
-                <X size={16} color="white" />
-              </button>
-            </div>
-            <div style={{ padding:12, display:"flex", flexDirection:"column", gap:8, maxHeight:180, overflowY:"auto" }}>
-              {chatMsgs.map((m, i) => (
-                m.role === "user" ? (
-                  <div key={i} style={{ alignSelf:"flex-end", background:C.blue, color:"white", borderRadius:"12px 12px 4px 12px", padding:"10px 12px", fontSize:13, maxWidth:"85%", lineHeight:1.5, whiteSpace:"pre-wrap" }}>{m.content}</div>
-                ) : (
-                  <div key={i} style={{ alignSelf:"flex-start", background:C.bg, color:C.text, borderRadius:"12px 12px 12px 4px", padding:"10px 12px", fontSize:13, maxWidth:"85%", lineHeight:1.5, whiteSpace:"pre-wrap" }}>{m.content || (chatBusy ? "…" : "")}</div>
-                )
-              ))}
-            </div>
-            <div style={{ borderTop:`1px solid ${C.border}` }}>
-              <div style={{ padding:"6px 12px 0", fontSize:10, color:C.muted, textAlign:"center" }}>Risposte generate da intelligenza artificiale</div>
-              <div style={{ padding:10, display:"flex", gap:8 }}>
-                <input
-                  value={chatInput}
-                  onChange={e => setChatInput(e.target.value)}
-                  onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendChat(); } }}
-                  disabled={chatBusy}
-                  placeholder="Scrivi un messaggio..."
-                  style={{ flex:1, border:`1px solid ${C.border}`, borderRadius:8, padding:"8px 12px", fontSize:13, outline:"none", fontFamily:"Inter,system-ui" }}
-                />
-                <button onClick={sendChat} disabled={chatBusy || !chatInput.trim()} style={{ background:C.blue, border:"none", borderRadius:8, width:34, cursor:(chatBusy || !chatInput.trim())?"default":"pointer", opacity:(chatBusy || !chatInput.trim())?0.5:1, color:"white", fontWeight:700, flexShrink:0, fontFamily:"Inter,system-ui" }}>↑</button>
-              </div>
-            </div>
-          </div>
-        )}
-        <button className="bs-chatbot-btn" onClick={() => setChatOpen(!chatOpen)}>
-          {chatOpen ? <X size={22} color="white" /> : <Bot size={24} color="white" />}
-        </button>
-        <CookieBanner />
-      </div>
+      <BulkStrikeChatWidget />
+      <CookieBanner />
     </div>
   );
 }
