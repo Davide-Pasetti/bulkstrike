@@ -262,10 +262,11 @@ export default function CheckoutPage() {
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap');
         * { box-sizing:border-box; }
         .co-num { font-family:'JetBrains Mono',monospace; }
-        .co-row { display:grid; grid-template-columns:2fr 1fr 1fr 1fr; gap:12px; padding:13px 16px; border-bottom:1px solid ${C.border}; font-size:13.5px; align-items:center; }
+        .co-row { display:grid; grid-template-columns:2fr 1fr 1fr 1fr 1fr 1fr; gap:12px; padding:13px 16px; border-bottom:1px solid ${C.border}; font-size:13.5px; align-items:center; }
+        .co-table { overflow:hidden; }
         .co-input { width:100%; padding:11px 13px; border:1.5px solid ${C.border}; border-radius:9px; font-size:14px; outline:none; font-family:'Inter',system-ui; background:#fff; }
         .co-input:focus { border-color:${C.blue}; }
-        @media (max-width:760px) { .co-row { grid-template-columns:1fr 1fr !important; } }
+        @media (max-width:760px) { .co-table { overflow-x:auto; -webkit-overflow-scrolling:touch; } .co-row { min-width:680px; } }
       `}</style>
 
       <nav style={{ position: "sticky", top: 0, zIndex: 50, background: "rgba(255,255,255,0.96)", backdropFilter: "blur(12px)", borderBottom: `1px solid ${C.border}` }}>
@@ -424,9 +425,9 @@ export default function CheckoutPage() {
                   <div style={{ fontSize: 11.5, color: C.muted, marginTop: 8 }}>L'indirizzo selezionato viene salvato tra quelli della tua azienda per i prossimi ordini.</div>
                 </div>
 
-                <div style={{ border: `1px solid ${C.border}`, borderRadius: 14, overflow: "hidden", marginBottom: 10 }}>
+                <div className="co-table" style={{ border: `1px solid ${C.border}`, borderRadius: 14, marginBottom: 10 }}>
                   <div className="co-row" style={{ background: C.bg, fontSize: 11, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.04em", color: C.muted }}>
-                    <span>Prodotto / fornitore</span><span>Quantità</span><span>Preparazione e consegna</span><span style={{ textAlign: "right" }}>Totale</span>
+                    <span>Prodotto / fornitore</span><span>Quantità</span><span>Preparazione</span><span>Consegna</span><span>Data stimata</span><span style={{ textAlign: "right" }}>Totale</span>
                   </div>
                   {items.map(it => {
                     const est = estimateDelivery(it);
@@ -437,17 +438,11 @@ export default function CheckoutPage() {
                           <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>{it.supplier_name}</div>
                         </div>
                         <span className="co-num">{Number(it.quantity_kg).toLocaleString("it-IT")} kg</span>
-                        <div>
-                          <div style={{ fontWeight: 600 }}>{it.lead_time_days != null ? `${it.lead_time_days} gg preparazione` : "—"}</div>
-                          <div style={{ fontSize: 11, color: C.muted, marginTop: 2, display: "flex", alignItems: "center", gap: 4 }}>
-                            <Truck size={11} /> {est.label}
-                          </div>
-                          {est.dateLabel && (
-                            <div style={{ fontSize: 11.5, fontWeight: 700, color: C.blue, marginTop: 2 }}>
-                              Arrivo stimato: {est.dateLabel}
-                            </div>
-                          )}
+                        <div style={{ fontWeight: 600 }}>{it.lead_time_days != null ? `${it.lead_time_days} gg` : "—"}</div>
+                        <div style={{ fontSize: 12, color: C.muted, display: "flex", alignItems: "center", gap: 4 }}>
+                          <Truck size={11} style={{ flexShrink: 0 }} /> {est.label}
                         </div>
+                        <div style={{ fontSize: 12.5, fontWeight: 700, color: est.dateLabel ? C.blue : C.muted }}>{est.dateLabel || "—"}</div>
                         <span className="co-num" style={{ textAlign: "right", fontWeight: 700 }}>{it.unit_price != null ? eur(Number(it.unit_price) * Number(it.quantity_kg)) : "—"}</span>
                       </div>
                     );
