@@ -244,7 +244,23 @@ export default function CheckoutPage() {
     (s) => methodBySupplier[s.supplier_company_id] === "escrow_sepa" && subOrderTotal(s) <= ESCROW_FEE_THRESHOLD
   ).length;
   const escrowFeeTotal = escrowFeeCount * ESCROW_SERVICE_FEE;
-  const grandTotalForDisplay = totalForDisplay != null ? totalForDisplay + escrowFeeTotal : null;
+
+  // Costi di servizio escrow premium (carta, sub-ordine > €10.000): STIMA all'1,5%
+  // + €0,25 per transazione (tariffa Stripe carte standard SEE; le premium costano
+  // 1,9%) calcolata sull'importo IVA inclusa del sub-ordine (×1,22, stessa stima del
+  // consolidamento escrow) — la stessa base total_amount usata dal trigger DB
+  // apply_escrow_premium_service_fee. L'importo reale dipende dal tipo di carta,
+  // determinato da Stripe all'addebito: per questo in UI la voce è marcata "stima".
+  const PREMIUM_FEE_RATE = 0.015;
+  const PREMIUM_FEE_FIXED = 0.25;
+  const premiumFeeSuppliers = (preview?.by_supplier || []).filter(
+    (s) => methodBySupplier[s.supplier_company_id] === "escrow_premium" && subOrderTotal(s) * 1.22 > ESCROW_FEE_THRESHOLD
+  );
+  const premiumFeeTotal = premiumFeeSuppliers.reduce(
+    (a, s) => a + (subOrderTotal(s) * 1.22 * PREMIUM_FEE_RATE + PREMIUM_FEE_FIXED), 0
+  );
+
+  const grandTotalForDisplay = totalForDisplay != null ? totalForDisplay + escrowFeeTotal + premiumFeeTotal : null;
 
   function goToPayment() {
     setErr("");
@@ -655,6 +671,15 @@ export default function CheckoutPage() {
                               <span className="co-num" style={{ whiteSpace: "nowrap", fontSize: 13, fontWeight: 700 }}>{escrowFeeCount === 1 ? "€0,35" : eur(escrowFeeTotal)}</span>
                             </div>
                             <div style={{ fontSize: 11, color: C.muted, marginTop: 3, lineHeight: 1.5 }}>Costo fisso di transazione SEPA del provider di pagamento, non una commissione BulkStrike.</div>
+                          </>
+                        )}
+                        {premiumFeeSuppliers.length > 0 && (
+                          <>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginTop: 8, gap: 10 }}>
+                              <span style={{ fontSize: 12.5, color: C.text, fontWeight: 600 }}>Costi di servizio escrow premium{premiumFeeSuppliers.length > 1 ? ` (${premiumFeeSuppliers.length} transazioni)` : ""} <span style={{ fontWeight: 500, color: C.muted }}>— stima</span></span>
+                              <span className="co-num" style={{ whiteSpace: "nowrap", fontSize: 13, fontWeight: 700 }}>{eur(premiumFeeTotal)}</span>
+                            </div>
+                            <div style={{ fontSize: 11, color: C.muted, marginTop: 3, lineHeight: 1.5 }}>Stima all&apos;1,5% + €0,25 per transazione (tariffa carte standard SEE del provider): l&apos;importo effettivo dipende dal tipo di carta ed è determinato all&apos;addebito. Non è una commissione BulkStrike.</div>
                           </>
                         )}
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginTop: 8 }}>
