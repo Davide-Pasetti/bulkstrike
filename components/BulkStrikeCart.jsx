@@ -6,7 +6,7 @@
 // (indirizzo aziendale, provvisoria) e ricalcolata definitivamente al checkout
 // dopo che il cliente ha scelto/confermato l'indirizzo di spedizione.
 import { useState, useEffect, useMemo } from "react";
-import { ShoppingCart, Trash2, ArrowRight, AlertTriangle, Package, ShieldCheck, ChevronRight } from "lucide-react";
+import { ShoppingCart, Trash2, ArrowRight, AlertTriangle, Package, ChevronRight } from "lucide-react";
 import { getCart, upsertCartItem, removeCartItem, clearCart, getSession, poolErrorMessage, previewCheckout, getMyCompanyAddress, getShippingQuotes } from "@/lib/api";
 import NavAuth from "@/components/BulkStrikeNavAuth";
 
@@ -232,15 +232,18 @@ export default function CartPage() {
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13.5, marginBottom: 8 }}>
                 <span style={{ color: C.muted }}>Volume totale</span><span className="ct-num" style={{ fontWeight: 600 }}>{totalKg.toLocaleString("it-IT")} kg</span>
               </div>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13.5, marginBottom: 8 }}>
-                <span style={{ color: C.muted }}>Commissioni BulkStrike</span><span className="ct-num" style={{ fontWeight: 700, color: C.green }}>€0,00</span>
-              </div>
 
               <div style={{ borderTop: `1px solid ${C.border}`, marginTop: 4, paddingTop: 10 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13.5, marginBottom: 8 }}>
                   <span style={{ color: C.muted }}>Materia prima</span>
                   <span className="ct-num" style={{ fontWeight: 600 }}>{eur(preview?.goods_subtotal ?? subtotal)}</span>
                 </div>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13.5, marginBottom: 8 }}>
+                  <span style={{ color: C.muted }}>Commissioni BulkStrike sulle materie prime</span><span className="ct-num" style={{ fontWeight: 700, color: C.green }}>€0,00</span>
+                </div>
+              </div>
+
+              <div style={{ borderTop: `1px solid ${C.border}`, marginTop: 4, paddingTop: 10 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13.5, marginBottom: 8 }}>
                   <span style={{ color: C.muted }}>Spedizione (stima) {previewLoading && "…"}</span>
                   <span className="ct-num" style={{ fontWeight: 600 }}>{previewLoading ? "…" : eur(preview?.shipping_amount)}</span>
@@ -266,10 +269,6 @@ export default function CartPage() {
                 style={{ width: "100%", justifyContent: "center", background: C.blue, color: "#fff", border: "none", borderRadius: 10, padding: "13px", fontSize: 14.5, fontWeight: 700, cursor: issues.length > 0 ? "default" : "pointer", opacity: issues.length > 0 ? 0.5 : 1, display: "flex", alignItems: "center", gap: 8, fontFamily: "Inter,system-ui" }}>
                 Confronta i costi di spedizione <ArrowRight size={16} />
               </button>
-              <div style={{ display: "flex", gap: 7, alignItems: "flex-start", fontSize: 11.5, color: C.muted, marginTop: 12, lineHeight: 1.5 }}>
-                <ShieldCheck size={13} color={C.green} style={{ marginTop: 1, flexShrink: 0 }} />
-                <span>Pagamento protetto in escrow: il fornitore incassa solo dopo la tua conferma di consegna.</span>
-              </div>
             </div>
           </div>
         )}
