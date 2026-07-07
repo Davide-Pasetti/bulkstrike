@@ -179,11 +179,16 @@ export default function PoolAuctionPage() {
   const projectedTier = tierFor(projected);
   const ceilingNow = currentTier.price;
   const effectiveNow = Math.min(pool.bestBid, ceilingNow);
+  // Prezzo "stimato (live)": riflette lo scaglione che la quantità in sospeso
+  // (userQty) sbloccherebbe — stesso calcolo client-side del segmento di anteprima
+  // sulla barra di progresso, così bar e prezzo si aggiornano insieme.
+  const ceilingProjected = projectedTier.price;
+  const effectiveProjected = Math.min(pool.bestBid, ceilingProjected);
   const nextThreshold = currentTier.max === Infinity ? null : currentTier.max;
   const toNext = nextThreshold ? Math.max(0, nextThreshold - pool.current) : 0;
   const crossesTier = projectedTier.max !== currentTier.max;
   const aloneCeiling = tierCeiling(userQty);
-  const savings = Math.max(0, (aloneCeiling - effectiveNow) * userQty);
+  const savings = Math.max(0, (aloneCeiling - effectiveProjected) * userQty);
   const setQtySafe = (v) => setUserQty(Math.max(100, Math.min(40000, v)));
   const palletKg = realPalletKg || PALLET_KG; // kg di 1 pallet: reale se noto, altrimenti la demo
   const belowMin = userQty < palletKg;
@@ -364,10 +369,6 @@ export default function PoolAuctionPage() {
                 </div>
                 <div style={{ fontSize:13, color:C.muted, marginBottom:16, lineHeight:1.5 }}>La tua quantità è entrata nel volume aggregato. Segui l'andamento dell'asta dal tuo profilo.</div>
                 <button onClick={() => { window.location.href = "/dashboard?section=pools"; }} className="bs-btn" style={{ width:"100%" }}>Visualizza le tue aste <ArrowRight size={18}/></button>
-                <div style={{ display:"flex", alignItems:"center", gap:6, marginTop:12, fontSize:12, color:C.muted }}>
-                  <Shield size={20} color={C.green} style={{ flexShrink:0 }}/>
-                  <span>Pagamento in escrow al prezzo di chiusura. Mai più dell'Acquisto Rapido.</span>
-                </div>
               </>
             ) : targetJoin ? (
               <>
@@ -379,10 +380,6 @@ export default function PoolAuctionPage() {
                   Ti aggiungeremo automaticamente con <b style={{color:C.text}}>{kg(targetJoin.quantity_kg)} kg</b> non appena un fornitore scende a <b style={{color:C.text}}>{eurKg(targetJoin.target_price_per_kg)}/kg</b> o sotto. Nessuna azione richiesta da parte tua.
                 </div>
                 <button onClick={cancelTarget} style={{ width:"100%", background:"transparent", color:C.muted, border:`1.5px solid ${C.border}`, borderRadius:10, padding:"12px", fontSize:14, fontWeight:600, cursor:"pointer", fontFamily:"Inter,system-ui" }}>Annulla adesione in attesa</button>
-                <div style={{ display:"flex", alignItems:"center", gap:6, marginTop:12, fontSize:12, color:C.muted }}>
-                  <Shield size={20} color={C.green} style={{ flexShrink:0 }}/>
-                  <span>Pagamento in escrow al prezzo di chiusura. Mai più dell'Acquisto Rapido.</span>
-                </div>
               </>
             ) : (
               <>
@@ -444,7 +441,7 @@ export default function PoolAuctionPage() {
                 <div style={{ background:C.bg, borderRadius:10, padding:"14px 16px", marginBottom:14 }}>
                   <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", marginBottom:8 }}>
                     <span style={{ fontSize:13, color:C.muted }}>Prezzo stimato (live)</span>
-                    <span className="bs-num" style={{ fontSize:24, fontWeight:800, color:C.purple }}>{eurKg(effectiveNow)}<span style={{ fontSize:13, fontWeight:400, color:C.muted }}>/kg</span></span>
+                    <span className="bs-num" style={{ fontSize:24, fontWeight:800, color:C.purple }}>{eurKg(effectiveProjected)}<span style={{ fontSize:13, fontWeight:400, color:C.muted }}>/kg</span></span>
                   </div>
                   <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", paddingTop:8, borderTop:`1px solid ${C.border}` }}>
                     <span style={{ fontSize:13, color:C.muted }}>Risparmio vs Acquisto Rapido</span>
@@ -481,10 +478,6 @@ export default function PoolAuctionPage() {
                   {joining ? "Attivazione in corso…" : showTargetInput ? "Conferma soglia e attiva adesione" : (myQty > 0 ? "Aggiungi altro quantitativo quando il prezzo raggiunge una cifra stabilita" : (poolId ? "Aderisci all'asta a ribasso quando il prezzo raggiunge una cifra stabilita" : "Apri un'asta a ribasso quando il prezzo raggiunge una cifra stabilita"))}
                 </button>
                 {joinMsg && <div style={{ marginTop:10, fontSize:13, textAlign:"center", color: joinMsg.startsWith("✓") ? C.green : C.red }}>{joinMsg}</div>}
-                <div style={{ display:"flex", alignItems:"center", gap:6, marginTop:12, fontSize:12, color:C.muted }}>
-                  <Shield size={20} color={C.green} style={{ flexShrink:0 }}/>
-                  <span>Pagamento in escrow al prezzo di chiusura. Mai più dell'Acquisto Rapido.</span>
-                </div>
               </>
             )}
           </div>
