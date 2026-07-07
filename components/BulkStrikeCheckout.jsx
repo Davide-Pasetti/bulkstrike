@@ -10,8 +10,9 @@
 // Il pagamento chiude il checkout: non è più un passo separato successivo.
 import { useState, useEffect, useMemo } from "react";
 import { ArrowRight, ArrowLeft, Check, ChevronRight, Package, FileText, AlertTriangle, MapPin, Mail, CreditCard, Truck, Clock3, PauseCircle, Plus, X, Receipt } from "lucide-react";
-import { getCart, checkoutCart, previewCheckout, getMyCompany, getMyCompanyAddress, getShippingAddresses, addShippingAddress, getSession, poolErrorMessage, getShippingQuotes } from "@/lib/api";
+import { getCart, checkoutCart, previewCheckout, getMyCompany, getMyCompanyAddress, getShippingAddresses, addShippingAddress, getSession, poolErrorMessage, getShippingQuotes, stampOrderPaymentMethods } from "@/lib/api";
 import BulkStrikeNav from "@/components/BulkStrikeNav";
+import PaymentMethodSelector from "@/components/checkout/PaymentMethodSelector";
 
 const C = { blue: "#0EA5E9", dark: "#0284C7", text: "#0F172A", muted: "#64748B", border: "#E2E8F0", bg: "#F8FAFE", green: "#059669", red: "#DC2626", amber: "#D97706" };
 const eur = (n) => n == null ? "—" : "€" + Number(n).toLocaleString("it-IT", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -51,6 +52,12 @@ export default function CheckoutPage() {
   const [done, setDone] = useState(null);
   const [buyerEmail, setBuyerEmail] = useState("");
 
+  // Pagamento per fornitore: id azienda acquirente (per la soglia escrow lato RPC),
+  // metodo scelto per ciascun fornitore, e la struttura del pay-in escrow consolidato.
+  const [buyerCompanyId, setBuyerCompanyId] = useState(null);
+  const [methodBySupplier, setMethodBySupplier] = useState({});
+  const [consolidatedEscrow, setConsolidatedEscrow] = useState(null);
+
   // Rubrica indirizzi di spedizione salvati dal cliente + la sede legale (sempre
   // disponibile, non richiede salvataggio) + form per aggiungerne uno nuovo.
   const [addresses, setAddresses] = useState([]);
@@ -87,6 +94,7 @@ export default function CheckoutPage() {
         setItems(cart);
         setAddresses(savedAddrs || []);
         setCompanyName(company?.legal_name || null);
+        setBuyerCompanyId(company?.id || null);
         const legalText = companyAddr ? [companyAddr.address, companyAddr.city, companyAddr.country].filter(Boolean).join(", ") : null;
         setCompanyAddress(legalText);
 
@@ -232,10 +240,44 @@ export default function CheckoutPage() {
     setStep(2);
   }
 
+  // Merce (IVA esclusa) di un fornitore: somma prezzo×quantità delle sue righe nel carrello.
+  function supplierGoods(supplierId) {
+    return items
+      .filter(it => it.supplier_company_id === supplierId)
+      .reduce((a, it) => a + Number(it.unit_price || 0) * Number(it.quantity_kg || 0), 0);
+  }
+  // Imponibile del sub-ordine (soglia escrow): merce IVA esclusa + spedizione del fornitore.
+  function subOrderTotal(s) {
+    return supplierGoods(s.supplier_company_id) + Number(s.shipping_amount || 0);
+  }
+
+  const allMethodsChosen = (preview?.by_supplier || []).length > 0
+    && preview.by_supplier.every(s => methodBySupplier[s.supplier_company_id]);
+
   async function confirmPayment() {
     setSubmitting(true); setErr("");
     try {
       const res = await checkoutCart(address, notes, selectedCarrier);
+
+      // Applica il metodo di pagamento scelto per fornitore agli ordini appena creati.
+      // terms_days è risolto server-side dalla whitelist: NON lo inviamo dal client.
+      const map = Object.fromEntries(preview.by_supplier.map(s => [s.supplier_company_id, { method: methodBySupplier[s.supplier_company_id] }]));
+      await stampOrderPaymentMethods(map);
+
+      // Consolidamento escrow (solo struttura dati — nessun Stripe): raggruppa i
+      // sub-ordini in garanzia in un unico addebito.
+      // Il pay-in Stripe consolidato è fuori scope: qui prepariamo solo la struttura dati.
+      const escrowSuppliers = preview.by_supplier.filter(s => ["escrow_sepa", "escrow_premium"].includes(methodBySupplier[s.supplier_company_id]));
+      if (escrowSuppliers.length > 0) {
+        setConsolidatedEscrow({
+          supplierIds: escrowSuppliers.map(s => s.supplier_company_id),
+          count: escrowSuppliers.length,
+          // totale imponibile + IVA 22% stimata sugli stessi imponibili (l'IVA per
+          // fornitore non è nella preview, la stimiamo qui per la sola visualizzazione).
+          total: escrowSuppliers.reduce((a, s) => a + subOrderTotal(s) * 1.22, 0),
+        });
+      }
+
       setDone(res);
     } catch (e) {
       setErr(poolErrorMessage(e));
@@ -309,6 +351,38 @@ export default function CheckoutPage() {
                 <span>Per {(done.held_orders || []).length === 1 ? "un ordine" : `${(done.held_orders || []).length} ordini`} non abbiamo ancora un corriere attivo sulla tratta scelta. Restano in attesa: il nostro team logistico ti farà avere il costo di spedizione a breve, e completerai il pagamento solo a quel punto.</span>
               </div>
             )}
+
+            {/* GUIDA PER METODO DI PAGAMENTO scelto per fornitore */}
+            {(() => {
+              const by = preview?.by_supplier || [];
+              const pick = (methods) => by.filter(s => methods.includes(methodBySupplier[s.supplier_company_id]));
+              const bonifico = pick(["bonifico_anticipato"]);
+              const termini = pick(["termini_dilazionati"]);
+              const boxBase = { fontSize: 12.5, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 10, padding: "12px 16px", maxWidth: 520, margin: "0 auto 14px", textAlign: "left", lineHeight: 1.6 };
+              return (
+                <>
+                  {bonifico.length > 0 && (
+                    <div style={{ ...boxBase, background: "#FFFBEB", border: "1px solid #FDE68A", color: "#92400E" }}>
+                      <div style={{ fontWeight: 700, marginBottom: 4 }}>Bonifico bancario anticipato — {bonifico.map(s => s.supplier_name).join(", ")}</div>
+                      Paga tramite bonifico bancario: i dati (IBAN del fornitore) sono nella pagina dell'ordine, sezione Pagamento.{" "}
+                      <span onClick={() => { window.location.href = "/ordini"; }} style={{ fontWeight: 700, cursor: "pointer", textDecoration: "underline" }}>Vai ai miei ordini</span>
+                    </div>
+                  )}
+                  {termini.length > 0 && (
+                    <div style={{ ...boxBase, background: "#EFF6FF", border: "1px solid #BFDBFE", color: "#1E40AF" }}>
+                      <div style={{ fontWeight: 700, marginBottom: 4 }}>Pagamento dilazionato — {termini.map(s => s.supplier_name).join(", ")}</div>
+                      Ordine confermato con pagamento dilazionato — nessun pagamento ora.
+                    </div>
+                  )}
+                  {consolidatedEscrow && (
+                    <div style={{ ...boxBase, background: "#F0FDF4", border: "1px solid #A7F3D0", color: "#065F46" }}>
+                      <div style={{ fontWeight: 700, marginBottom: 4 }}>Pagamento in garanzia consolidato (1 solo addebito)</div>
+                      {consolidatedEscrow.count} {consolidatedEscrow.count === 1 ? "ordine in garanzia" : "ordini in garanzia"} raggruppati in un unico addebito di <b>{eur(consolidatedEscrow.total)}</b> (IVA inclusa). I fondi restano in deposito e vengono rilasciati ai fornitori solo dopo la consegna confermata.
+                    </div>
+                  )}
+                </>
+              );
+            })()}
 
             <div style={{ display: "flex", gap: 8, alignItems: "flex-start", fontSize: 12.5, color: C.muted, background: C.bg, borderRadius: 10, padding: "12px 16px", maxWidth: 520, margin: "0 auto 26px", textAlign: "left", lineHeight: 1.6 }}>
               <Truck size={15} color={C.blue} style={{ marginTop: 1, flexShrink: 0 }} />
@@ -571,9 +645,30 @@ export default function CheckoutPage() {
                   )}
                 </div>
 
+                {/* METODO DI PAGAMENTO — uno per fornitore (la soglia €10.000 è per sub-ordine) */}
+                {(preview?.by_supplier || []).length > 0 && (
+                  <div style={{ marginBottom: 18 }}>
+                    <div style={{ fontSize: 13, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: C.muted, marginBottom: 12 }}>Metodo di pagamento</div>
+                    {preview.by_supplier.map(s => (
+                      <PaymentMethodSelector
+                        key={s.supplier_company_id}
+                        buyerId={buyerCompanyId}
+                        supplierId={s.supplier_company_id}
+                        supplierName={s.supplier_name}
+                        subOrderTotal={subOrderTotal(s)}
+                        value={methodBySupplier[s.supplier_company_id]}
+                        onChange={(m) => setMethodBySupplier(prev => ({ ...prev, [s.supplier_company_id]: m }))}
+                      />
+                    ))}
+                    {!allMethodsChosen && (
+                      <div style={{ fontSize: 12.5, color: C.amber, marginTop: 2 }}>Scegli un metodo di pagamento per ogni fornitore per proseguire.</div>
+                    )}
+                  </div>
+                )}
+
                 <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                  <button onClick={confirmPayment} disabled={submitting || !payReady}
-                    style={{ background: C.blue, color: "#fff", border: "none", borderRadius: 10, padding: "14px 28px", fontSize: 15, fontWeight: 700, cursor: (submitting || !payReady) ? "default" : "pointer", opacity: (submitting || !payReady) ? 0.6 : 1, display: "inline-flex", alignItems: "center", gap: 8, fontFamily: "Inter,system-ui" }}>
+                  <button onClick={confirmPayment} disabled={submitting || !payReady || !allMethodsChosen}
+                    style={{ background: C.blue, color: "#fff", border: "none", borderRadius: 10, padding: "14px 28px", fontSize: 15, fontWeight: 700, cursor: (submitting || !payReady || !allMethodsChosen) ? "default" : "pointer", opacity: (submitting || !payReady || !allMethodsChosen) ? 0.6 : 1, display: "inline-flex", alignItems: "center", gap: 8, fontFamily: "Inter,system-ui" }}>
                     {submitting ? "Pagamento in corso…" : !payReady ? "Calcolo totale…" : <>Paga {eur(totalForDisplay)} e conferma ordine <ArrowRight size={17} /></>}
                   </button>
                   <button onClick={() => setStep(1)} disabled={submitting} style={{ background: "transparent", color: C.muted, border: `1.5px solid ${C.border}`, borderRadius: 10, padding: "14px 20px", fontSize: 14, fontWeight: 600, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6, fontFamily: "Inter,system-ui" }}><ArrowLeft size={15} /> Indietro</button>

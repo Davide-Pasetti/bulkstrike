@@ -5,9 +5,10 @@
 //  · fornitore: segna come spedito quando l'escrow è versato
 // Tutte le transizioni sono validate server-side (RPC dedicate).
 import { useState, useEffect } from "react";
-import { ChevronRight, Check, Truck, CreditCard, PackageCheck, Star, ShieldCheck, FileText, Clock, AlertTriangle, ArrowRight, MapPin, MessageSquareWarning, X } from "lucide-react";
-import { getOrderDetail, getSession, markOrderPaidDemo, markOrderShipped, confirmDelivery, raiseDispute, poolErrorMessage } from "@/lib/api";
+import { ChevronRight, Check, Truck, CreditCard, PackageCheck, Star, ShieldCheck, FileText, Clock, AlertTriangle, ArrowRight, MapPin, MessageSquareWarning, X, Landmark, Lock } from "lucide-react";
+import { getOrderDetail, getSession, markOrderPaidDemo, markOrderShipped, confirmDelivery, raiseDispute, poolErrorMessage, getSupplierIbanForOrder } from "@/lib/api";
 import BulkStrikeNav from "@/components/BulkStrikeNav";
+import CopyButton from "@/components/CopyButton";
 
 const C = { blue:"#0EA5E9", dark:"#0284C7", text:"#0F172A", muted:"#64748B", border:"#E2E8F0", bg:"#F8FAFE", green:"#059669", red:"#DC2626", amber:"#D97706", purple:"#7C3AED" };
 const eur = (n) => n == null ? "—" : "€" + Number(n).toLocaleString("it-IT", { minimumFractionDigits:2, maximumFractionDigits:2 });
@@ -50,6 +51,11 @@ export default function OrderPage() {
   const [err, setErr] = useState("");
   const [justDone, setJustDone] = useState("");
 
+  // Rivelazione IBAN fornitore (solo ordini con bonifico anticipato).
+  const [iban, setIban] = useState(null);
+  const [ibanLoading, setIbanLoading] = useState(false);
+  const [ibanErr, setIbanErr] = useState("");
+
   async function reload(id) {
     const o = await getOrderDetail(id);
     if (o) setOrder(o); else setNotFound(true);
@@ -91,6 +97,18 @@ export default function OrderPage() {
       setErr(poolErrorMessage(e));
     } finally {
       setActing(false);
+    }
+  }
+
+  async function revealIban() {
+    setIbanLoading(true); setIbanErr("");
+    try {
+      const data = await getSupplierIbanForOrder(order.id);
+      setIban(data);
+    } catch (e) {
+      setIbanErr(poolErrorMessage(e));
+    } finally {
+      setIbanLoading(false);
     }
   }
 
@@ -310,6 +328,76 @@ export default function OrderPage() {
                     <div style={{ fontSize:13, fontWeight:800, textTransform:"uppercase", letterSpacing:"0.05em", color:C.muted, marginBottom:10, display:"flex", alignItems:"center", gap:7 }}><MapPin size={14}/> Indirizzo di consegna</div>
                     <div style={{ fontSize:13.5, fontWeight:600 }}>{order.shipping_address}</div>
                     {order.shipping_notes && <div style={{ fontSize:12.5, color:C.muted, marginTop:6 }}>{order.shipping_notes}</div>}
+                  </div>
+                )}
+
+                {/* PAGAMENTO — dipende dal metodo scelto al checkout (order.payment_method).
+                    NB: get_order_detail deve esporre payment_method (e terms_days): finché
+                    non lo fa, questa sezione resta nascosta e nulla si rompe. */}
+                {order.payment_method && (
+                  <div className="od-card">
+                    <div style={{ fontSize:13, fontWeight:800, textTransform:"uppercase", letterSpacing:"0.05em", color:C.muted, marginBottom:12, display:"flex", alignItems:"center", gap:7 }}><CreditCard size={14}/> Pagamento</div>
+
+                    {order.payment_method === "bonifico_anticipato" && (
+                      <div>
+                        <div style={{ fontSize:14, fontWeight:700, marginBottom:6, display:"flex", alignItems:"center", gap:7 }}><Landmark size={15} color={C.blue}/> Dati per il bonifico</div>
+                        {!iban ? (
+                          <>
+                            <p style={{ fontSize:13, color:C.muted, lineHeight:1.6, marginBottom:12 }}>
+                              I dati bancari del fornitore sono visibili solo qui, in area riservata, e solo a te acquirente dell'ordine.
+                            </p>
+                            <button onClick={revealIban} disabled={ibanLoading}
+                                    style={{ background:C.blue, color:"#fff", border:"none", borderRadius:10, padding:"11px 20px", fontSize:13.5, fontWeight:700, cursor:ibanLoading?"default":"pointer", opacity:ibanLoading?0.6:1, display:"inline-flex", alignItems:"center", gap:7, fontFamily:"Inter,system-ui" }}>
+                              <Lock size={14}/> {ibanLoading ? "Carico…" : "Mostra IBAN del fornitore"}
+                            </button>
+                            {ibanErr && <div style={{ fontSize:12.5, color:C.red, marginTop:10 }}>{ibanErr}</div>}
+                          </>
+                        ) : (
+                          <div>
+                            <div style={{ display:"grid", gridTemplateColumns:"1fr", gap:12, marginBottom:12 }}>
+                              <div>
+                                <div style={{ fontSize:11, color:C.muted }}>Intestatario</div>
+                                <div style={{ fontSize:14, fontWeight:600 }}>{iban.iban_holder || "—"}</div>
+                              </div>
+                              <div>
+                                <div style={{ fontSize:11, color:C.muted, marginBottom:3 }}>IBAN</div>
+                                <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
+                                  <span className="od-num" style={{ fontSize:14, fontWeight:700, userSelect:"text" }}>{iban.iban || "—"}</span>
+                                  {iban.iban && <CopyButton value={iban.iban}/>}
+                                </div>
+                              </div>
+                              <div>
+                                <div style={{ fontSize:11, color:C.muted, marginBottom:3 }}>BIC / SWIFT</div>
+                                <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
+                                  <span className="od-num" style={{ fontSize:14, fontWeight:700, userSelect:"text" }}>{iban.bic || "—"}</span>
+                                  {iban.bic && <CopyButton value={iban.bic}/>}
+                                </div>
+                              </div>
+                              <div>
+                                <div style={{ fontSize:11, color:C.muted }}>Importo del bonifico</div>
+                                <div className="od-num" style={{ fontSize:16, fontWeight:800, color:C.blue }}>{eur(iban.amount)}</div>
+                              </div>
+                            </div>
+                            <div style={{ fontSize:12, color:C.muted, background:C.bg, borderRadius:8, padding:"10px 12px", lineHeight:1.6 }}>
+                              Questi dati sono visibili solo qui, in area riservata. Non li inviamo mai via email o chat.
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {order.payment_method === "termini_dilazionati" && (
+                      <div style={{ fontSize:13.5, color:C.muted, lineHeight:1.6 }}>
+                        Pagamento dilazionato a <b style={{ color:C.text }}>{order.terms_days}</b> giorni — nessun pagamento immediato.
+                      </div>
+                    )}
+
+                    {["escrow_sepa","escrow_premium"].includes(order.payment_method) && (
+                      <div style={{ fontSize:13.5, color:C.muted, lineHeight:1.6, display:"flex", alignItems:"flex-start", gap:8 }}>
+                        <ShieldCheck size={15} color={C.green} style={{ marginTop:1, flexShrink:0 }}/>
+                        <span>Pagamento in garanzia (deposito su BulkStrike).</span>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
