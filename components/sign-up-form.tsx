@@ -39,6 +39,14 @@ export function SignUpForm({
       return;
     }
 
+    // 12 = minimo impostato su Supabase Auth: validare qui evita un errore
+    // server-side non spiegato dal form
+    if (password.length < 12) {
+      setError("La password deve avere almeno 12 caratteri");
+      setIsLoading(false);
+      return;
+    }
+
     try {
       const { error } = await supabase.auth.signUp({
         email,
