@@ -238,8 +238,8 @@ export default function CartPage() {
                   <span style={{ color: C.muted }}>Materia prima</span>
                   <span className="ct-num" style={{ fontWeight: 600 }}>{eur(preview?.goods_subtotal ?? subtotal)}</span>
                 </div>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13.5, marginBottom: 8 }}>
-                  <span style={{ color: C.muted }}>Commissioni BulkStrike sulle materie prime</span><span className="ct-num" style={{ fontWeight: 700, color: C.green }}>€0,00</span>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: 13.5, marginBottom: 8 }}>
+                  <span style={{ color: C.muted }}>Commissioni BulkStrike<br />sulle materie prime</span><span className="ct-num" style={{ fontWeight: 700, color: C.green }}>€0,00</span>
                 </div>
               </div>
 
