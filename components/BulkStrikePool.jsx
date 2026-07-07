@@ -74,6 +74,7 @@ export default function PoolAuctionPage() {
   const [joining, setJoining] = useState(false);
   const [joinMsg, setJoinMsg] = useState(null);
   const [userQty, setUserQty] = useState(2000);
+  const [qtyMode, setQtyMode] = useState("pallet");
   const [chatOpen, setChatOpen] = useState(false);
   const [acceptTerms, setAcceptTerms] = useState(false);
   const [secs, setSecs] = useState(pool.secondsLeft);
@@ -190,6 +191,7 @@ export default function PoolAuctionPage() {
   // palletCount è solo la sua vista in pallet per questo prodotto.
   const palletCount = Math.max(1, Math.round(userQty / palletKg));
   const setPalletCount = (n) => setQtySafe(Math.max(1, n) * palletKg);
+  const isPalletMultiple = userQty % palletKg === 0;
 
   return (
     <div style={{ background:"#fff", color:C.text, fontFamily:"'Inter',system-ui,sans-serif", minHeight:"100vh", overflowX:"hidden" }}>
@@ -324,7 +326,7 @@ export default function PoolAuctionPage() {
                 </div>
                 <div style={{ height:16, background:"#EDE4F7", borderRadius:100, overflow:"hidden", display:"flex" }}>
                   <div style={{ width:`${pool.current/nextThreshold*100}%`, height:"100%", background:`linear-gradient(90deg,${C.purple},#A855F7)`, animation:"fill 1s ease" }}/>
-                  {crossesTier && userQty>0 && (
+                  {userQty>0 && (
                     <div style={{ width:`${Math.min((projected-pool.current)/nextThreshold*100, 100-pool.current/nextThreshold*100)}%`, height:"100%", background:`repeating-linear-gradient(45deg,${C.blue},${C.blue} 6px,#38BDF8 6px,#38BDF8 12px)` }}/>
                   )}
                 </div>
@@ -391,26 +393,51 @@ export default function PoolAuctionPage() {
                   <div style={{ fontSize:13, color:C.muted, marginBottom:14 }}>La tua quantità entra subito nel volume aggregato</div>
                 )}
 
-                <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:8 }}>
-                  <button className="bs-qty-btn" onClick={() => setPalletCount(palletCount-1)}><Minus size={16}/></button>
-                  <div style={{ flex:1, display:"flex", alignItems:"baseline", justifyContent:"center", gap:6, background:C.bg, border:`1px solid ${belowMin?C.amber:C.border}`, borderRadius:8, padding:"9px 12px" }}>
-                    <input className="bs-num" style={{ width:50, border:"none", outline:"none", background:"transparent", fontSize:20, fontWeight:700, textAlign:"center", color:C.text }} value={palletCount} onChange={e => setPalletCount(parseInt(e.target.value.replace(/\D/g,"")||"0"))}/>
-                    <span style={{ fontSize:14, color:C.muted }}>{palletCount===1?"pallet":"pallet"}</span>
-                  </div>
-                  <button className="bs-qty-btn" onClick={() => setPalletCount(palletCount+1)}><Plus size={16}/></button>
-                </div>
-                <div style={{ fontSize:12, color:C.muted, marginBottom:12 }}>= <b className="bs-num" style={{color:C.text}}>{kg(userQty)} kg</b> totali <span style={{ color:"#94A3B8" }}>(1 pallet = {kg(palletKg)} kg per questo prodotto)</span></div>
-
-                <div style={{ display:"flex", gap:6, marginBottom:14 }}>
-                  {[1,2,5,10].map(n => (
-                    <button key={n} onClick={() => setPalletCount(n)} style={{ flex:1, padding:"7px", borderRadius:7, border:`1px solid ${palletCount===n?C.purple:C.border}`, background:palletCount===n?"#FBF7FF":"#fff", color:palletCount===n?C.purple:C.muted, fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:"Inter,system-ui" }}>{n} pallet{n===1?"":"s"}</button>
+                <div style={{ display:"flex", gap:6, marginBottom:10 }}>
+                  {[["pallet","Pedane"],["kg","Kg personalizzati"]].map(([mode,lab]) => (
+                    <button key={mode} onClick={() => setQtyMode(mode)} style={{ flex:1, padding:"7px", borderRadius:7, border:`1px solid ${qtyMode===mode?C.purple:C.border}`, background:qtyMode===mode?"#FBF7FF":"#fff", color:qtyMode===mode?C.purple:C.muted, fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:"Inter,system-ui" }}>{lab}</button>
                   ))}
                 </div>
+
+                {qtyMode === "pallet" ? (
+                  <>
+                    <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:8 }}>
+                      <button className="bs-qty-btn" onClick={() => setPalletCount(palletCount-1)}><Minus size={16}/></button>
+                      <div style={{ flex:1, display:"flex", alignItems:"baseline", justifyContent:"center", gap:6, background:C.bg, border:`1px solid ${belowMin?C.amber:C.border}`, borderRadius:8, padding:"9px 12px" }}>
+                        <input className="bs-num" style={{ width:50, border:"none", outline:"none", background:"transparent", fontSize:20, fontWeight:700, textAlign:"center", color:C.text }} value={palletCount} onChange={e => setPalletCount(parseInt(e.target.value.replace(/\D/g,"")||"0"))}/>
+                        <span style={{ fontSize:14, color:C.muted }}>{palletCount===1?"pallet":"pallet"}</span>
+                      </div>
+                      <button className="bs-qty-btn" onClick={() => setPalletCount(palletCount+1)}><Plus size={16}/></button>
+                    </div>
+                    <div style={{ fontSize:12, color:C.muted, marginBottom:12 }}>= <b className="bs-num" style={{color:C.text}}>{kg(userQty)} kg</b> totali <span style={{ color:"#94A3B8" }}>(1 pallet = {kg(palletKg)} kg per questo prodotto)</span></div>
+
+                    <div style={{ display:"flex", gap:6, marginBottom:14 }}>
+                      {[1,2,5,10].map(n => (
+                        <button key={n} onClick={() => setPalletCount(n)} style={{ flex:1, padding:"7px", borderRadius:7, border:`1px solid ${palletCount===n?C.purple:C.border}`, background:palletCount===n?"#FBF7FF":"#fff", color:palletCount===n?C.purple:C.muted, fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:"Inter,system-ui" }}>{n} pallet{n===1?"":"s"}</button>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div style={{ display:"flex", alignItems:"baseline", justifyContent:"center", gap:6, background:C.bg, border:`1px solid ${belowMin?C.amber:C.border}`, borderRadius:8, padding:"9px 12px", marginBottom:8 }}>
+                      <input className="bs-num" style={{ width:90, border:"none", outline:"none", background:"transparent", fontSize:20, fontWeight:700, textAlign:"center", color:C.text }} value={userQty} onChange={e => setQtySafe(parseInt(e.target.value.replace(/\D/g,"")||"0"))}/>
+                      <span style={{ fontSize:14, color:C.muted }}>kg</span>
+                    </div>
+                    <div style={{ fontSize:12, color:C.muted, marginBottom:14 }}>= <b className="bs-num" style={{color:C.text}}>{palletCount}</b> pedane circa <span style={{ color:"#94A3B8" }}>(≈ {(userQty/palletKg).toFixed(2)} · 1 pallet = {kg(palletKg)} kg per questo prodotto)</span></div>
+                  </>
+                )}
 
                 {belowMin && (
                   <div style={{ background:"#FFFBEB", border:`1px solid ${C.amber}55`, borderRadius:9, padding:"10px 12px", marginBottom:14, fontSize:12, color:"#92400E", display:"flex", gap:8 }}>
                     <Info size={26} color={C.amber} style={{ flexShrink:0 }}/>
                     <span>Sotto 1 pallet (<b>{kg(palletKg)} kg</b> per questo prodotto) non puoi aprire un'asta, ma puoi aggiungerti a questa già attiva oppure fare l'<b>Acquisto Rapido</b>.</span>
+                  </div>
+                )}
+
+                {!isPalletMultiple && (
+                  <div style={{ background:"#FFFBEB", border:`1px solid ${C.amber}55`, borderRadius:9, padding:"10px 12px", marginBottom:14, fontSize:12, color:"#92400E", display:"flex", gap:8 }}>
+                    <Info size={26} color={C.amber} style={{ flexShrink:0 }}/>
+                    <span>Questa quantità non è un multiplo di pedana: potrebbe comportare un supplemento di spedizione in collettame, verificato quando l'asta si chiude e viene assegnato il corriere. Se nessun corriere disponibile offre il collettame su quella tratta, l'ordine resterà in attesa di corriere, come già accade oggi per gli acquisti diretti.</span>
                   </div>
                 )}
 
