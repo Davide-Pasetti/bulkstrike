@@ -20,11 +20,9 @@ import { getMyCompany, signOut, getUnreadMessagesCount } from "@/lib/api";
 
 const C = { border: "#E2E8F0", text: "#0F172A", muted: "#64748B", blue: "#0EA5E9", dark: "#0D2137", bg: "#F8FAFE", red: "#DC2626" };
 
-// Attivate con gli step 5/6 (messaggistica e fornitori preferiti): finché
-// sono false le voci non compaiono e le pagine /messaggi e /preferiti non
-// vengono linkate.
-const FEATURE_MESSAGING = false;
-const FEATURE_FOLLOWS = false;
+// Messaggistica e fornitori preferiti (step 5/6): attive.
+const FEATURE_MESSAGING = true;
+const FEATURE_FOLLOWS = true;
 
 function Item({ href, icon: Icon, label, badge, danger, onClick, note }) {
   return (

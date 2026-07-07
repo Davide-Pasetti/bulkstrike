@@ -4,7 +4,7 @@
 // Da qui si può ordinare direttamente ogni prodotto del listino (Acquisto Rapido).
 import { useState, useEffect, useMemo, useRef } from "react";
 import { Search, Star, ShieldCheck, MapPin, Phone, Globe, Mail, User, FileText, Package, Layers, Award, Clock, ChevronRight, ArrowRight, Flame, Building2, Truck, ExternalLink, Check, X, MessageSquare, Send, ShoppingCart } from "lucide-react";
-import { getSupplierProfile, getSession, upsertCartItem, poolErrorMessage, getSupplierReviews, getReviewableOrders, submitReview, getCart } from "@/lib/api";
+import { getSupplierProfile, getSession, upsertCartItem, poolErrorMessage, getSupplierReviews, getReviewableOrders, submitReview, getCart, followSupplier, unfollowSupplier, isFollowingSupplier } from "@/lib/api";
 import BulkStrikeNav from "@/components/BulkStrikeNav";
 import { BSIcon } from "@/components/BSLogo";
 import { IvaChip } from "@/components/BulkStrikeBadges";
@@ -16,6 +16,40 @@ const flagFor = (c) => FLAG[c] || "🏳️";
 const TYPE_LABEL = { producer:"Produttore", distributor:"Distributore", trader:"Trader" };
 const eurKg = (n) => n == null ? "—" : "€" + Number(n).toLocaleString("it-IT", { minimumFractionDigits:2, maximumFractionDigits:2 });
 const eur = (n) => n == null ? "—" : "€" + Number(n).toLocaleString("it-IT", { minimumFractionDigits:2, maximumFractionDigits:2 });
+// Bottone Segui/Non seguire (tabella supplier_follows, RPC follow/unfollow):
+// stato letto al mount; se l'utente non è loggato il click porta al login.
+function FollowButton({ supplierId }) {
+  const [following, setFollowing] = useState(false);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    if (!supplierId) return;
+    isFollowingSupplier(supplierId).then(setFollowing).catch(() => {});
+  }, [supplierId]);
+  async function toggle() {
+    if (busy) return;
+    setBusy(true);
+    try {
+      if (following) { await unfollowSupplier(supplierId); setFollowing(false); }
+      else { await followSupplier(supplierId); setFollowing(true); }
+    } catch {
+      // non loggato (o azienda mancante): il follow richiede un account
+      window.location.href = "/auth/login";
+    } finally { setBusy(false); }
+  }
+  return (
+    <button
+      onClick={toggle}
+      disabled={busy}
+      aria-pressed={following}
+      title={following ? "Smetti di seguire questo fornitore" : "Aggiungi ai fornitori preferiti"}
+      style={{ display:"inline-flex", alignItems:"center", gap:7, background:following ? "#FEF3C7" : "#fff", color:following ? "#B45309" : C.text, border:`1.5px solid ${following ? "#FDE68A" : C.border}`, borderRadius:9, padding:"10px 16px", fontSize:13.5, fontWeight:700, cursor:"pointer", fontFamily:"Inter,system-ui", opacity:busy ? 0.6 : 1 }}
+    >
+      <Star size={15} fill={following ? "#D97706" : "none"} color={following ? "#D97706" : C.muted} />
+      {following ? "Lo segui" : "Segui"}
+    </button>
+  );
+}
+
 // stima spedizione per paese fornitore — stessa logica di BulkStrikeProduct.jsx
 function shipFor(country) {
   if (country === "Italia") return { shipBase:80, shipKg:0.05 };
@@ -155,10 +189,8 @@ export default function SupplierPage() {
 
   const mapsQuery = profile ? [profile.address, profile.city, profile.country].filter(Boolean).join(", ") : "";
   const mapsUrl = mapsQuery ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(mapsQuery)}` : null;
-  const contactEmail = profile?.support_email || profile?.contact_email || null;
-  const mailtoHref = contactEmail
-    ? `mailto:${contactEmail}?subject=${encodeURIComponent(`Richiesta informazioni — ${profile?.name || ""} su BulkStrike`)}&body=${encodeURIComponent("Ciao,\n\nSono interessato/a ai vostri prodotti su BulkStrike e vorrei alcune informazioni.\n\nGrazie,")}`
-    : null;
+  // (il vecchio mailto di contatto è stato sostituito dalla messaggistica
+  // interna: bottone "Contatta il fornitore" → /messaggi?to=<id>)
   const avgLead = products.length ? Math.round(products.reduce((a, p) => a + (p.lead_time_days || 0), 0) / products.length) : null;
   const initials = (profile?.name || "?").split(/\s+/).slice(0, 2).map(w => w[0]).join("").toUpperCase();
 
@@ -241,15 +273,15 @@ export default function SupplierPage() {
                   <span>Su BulkStrike dal {profile.member_since}</span>
                 </div>
               </div>
-              {mailtoHref ? (
-                <a href={mailtoHref} style={{ flexShrink:0, display:"inline-flex", alignItems:"center", gap:7, background:C.blue, color:"#fff", border:"none", borderRadius:9, padding:"10px 18px", fontSize:13.5, fontWeight:700, textDecoration:"none" }}>
-                  <MessageSquare size={15}/> Invia un messaggio
+              {/* Messaggistica interna (thread buyer↔fornitore) — sostituisce il
+                  vecchio mailto: funziona per ogni fornitore verificato, con
+                  storico conversazione su /messaggi. Accanto: Segui/Non seguire. */}
+              <div style={{ flexShrink:0, display:"flex", gap:8, flexWrap:"wrap" }}>
+                <a href={`/messaggi?to=${profile.id}`} style={{ display:"inline-flex", alignItems:"center", gap:7, background:C.blue, color:"#fff", border:"none", borderRadius:9, padding:"10px 18px", fontSize:13.5, fontWeight:700, textDecoration:"none" }}>
+                  <MessageSquare size={15}/> Contatta il fornitore
                 </a>
-              ) : (
-                <span title="Il fornitore non ha ancora indicato un'email di assistenza" style={{ flexShrink:0, display:"inline-flex", alignItems:"center", gap:7, background:C.bg, color:C.muted, border:`1px solid ${C.border}`, borderRadius:9, padding:"10px 18px", fontSize:13.5, fontWeight:700, cursor:"default" }}>
-                  <MessageSquare size={15}/> Contatto non disponibile
-                </span>
-              )}
+                <FollowButton supplierId={profile.id} />
+              </div>
             </div>
             {profile.description && <p style={{ fontSize:14, color:C.muted, lineHeight:1.6, marginTop:10, maxWidth:640 }}>{profile.description}</p>}
           </div>
@@ -261,7 +293,7 @@ export default function SupplierPage() {
             { icon:Package, label:"Prodotti a listino", val:products.length },
             { icon:Layers, label:"Settori coperti", val:(profile.sectors || []).length },
             { icon:Award, label:"Certificazioni", val:(profile.certifications || []).length },
-            { icon:Clock, label:"Lead time medio", val:avgLead != null ? `${avgLead} gg` : "—" },
+            { icon:Clock, label:"Preparazione media", val:avgLead != null ? `${avgLead} gg` : "—" },
             { icon:Globe, label:"Paesi serviti", val:(profile.countries_served || []).length || "—" },
           ].map(({ icon:Icon, label, val }) => (
             <div key={label} className="sup-stat" style={{ borderRight:`1px solid ${C.border}` }}>

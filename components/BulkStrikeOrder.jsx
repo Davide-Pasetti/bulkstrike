@@ -5,7 +5,7 @@
 //  · fornitore: segna come spedito quando l'escrow è versato
 // Tutte le transizioni sono validate server-side (RPC dedicate).
 import { useState, useEffect } from "react";
-import { ChevronRight, Check, Truck, CreditCard, PackageCheck, Star, ShieldCheck, FileText, Clock, AlertTriangle, ArrowRight, MapPin, MessageSquareWarning, X, Landmark, Lock } from "lucide-react";
+import { ChevronRight, Check, Truck, CreditCard, PackageCheck, Star, ShieldCheck, FileText, Clock, AlertTriangle, ArrowRight, MapPin, MessageSquareWarning, MessageCircle, X, Landmark, Lock } from "lucide-react";
 import { getOrderDetail, getSession, markOrderPaidDemo, markOrderShipped, confirmDelivery, raiseDispute, poolErrorMessage, getSupplierIbanForOrder } from "@/lib/api";
 import BulkStrikeNav from "@/components/BulkStrikeNav";
 import CopyButton from "@/components/CopyButton";
@@ -169,7 +169,14 @@ export default function OrderPage() {
                   {" · "}creato il {new Date(order.created_at).toLocaleDateString("it-IT", { year:"numeric", month:"long", day:"numeric" })}
                 </div>
               </div>
-              <span style={{ fontSize:13, fontWeight:800, color:st.fg, background:st.bg, borderRadius:100, padding:"7px 16px" }}>{st.label}</span>
+              <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap" }}>
+                {/* Thread di messaggistica con contesto ordine: start_or_get_thread
+                    deriva le due parti dall'ordine stesso (?order=). */}
+                <a href={`/messaggi?order=${order.id}`} style={{ display:"inline-flex", alignItems:"center", gap:6, background:"#fff", color:C.blue, border:`1.5px solid ${C.blue}`, borderRadius:9, padding:"8px 15px", fontSize:13, fontWeight:700, textDecoration:"none", whiteSpace:"nowrap" }}>
+                  <MessageCircle size={14}/> {isBuyer ? "Contatta il fornitore" : "Contatta il cliente"}
+                </a>
+                <span style={{ fontSize:13, fontWeight:800, color:st.fg, background:st.bg, borderRadius:100, padding:"7px 16px" }}>{st.label}</span>
+              </div>
             </div>
 
             {/* TIMELINE */}
