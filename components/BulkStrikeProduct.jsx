@@ -538,7 +538,7 @@ export default function ProductPage() {
                       È un'<b style={{ color:C.text }}>asta a ribasso</b>: <b style={{ color:C.text }}>{pool.companies} aziende</b> si sono già aggregate e <b style={{ color:C.text }}>{pool.suppliers} fornitori certificati</b> competono. Unendoti, paghi il prezzo più basso raggiunto — e il prezzo <b style={{ color:C.text }}>può solo scendere</b> fino alla chiusura.
                     </div>
                     <div style={{ display:"flex", gap:18, flexWrap:"wrap", marginBottom:14 }}>
-                      <Fact icon={<Gavel size={15} color={C.purple}/>} label="Prezzo pool ora" value={`${eurKg(pool.bestPrice)}/kg`} />
+                      <Fact icon={<Gavel size={15} color={C.purple}/>} label="Prezzo asta ora" value={`${eurKg(pool.bestPrice)}/kg`} />
                       <Fact icon={<TrendingDown size={15} color={C.green}/>} label="Risparmio stimato" value={joinSavings>0?eur(joinSavings):"in calo"} />
                       <Fact icon={<Users size={15} color={C.purple}/>} label="Già aggregate" value={`${pool.companies} aziende`} />
                     </div>
@@ -546,7 +546,7 @@ export default function ProductPage() {
                     <div style={{ display:"flex", gap:8, background:"#FFF7ED", border:`1px solid ${C.amber}44`, borderRadius:9, padding:"10px 12px", marginBottom:14 }}>
                       <Info size={18} color={C.amber} style={{ flexShrink:0 }}/>
                       <span style={{ fontSize:12, color:"#7C2D12", lineHeight:1.5 }}>
-                        Unendoti accetti il <b>fornitore più economico</b> tra quelli certificati e attendi fino alla <b>chiusura del pool</b> — che dipende da quando è stato aperto (qui: tra {pool.closesIn}) e può anche essere imminente. Vuoi scegliere un fornitore o ricevere subito? Continua con l'Acquisto Rapido qui sotto.
+                        Unendoti accetti il <b>fornitore più economico</b> tra quelli certificati e attendi fino alla <b>chiusura dell'asta</b> — che dipende da quando è stato aperto (qui: tra {pool.closesIn}) e può anche essere imminente. Vuoi scegliere un fornitore o ricevere subito? Continua con l'Acquisto Rapido qui sotto.
                       </span>
                     </div>
                     <div style={{ display:"flex", gap:12, flexWrap:"wrap", alignItems:"center" }}>
@@ -750,7 +750,7 @@ export default function ProductPage() {
                 )}
                 {canOpenPool
                   ? <button onClick={handleOpenPool} disabled={busy || !openAcceptTerms} style={{ background:C.purple, color:"#fff", border:"none", borderRadius:9, padding:"12px 22px", fontSize:14, fontWeight:700, cursor:(busy||!openAcceptTerms)?"default":"pointer", opacity:(busy||!openAcceptTerms)?0.5:1, display:"inline-flex", alignItems:"center", gap:7, fontFamily:"Inter,system-ui" }}><Gavel size={16}/> Apri un'asta a ribasso con {(qty/1000).toLocaleString("it-IT")}t</button>
-                  : <div style={{ fontSize:12 }}>Imposta almeno {(palletKg/1000).toLocaleString("it-IT")}t (1 pallet) per aprire un pool.</div>}
+                  : <div style={{ fontSize:12 }}>Imposta almeno {(palletKg/1000).toLocaleString("it-IT")}t (1 pallet) per aprire un'asta a ribasso.</div>}
                 {actionMsg && <div style={{ marginTop:8, fontSize:12, color:C.red, fontWeight:600 }}>{actionMsg}</div>}
               </div>
             )}

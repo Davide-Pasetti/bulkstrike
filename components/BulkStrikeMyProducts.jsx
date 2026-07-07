@@ -417,7 +417,7 @@ export default function MyProductsPage() {
                         <div><label className="mp-label">Grade</label><input className="mp-input" value={r.grade} onChange={e => updatePdfRow(i, { grade:e.target.value })} placeholder="Es. Food Grade" /></div>
                         <div><label className="mp-label">Origine</label><input className="mp-input" value={r.origin} onChange={e => updatePdfRow(i, { origin:e.target.value })} placeholder="Es. Italia" /></div>
                         <div><label className="mp-label">Ordine min (kg)</label><input className="mp-input" type="number" value={r.min_order_kg} onChange={e => updatePdfRow(i, { min_order_kg:e.target.value })} /></div>
-                        <div><label className="mp-label">Lead time (gg)</label><input className="mp-input" type="number" value={r.lead_time_days} onChange={e => updatePdfRow(i, { lead_time_days:e.target.value })} /></div>
+                        <div><label className="mp-label">Preparazione (gg)</label><input className="mp-input" type="number" value={r.lead_time_days} onChange={e => updatePdfRow(i, { lead_time_days:e.target.value })} /></div>
                         <div><label className="mp-label">Formato</label><input className="mp-input" value={r.format_label} onChange={e => updatePdfRow(i, { format_label:e.target.value })} placeholder="sacco" /></div>
                         <div><label className="mp-label">kg per unità</label><input className="mp-input" type="number" value={r.format_size_kg} onChange={e => updatePdfRow(i, { format_size_kg:e.target.value })} /></div>
                       </div>
@@ -502,7 +502,7 @@ export default function MyProductsPage() {
                     <input className="mp-input" type="number" value={minOrderKg} onChange={e => setMinOrderKg(e.target.value)} placeholder="Es. 500" />
                   </div>
                   <div>
-                    <label className="mp-label">Lead time (giorni di preparazione ordine)</label>
+                    <label className="mp-label">Giorni di preparazione ordine</label>
                     <input className="mp-input" type="number" value={leadTimeDays} onChange={e => setLeadTimeDays(e.target.value)} placeholder="Es. 7" />
                   </div>
                   <div style={{ gridColumn:"1 / -1" }}>

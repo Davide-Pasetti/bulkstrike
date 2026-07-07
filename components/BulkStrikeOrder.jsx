@@ -326,7 +326,7 @@ export default function OrderPage() {
                     <div><div style={{ fontSize:11, color:C.muted }}>Prodotto</div><div style={{ fontWeight:700, cursor:"pointer", textDecoration:"underline" }} onClick={() => { window.location.href = `/prodotto?id=${order.product_id}`; }}>{order.product_name}</div></div>
                     <div><div style={{ fontSize:11, color:C.muted }}>Codici</div><div className="od-num">{[order.e_number, order.cas_number ? `CAS ${order.cas_number}` : null].filter(Boolean).join(" · ") || "—"}</div></div>
                     <div><div style={{ fontSize:11, color:C.muted }}>Quantità</div><div className="od-num" style={{ fontWeight:700 }}>{Number(order.quantity_kg).toLocaleString("it-IT")} kg</div></div>
-                    <div><div style={{ fontSize:11, color:C.muted }}>Modalità</div><div style={{ fontWeight:600 }}>{order.mode === "instant" ? "Acquisto rapido" : order.mode === "pool" ? "Pool collettivo" : order.mode}</div></div>
+                    <div><div style={{ fontSize:11, color:C.muted }}>Modalità</div><div style={{ fontWeight:600 }}>{order.mode === "instant" ? "Acquisto rapido" : order.mode === "pool" ? "Asta a ribasso" : order.mode}</div></div>
                   </div>
                 </div>
 

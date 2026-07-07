@@ -148,7 +148,7 @@ export default function CatalogPage() {
             <label style={{ display: "flex", alignItems: "center", gap: 9, padding: "10px 12px", border: `1px solid ${poolOnly ? "#0EA5E9" : C.border}`, borderRadius: 10, cursor: "pointer", background: poolOnly ? "#EFF6FF" : "#fff", marginBottom: 18 }}>
               <input type="checkbox" checked={poolOnly} onChange={(e) => setPoolOnly(e.target.checked)} style={{ accentColor: C.blue, width: 16, height: 16 }} />
               <Flame size={15} color={poolOnly ? C.blue : C.amber} />
-              <span style={{ fontSize: 13, fontWeight: 600, color: poolOnly ? "#0369A1" : C.text }}>Solo con pool attivo</span>
+              <span style={{ fontSize: 13, fontWeight: 600, color: poolOnly ? "#0369A1" : C.text }}>Solo con asta attiva</span>
             </label>
 
             {/* prezzo */}

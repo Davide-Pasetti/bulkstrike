@@ -22,12 +22,12 @@ const CERTS = ["Food Grade","OIV","ISO 9001","ISO 22000","REACH","Kosher","Halal
 // per-material alert types, differ by account type
 const ALERT_DEFS = {
   buyer: [
-    { k:"pool",     icon:Bell,        label:"Apre un pool",   desc:"Avvisami quando apre un pool per questo articolo — per partecipare e approfittarne" },
+    { k:"pool",     icon:Bell,        label:"Apre un'asta a ribasso",   desc:"Avvisami quando apre un'asta a ribasso per questo articolo — per partecipare e approfittarne" },
     { k:"price",    icon:TrendingDown,label:"Prezzo in calo", desc:"Avvisami quando arrivano nuove offerte più basse" },
     { k:"supplier", icon:Factory,     label:"Nuovo fornitore",desc:"Avvisami quando un nuovo fornitore certificato si aggiunge" },
   ],
   supplier: [
-    { k:"pool",    icon:Bell,   label:"Apre un pool",     desc:"Avvisami quando apre un pool per questo articolo — per fare un'offerta a ribasso" },
+    { k:"pool",    icon:Bell,   label:"Apre un'asta a ribasso",     desc:"Avvisami quando apre un'asta a ribasso per questo articolo — per fare un'offerta a ribasso" },
     { k:"request", icon:Search, label:"Richiesta cliente",desc:"Avvisami quando un cliente cerca questo prodotto" },
     { k:"outbid",  icon:Zap,    label:"Offerta superata", desc:"Avvisami se un concorrente offre un prezzo più basso del tuo" },
   ],

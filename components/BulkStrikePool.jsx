@@ -129,7 +129,7 @@ export default function PoolAuctionPage() {
   }
 
   async function joinTheAuction() {
-    if (!poolId) { setJoinMsg("Questa è l'asta dimostrativa. Apri /pool?id=… con un'asta reale per partecipare."); return; }
+    if (!poolId) { setJoinMsg("Questa è l'asta dimostrativa: per partecipare apri un'asta a ribasso reale dalla pagina di un prodotto."); return; }
     setJoining(true); setJoinMsg(null);
     try {
       await joinPool(poolId, userQty, true);
@@ -146,7 +146,7 @@ export default function PoolAuctionPage() {
   // Aderisci quando il prezzo raggiunge la soglia scelta. Se il prezzo attuale
   // è già a quel livello o sotto, il server unisce subito (stessa cosa di joinTheAuction).
   async function joinAtTarget() {
-    if (!poolId) { setJoinMsg("Questa è l'asta dimostrativa. Apri /pool?id=… con un'asta reale per partecipare."); return; }
+    if (!poolId) { setJoinMsg("Questa è l'asta dimostrativa: per partecipare apri un'asta a ribasso reale dalla pagina di un prodotto."); return; }
     const price = parseFloat(String(targetPrice).replace(",", "."));
     if (!price || price <= 0) { setJoinMsg("Inserisci un prezzo soglia valido."); return; }
     setJoining(true); setJoinMsg(null);
