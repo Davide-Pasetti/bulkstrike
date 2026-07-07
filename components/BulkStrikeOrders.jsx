@@ -4,7 +4,7 @@
 // ruolo e stato. Click su una riga → pagina dettaglio /ordine?id=…
 import { useState, useEffect, useMemo } from "react";
 import { ShoppingCart, ChevronRight, ArrowRight, Package, Star, Store } from "lucide-react";
-import { getMyOrdersHistory, getSession, poolErrorMessage } from "@/lib/api";
+import { getMyOrdersHistory, getSession, poolErrorMessage, reorderOrder } from "@/lib/api";
 import BulkStrikeNav from "@/components/BulkStrikeNav";
 
 const C = { blue:"#0EA5E9", dark:"#0284C7", text:"#0F172A", muted:"#64748B", border:"#E2E8F0", bg:"#F8FAFE", green:"#059669", red:"#DC2626", amber:"#D97706", purple:"#7C3AED" };
@@ -30,6 +30,7 @@ export default function OrdersPage() {
   const [err, setErr] = useState("");
   const [roleF, setRoleF] = useState("all");     // all | buyer | supplier
   const [statusF, setStatusF] = useState("all"); // all | open | closed
+  const [reorderState, setReorderState] = useState({}); // { [orderId]: { busy | done | err } }
 
   useEffect(() => {
     (async () => {
@@ -48,6 +49,19 @@ export default function OrdersPage() {
 
   const nBuy = orders.filter(o => o.role === "buyer").length;
   const nSell = orders.filter(o => o.role === "supplier").length;
+
+  // Riordina: rimette l'articolo dell'ordine nel carrello. e.stopPropagation per
+  // non attivare la navigazione al dettaglio della riga.
+  const handleReorder = async (e, id) => {
+    e.stopPropagation();
+    setReorderState(s => ({ ...s, [id]: { busy: true } }));
+    try {
+      await reorderOrder(id);
+      setReorderState(s => ({ ...s, [id]: { done: true } }));
+    } catch (err) {
+      setReorderState(s => ({ ...s, [id]: { err: poolErrorMessage(err) } }));
+    }
+  };
 
   const Tab = ({ val, cur, set, children }) => (
     <button onClick={() => set(val)} style={{ padding:"7px 16px", borderRadius:100, fontSize:13, fontWeight:600, cursor:"pointer", border:`1.5px solid ${cur === val ? C.blue : C.border}`, background:cur === val ? "#EFF6FF" : "#fff", color:cur === val ? "#0369A1" : C.muted, fontFamily:"Inter,system-ui" }}>{children}</button>
@@ -136,7 +150,21 @@ export default function OrdersPage() {
                     {new Date(o.created_at).toLocaleDateString("it-IT", { year:"numeric", month:"short", day:"numeric" })}
                     <div style={{ fontSize:11 }}>{new Date(o.created_at).toLocaleTimeString("it-IT", { hour:"2-digit", minute:"2-digit" })}</div>
                   </div>
-                  <ChevronRight size={16} color={C.muted}/>
+                  <div style={{ display:"flex", alignItems:"center", gap:8, justifyContent:"flex-end" }}>
+                    {o.role === "buyer" && !OPEN_STATES.includes(o.status) && (() => {
+                      const rs = reorderState[o.id] || {};
+                      if (rs.done) return (
+                        <span onClick={(e) => { e.stopPropagation(); window.location.href = "/carrello"; }} style={{ fontSize:12, fontWeight:700, color:C.green, cursor:"pointer", whiteSpace:"nowrap" }}>Aggiunto al carrello ✓ · Vai</span>
+                      );
+                      return (
+                        <div style={{ display:"flex", flexDirection:"column", alignItems:"flex-end", gap:3 }}>
+                          <button onClick={(e) => handleReorder(e, o.id)} disabled={rs.busy} style={{ padding:"6px 12px", borderRadius:100, fontSize:12, fontWeight:700, cursor:rs.busy?"default":"pointer", border:`1.5px solid ${C.blue}`, background:"#EFF6FF", color:"#0369A1", fontFamily:"Inter,system-ui", opacity:rs.busy?0.6:1, whiteSpace:"nowrap" }}>{rs.busy ? "Aggiungo…" : "Riordina"}</button>
+                          {rs.err && <span style={{ fontSize:10.5, color:C.red, maxWidth:140, textAlign:"right" }}>{rs.err}</span>}
+                        </div>
+                      );
+                    })()}
+                    <ChevronRight size={16} color={C.muted}/>
+                  </div>
                 </div>
               );
             })}

@@ -4,7 +4,7 @@ import {
   getWatchedMaterials, addWatchedMaterial, removeWatchedMaterial, updateMaterialAlert,
   getNotifications, markNotificationRead, markAllNotificationsRead, subscribeNotifications,
 } from "@/lib/api";
-import { Bell, Search, Plus, TrendingDown, Zap, Factory, Check, X, Gavel, LayoutGrid, Inbox, Clock, Boxes, ChevronRight, Settings, Trophy, Send, Package, Truck, LogOut, AlertTriangle } from "lucide-react";
+import { Bell, Search, Plus, TrendingDown, Zap, Factory, Check, X, Gavel, LayoutGrid, Inbox, Clock, Boxes, ChevronRight, Settings, Trophy, Send, Package, Truck, LogOut, AlertTriangle, ShoppingBag, Shield } from "lucide-react";
 import { BSIcon } from "@/components/BSLogo";
 
 const C = { blue:"#0EA5E9", dark:"#0284C7", text:"#0F172A", muted:"#64748B", border:"#E2E8F0", bg:"#F8FAFE", green:"#059669", amber:"#D97706", red:"#DC2626", purple:"#7C3AED" };
@@ -168,7 +168,9 @@ export default function Dashboard() {
   // usato dal pulsante "Visualizza le tue aste" dopo l'adesione a un'asta).
   useEffect(() => {
     const s = new URLSearchParams(window.location.search).get("section");
-    if (s) setSection(s);
+    // Le notifiche sono state accorpate in "alerts": i vecchi link ?section=notifs
+    // devono continuare a funzionare.
+    if (s) setSection(s === "notifs" ? "alerts" : s);
   }, []);
 
   const cur = mats[role];
@@ -290,11 +292,18 @@ export default function Dashboard() {
   const searchHits = query ? ALL_MATERIALS.filter(m=>m.toLowerCase().includes(query)) : [];
   const exact = query && ALL_MATERIALS.some(m=>m.toLowerCase()===query);
 
-  const NAV = [
-    { id:"overview", label:"Panoramica", icon:LayoutGrid },
-    { id:"alerts",   label:"Avvisi & materie prime", icon:Bell },
-    { id:"pools",    label:"Aste attive", icon:Gavel },
-    { id:"notifs",   label:"Notifiche", icon:Inbox },
+  // Sidebar unica e ordinata: "section" = cambio sezione in-component (setSection),
+  // "route" = navigazione a un'altra pagina (window.location.href). Le voci con
+  // show:false sono nascoste per il ruolo corrente.
+  const SIDEBAR = [
+    { type:"section", id:"overview", label:"Panoramica",             icon:LayoutGrid },
+    { type:"section", id:"alerts",   label:"Avvisi & materie prime", icon:Bell, badge:true },
+    { type:"route",   href:"/ordini", label:"Ordini",                icon:ShoppingBag },
+    { type:"section", id:"pools",    label:"Aste attive",            icon:Gavel },
+    { type:"route",   href:"/i-miei-prodotti", label:"Listino prodotti", icon:Package, show: !!company?.is_supplier },
+    { type:"route",   href:"/corriere",        label:"Listino servizi", icon:Truck,   show: !!company?.is_carrier },
+    { type:"route",   href:"/admin/prodotti",  label:"Admin",           icon:Shield,  show: !!company?.is_platform_admin },
+    { type:"section", id:"account",  label:"Account",                icon:Settings },
   ];
 
   return (
@@ -330,7 +339,7 @@ export default function Dashboard() {
           ) : <div style={{ marginLeft:"auto" }}/>}
 
           {/* bell */}
-          <button onClick={()=>setSection("notifs")} style={{ position:"relative", width:40, height:40, borderRadius:10, border:`1px solid ${C.border}`, background:"#fff", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>
+          <button onClick={()=>setSection("alerts")} style={{ position:"relative", width:40, height:40, borderRadius:10, border:`1px solid ${C.border}`, background:"#fff", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>
             <Bell size={18} color={C.text}/>
             {unread>0 && <span style={{ position:"absolute", top:-5, right:-5, minWidth:18, height:18, padding:"0 4px", borderRadius:9, background:C.red, color:"#fff", fontSize:10, fontWeight:800, display:"flex", alignItems:"center", justifyContent:"center", border:"2px solid #fff" }}>{unread}</span>}
           </button>
@@ -345,22 +354,24 @@ export default function Dashboard() {
       <div className="bs-shell" style={{ maxWidth:1180, margin:"0 auto", padding:"22px 20px 60px", display:"grid", gridTemplateColumns:"230px 1fr", gap:22, alignItems:"start" }}>
         {/* SIDEBAR */}
         <aside className="bs-side" style={{ position:"sticky", top:84, display:"flex", flexDirection:"column", gap:4 }}>
-          {NAV.map(n=>{
-            const on=section===n.id; const Ico=n.icon;
+          {SIDEBAR.map(item=>{
+            if (item.show === false) return null;
+            const Ico=item.icon;
+            if (item.type==="route") {
+              return (
+                <div key={item.label} className="bs-nav" onClick={() => { window.location.href = item.href; }} style={{ background:"transparent", color:C.muted }}>
+                  <Ico size={18}/><span>{item.label}</span>
+                </div>
+              );
+            }
+            const on=section===item.id;
             return (
-              <div key={n.id} className="bs-nav" onClick={()=>setSection(n.id)} style={{ background:on?"#EFF6FF":"transparent", color:on?C.blue:C.muted }}>
-                <Ico size={18}/><span>{n.label}</span>
-                {n.id==="notifs" && unread>0 && <span style={{ marginLeft:"auto", minWidth:18, height:18, padding:"0 5px", borderRadius:9, background:C.red, color:"#fff", fontSize:10, fontWeight:800, display:"flex", alignItems:"center", justifyContent:"center" }}>{unread}</span>}
+              <div key={item.id} className="bs-nav" onClick={()=>setSection(item.id)} style={{ background:on?"#EFF6FF":"transparent", color:on?C.blue:C.muted }}>
+                <Ico size={18}/><span>{item.label}</span>
+                {item.badge && unread>0 && <span style={{ marginLeft:"auto", minWidth:18, height:18, padding:"0 5px", borderRadius:9, background:C.red, color:"#fff", fontSize:10, fontWeight:800, display:"flex", alignItems:"center", justifyContent:"center" }}>{unread}</span>}
               </div>
             );
           })}
-          {role==="supplier" && (
-            <div className="bs-nav" onClick={() => { window.location.href = "/i-miei-prodotti"; }} style={{ background:"transparent", color:C.muted }}><Package size={18}/><span>I miei prodotti</span></div>
-          )}
-          {company?.is_carrier && (
-            <div className="bs-nav" onClick={() => { window.location.href = "/corriere"; }} style={{ background:"transparent", color:C.muted }}><Truck size={18}/><span>Corriere</span></div>
-          )}
-          <div className="bs-nav" onClick={()=>setSection("account")} style={{ background:section==="account"?"#EFF6FF":"transparent", color:section==="account"?C.blue:C.muted }}><Settings size={18}/><span>Account</span></div>
         </aside>
 
         {/* MAIN */}
@@ -391,7 +402,7 @@ export default function Dashboard() {
                 <div className="bs-card" style={{ padding:18 }}>
                   <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10 }}>
                     <div style={{ fontSize:15, fontWeight:700 }}>Notifiche recenti</div>
-                    <button onClick={()=>setSection("notifs")} style={{ background:"none", border:"none", color:C.blue, fontSize:12.5, fontWeight:600, cursor:"pointer", fontFamily:"Inter,system-ui" }}>Vedi tutte</button>
+                    <button onClick={()=>setSection("alerts")} style={{ background:"none", border:"none", color:C.blue, fontSize:12.5, fontWeight:600, cursor:"pointer", fontFamily:"Inter,system-ui" }}>Vedi tutte</button>
                   </div>
                   <div>{curNotifs.slice(0,3).map((n,i)=>(
                     <div key={n.id} style={{ borderBottom:i<2?`1px solid #F1F5F9`:"none" }}><NotifRow n={n} onRead={markRead} compact/></div>
@@ -477,6 +488,19 @@ export default function Dashboard() {
                     </div>
                   </div>
                 ))}
+              </div>
+
+              {/* NOTIFICHE — feed accorpato qui dagli avvisi generati dalle materie monitorate */}
+              <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", margin:"26px 0 6px", flexWrap:"wrap", gap:8 }}>
+                <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                  <Inbox size={17} color={C.blue}/><h2 style={{ fontSize:17, fontWeight:800 }}>Notifiche</h2>
+                  {unread>0 && <span style={{ minWidth:18, height:18, padding:"0 5px", borderRadius:9, background:C.red, color:"#fff", fontSize:10, fontWeight:800, display:"flex", alignItems:"center", justifyContent:"center" }}>{unread}</span>}
+                </div>
+                {unread>0 && <button onClick={markAll} style={{ background:"#fff", border:`1px solid ${C.border}`, borderRadius:8, padding:"8px 14px", fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:"Inter,system-ui", color:C.muted }}>Segna tutte come lette</button>}
+              </div>
+              <p style={{ fontSize:14, color:C.muted, marginBottom:14 }}>Gli avvisi generati dalle tue materie prime monitorate.</p>
+              <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+                {curNotifs.map(n=><NotifRow key={n.id} n={n} onRead={markRead}/>)}
               </div>
             </>
           )}
@@ -587,20 +611,6 @@ export default function Dashboard() {
                     </button>
                   </div>
                 ))}
-              </div>
-            </>
-          )}
-
-          {/* ===== NOTIFICATIONS ===== */}
-          {section==="notifs" && (
-            <>
-              <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:6, flexWrap:"wrap", gap:8 }}>
-                <h1 style={{ fontSize:23, fontWeight:800 }}>Notifiche</h1>
-                {unread>0 && <button onClick={markAll} style={{ background:"#fff", border:`1px solid ${C.border}`, borderRadius:8, padding:"8px 14px", fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:"Inter,system-ui", color:C.muted }}>Segna tutte come lette</button>}
-              </div>
-              <p style={{ fontSize:14, color:C.muted, marginBottom:20 }}>Gli avvisi generati dalle tue materie prime monitorate.</p>
-              <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-                {curNotifs.map(n=><NotifRow key={n.id} n={n} onRead={markRead}/>)}
               </div>
             </>
           )}
