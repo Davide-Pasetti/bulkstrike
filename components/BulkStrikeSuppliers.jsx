@@ -5,8 +5,9 @@
 // ?macro= &sector= &country= &cert= &q=
 import { useState, useEffect, useMemo } from "react";
 import { Search, Star, ShieldCheck, ChevronRight, X, SlidersHorizontal, Package, Layers, Award, ArrowRight } from "lucide-react";
-import { getSuppliersDirectory, getMacroAreas } from "@/lib/api";
+import { getSuppliersDirectory, getMacroAreas, getSession } from "@/lib/api";
 import BulkStrikeNav from "@/components/BulkStrikeNav";
+import LoginGate from "@/components/BulkStrikeLoginGate";
 import { BSIcon } from "@/components/BSLogo";
 
 const C = { blue:"#0EA5E9", dark:"#0284C7", text:"#0F172A", muted:"#64748B", border:"#E2E8F0", bg:"#F8FAFE", green:"#059669", red:"#DC2626", amber:"#D97706" };
@@ -28,6 +29,7 @@ export default function SuppliersDirectory() {
   const [all, setAll] = useState([]);
   const [macrosTax, setMacrosTax] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [needLogin, setNeedLogin] = useState(false); // la RPC directory è solo per autenticati
 
   const [q, setQ] = useState("");
   const [country, setCountry] = useState(null);
@@ -40,9 +42,15 @@ export default function SuppliersDirectory() {
   const [showFilters, setShowFilters] = useState(false);
 
   useEffect(() => {
-    Promise.all([getSuppliersDirectory(), getMacroAreas()])
-      .then(([d, m]) => { setAll(d || []); setMacrosTax(m || []); setLoading(false); })
-      .catch(() => setLoading(false));
+    (async () => {
+      const session = await getSession().catch(() => null);
+      if (!session) { setNeedLogin(true); setLoading(false); return; }
+      try {
+        const [d, m] = await Promise.all([getSuppliersDirectory(), getMacroAreas()]);
+        setAll(d || []); setMacrosTax(m || []);
+      } catch {}
+      setLoading(false);
+    })();
     const sp = new URLSearchParams(window.location.search);
     if (sp.get("macro")) setActiveMacro(sp.get("macro"));
     if (sp.get("sector")) setActiveSector(sp.get("sector"));
@@ -118,9 +126,9 @@ export default function SuppliersDirectory() {
           <div>
             <div style={{ fontSize:11, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.1em", color:C.blue, marginBottom:6 }}>Anagrafica</div>
             <h1 style={{ fontSize:30, fontWeight:800, letterSpacing:"-0.02em" }}>Fornitori verificati</h1>
-            <p style={{ fontSize:14, color:C.muted, marginTop:6 }}>{all.length} fornitori attivi su BulkStrike — tutti verificati, pagamento in escrow.</p>
+            <p style={{ fontSize:14, color:C.muted, marginTop:6 }}>{needLogin ? "Fornitori verificati, pagamento in escrow — riservato agli utenti registrati." : `${all.length} fornitori attivi su BulkStrike — tutti verificati, pagamento in escrow.`}</p>
           </div>
-          <div style={{ display:"flex", gap:10, alignItems:"center", flexWrap:"wrap" }}>
+          {!needLogin && <div style={{ display:"flex", gap:10, alignItems:"center", flexWrap:"wrap" }}>
             <div style={{ display:"flex", alignItems:"center", gap:6, border:`1.5px solid ${C.border}`, borderRadius:9, padding:"9px 12px", minWidth:230, background:"#fff" }}>
               <Search size={15} color={C.muted}/>
               <input value={q} onChange={e => setQ(e.target.value)} placeholder="Cerca fornitore…" style={{ border:"none", outline:"none", fontSize:13.5, flex:1, fontFamily:"Inter,system-ui" }}/>
@@ -133,9 +141,15 @@ export default function SuppliersDirectory() {
             <button className="dir-filter-toggle" onClick={() => setShowFilters(!showFilters)} style={{ alignItems:"center", gap:6, border:`1.5px solid ${C.border}`, borderRadius:9, padding:"9px 14px", fontSize:13, fontWeight:700, background:"#fff", cursor:"pointer", fontFamily:"Inter,system-ui" }}>
               <SlidersHorizontal size={14}/> Filtri {activeCount > 0 && `(${activeCount})`}
             </button>
-          </div>
+          </div>}
         </div>
 
+        {needLogin ? (
+          <LoginGate
+            title="Accedi per vedere i fornitori verificati su BulkStrike"
+            subtitle="L'anagrafica completa dei fornitori — con settori, certificazioni e recensioni — è riservata agli utenti registrati."
+          />
+        ) : (
         <div className="dir-layout">
           {/* SIDEBAR FILTRI */}
           <aside className={`dir-aside${showFilters ? " open" : ""}`} style={{ border:`1px solid ${C.border}`, borderRadius:14, padding:"6px 16px 18px", background:"#fff" }}>
@@ -281,6 +295,7 @@ export default function SuppliersDirectory() {
             )}
           </main>
         </div>
+        )}
       </div>
 
       {/* FOOTER */}

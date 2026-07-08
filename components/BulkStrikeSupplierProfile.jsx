@@ -6,6 +6,7 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import { Search, Star, ShieldCheck, MapPin, Phone, Globe, Mail, User, FileText, Package, Layers, Award, Clock, ChevronRight, ArrowRight, Flame, Building2, Truck, ExternalLink, Check, X, MessageSquare, Send, ShoppingCart } from "lucide-react";
 import { getSupplierProfile, getSession, upsertCartItem, poolErrorMessage, getSupplierReviews, getReviewableOrders, submitReview, getCart, followSupplier, unfollowSupplier, isFollowingSupplier } from "@/lib/api";
 import BulkStrikeNav from "@/components/BulkStrikeNav";
+import LoginGate from "@/components/BulkStrikeLoginGate";
 import { BSIcon } from "@/components/BSLogo";
 import { IvaChip } from "@/components/BulkStrikeBadges";
 
@@ -84,6 +85,7 @@ export default function SupplierPage() {
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  const [needLogin, setNeedLogin] = useState(false); // get_supplier_profile è solo per autenticati
   const [tableQ, setTableQ] = useState("");
   const [qtyById, setQtyById] = useState({});          // product_id → kg
   const [orderState, setOrderState] = useState({});    // product_id → { busy, ok, err }
@@ -103,16 +105,14 @@ export default function SupplierPage() {
     if (!id) { setLoading(false); setNotFound(true); return; }
     (async () => {
       try {
+        const session = await getSession().catch(() => null);
+        if (!session) { setNeedLogin(true); return; }
         const p = await getSupplierProfile(id);
         if (p) {
           setProfile(p);
           getSupplierReviews(id).then(setReviews).catch(() => {});
-          getSession().then(s => {
-            if (s) {
-              getReviewableOrders(id).then(rows => { setReviewableOrders(rows); if (rows[0]) setReviewOrderId(rows[0].order_id); }).catch(() => {});
-              getCart().then(items => setAlreadyInCart((items || []).some(it => it.supplier_company_id === id))).catch(() => {});
-            }
-          });
+          getReviewableOrders(id).then(rows => { setReviewableOrders(rows); if (rows[0]) setReviewOrderId(rows[0].order_id); }).catch(() => {});
+          getCart().then(items => setAlreadyInCart((items || []).some(it => it.supplier_company_id === id))).catch(() => {});
         } else setNotFound(true);
       } catch (e) { setNotFound(true); }
       finally { setLoading(false); }
@@ -200,6 +200,19 @@ export default function SupplierPage() {
       <div style={{ minHeight:"100vh", background:C.bg, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:16, fontFamily:"'Inter',system-ui,sans-serif" }}>
         <BSIcon size={40} uid="load" />
         <div style={{ fontSize:14, color:C.muted }}>Caricamento profilo fornitore…</div>
+      </div>
+    );
+  }
+  if (needLogin) {
+    return (
+      <div style={{ background:"#fff", color:C.text, fontFamily:"'Inter',system-ui,sans-serif", minHeight:"100vh", colorScheme:"light" }}>
+        <BulkStrikeNav />
+        <div style={{ maxWidth:1280, margin:"0 auto", padding:"22px 20px 60px" }}>
+          <LoginGate
+            title="Accedi per vedere il profilo del fornitore"
+            subtitle="I profili dei fornitori verificati — con listino, certificazioni e recensioni — sono riservati agli utenti registrati."
+          />
+        </div>
       </div>
     );
   }

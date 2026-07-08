@@ -8,7 +8,9 @@
 import { useState, useEffect, useMemo } from "react";
 import { Truck, MapPin, Clock, ChevronRight, Search, ArrowRight } from "lucide-react";
 import { supabase } from "@/lib/supabase"; // RPC diretta per non toccare lib/api
+import { getSession } from "@/lib/api";
 import BulkStrikeNav from "@/components/BulkStrikeNav";
+import LoginGate from "@/components/BulkStrikeLoginGate";
 import { BSIcon } from "@/components/BSLogo";
 
 const C = { blue:"#0EA5E9", dark:"#0284C7", text:"#0F172A", muted:"#64748B", border:"#E2E8F0", bg:"#F8FAFE", green:"#059669", red:"#DC2626", amber:"#D97706" };
@@ -22,15 +24,19 @@ function leadTimeLabel(min, max) {
 export default function CarriersPage() {
   const [carriers, setCarriers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [needLogin, setNeedLogin] = useState(false); // la RPC directory è solo per autenticati
   const [q, setQ] = useState("");
 
   useEffect(() => {
-    supabase.rpc("get_carriers_directory")
-      .then(({ data, error }) => {
+    (async () => {
+      const session = await getSession().catch(() => null);
+      if (!session) { setNeedLogin(true); setLoading(false); return; }
+      try {
+        const { data, error } = await supabase.rpc("get_carriers_directory");
         if (!error) setCarriers(Array.isArray(data) ? data : []);
-        setLoading(false);
-      })
-      .catch(() => setLoading(false));
+      } catch {}
+      setLoading(false);
+    })();
   }, []);
 
   const filtered = useMemo(() => {
@@ -73,6 +79,12 @@ export default function CarriersPage() {
 
       {/* BODY */}
       <div style={{ maxWidth:1280, margin:"0 auto", padding:"22px 20px 40px" }}>
+        {needLogin ? (
+          <LoginGate
+            title="Accedi per vedere i corrieri registrati su BulkStrike"
+            subtitle="L'elenco dei corrieri — con zone coperte e tempi di consegna — è riservato agli utenti registrati."
+          />
+        ) : (<>
         <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:12, marginBottom:18 }}>
           <div style={{ fontSize:14, color:C.muted }}>
             {loading ? "Caricamento corrieri…" : <><b style={{ color:C.text }}>{filtered.length}</b> {filtered.length === 1 ? "corriere" : "corrieri"}{q.trim() ? " (filtrati)" : ""}</>}
@@ -137,6 +149,7 @@ export default function CarriersPage() {
             })}
           </div>
         )}
+        </>)}
       </div>
 
       {/* CTA per i corrieri: la gestione del listino sta nel profilo /corriere */}
