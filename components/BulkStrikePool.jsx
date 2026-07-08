@@ -75,11 +75,13 @@ export default function PoolAuctionPage() {
   const [joining, setJoining] = useState(false);
   const [joinMsg, setJoinMsg] = useState(null);
   const [userQty, setUserQty] = useState(2000);
-  const [qtyMode, setQtyMode] = useState("pallet");
+  const [format, setFormat] = useState("pallet"); // formato di vendita selezionato: sacco | pallet | container | kg (liberi)
   const [acceptTerms, setAcceptTerms] = useState(false);
   const [secs, setSecs] = useState(pool.secondsLeft);
   const [joined, setJoined] = useState(false);
   const [realPalletKg, setRealPalletKg] = useState(null); // kg di 1 pallet per il prodotto reale, se noto
+  const [realSaccoKg, setRealSaccoKg] = useState(null);       // kg di 1 sacco, solo se impostato sul prodotto
+  const [realContainerKg, setRealContainerKg] = useState(null); // kg di 1 container, solo se impostato sul prodotto
   const [targetJoin, setTargetJoin] = useState(null);   // { id, quantity_kg, target_price_per_kg } | null
   const [pendingJoins, setPendingJoins] = useState([]); // adesioni in attesa di altri clienti, in forma anonima
   const [myQty, setMyQty] = useState(0); // quanto ho già messo in questo pool (anche da sessioni precedenti)
@@ -112,6 +114,8 @@ export default function PoolAuctionPage() {
       setPendingJoins(waiting || []);
       setMyQty(Number(detail.my_quantity_kg) || 0);
       if (detail.pallet_kg) setRealPalletKg(Number(detail.pallet_kg));
+      if (detail.sacco_kg) setRealSaccoKg(Number(detail.sacco_kg));
+      if (detail.container_kg) setRealContainerKg(Number(detail.container_kg));
       setPool({
         product: detail.product?.canonical_name || "",
         enum: detail.product?.e_number || "",
@@ -194,7 +198,8 @@ export default function PoolAuctionPage() {
   const toNext = barTarget ? Math.max(0, barTarget - projected) : 0;
   const aloneCeiling = tierCeiling(userQty);
   const savings = Math.max(0, (aloneCeiling - ceilingProjected) * userQty);
-  const setQtySafe = (v) => setUserQty(Math.max(100, Math.min(40000, v)));
+  // min 1 kg (i sacchi possono essere piccoli), max 100 t (più container).
+  const setQtySafe = (v) => setUserQty(Math.max(1, Math.min(100000, v)));
   const palletKg = realPalletKg || PALLET_KG; // kg di 1 pallet: reale se noto, altrimenti la demo
   const belowMin = userQty < palletKg;
   // La soglia di 1 pedana vale SOLO per APRIRE una nuova asta, non per partecipare a
@@ -203,11 +208,28 @@ export default function PoolAuctionPage() {
   // sotto-pedana scatta solo mentre si sta aprendo una nuova asta.
   const isExistingAuction = !!poolId || pool.current > 0;
   const mustOpenWithPallet = !isExistingAuction && belowMin;
-  // Le aste vanno solo a pallet interi: userQty (kg) resta lo stato reale,
-  // palletCount è solo la sua vista in pallet per questo prodotto.
+  // userQty (kg) resta lo stato reale; palletCount è solo la sua vista in
+  // pallet per questo prodotto (usata dalla nota nei "Kg personalizzati").
   const palletCount = Math.max(1, Math.round(userQty / palletKg));
-  const setPalletCount = (n) => setQtySafe(Math.max(1, n) * palletKg);
   const isPalletMultiple = userQty % palletKg === 0;
+
+  // Formati di vendita: Pallet sempre disponibile; Sacchi/Container SOLO se il
+  // prodotto ha il peso di quel formato impostato (mai valori inventati).
+  const FORMATS = [
+    ...(realSaccoKg ? [{ id:"sacco", label:"Sacchi", unitKg:realSaccoKg, one:"sacco", many:"sacchi" }] : []),
+    { id:"pallet", label:"Pallet", unitKg:palletKg, one:"pallet", many:"pallet" },
+    ...(realContainerKg ? [{ id:"container", label:"Container", unitKg:realContainerKg, one:"container", many:"container" }] : []),
+  ];
+  const activeFormat = FORMATS.find(f => f.id === format) || null; // null → "Kg personalizzati"
+  const unitCount = activeFormat ? Math.max(1, Math.round(userQty / activeFormat.unitKg)) : palletCount;
+  const setUnitCount = (n) => { if (activeFormat) setQtySafe(Math.max(1, n) * activeFormat.unitKg); };
+  // cambio formato: aggancia la quantità al multiplo più vicino del nuovo formato
+  const selectFormat = (f) => { setFormat(f.id); setQtySafe(Math.max(1, Math.round(userQty / f.unitKg)) * f.unitKg); };
+  // "Chiudi scaglione": azione diretta che inserisce i kg esatti che mancano al
+  // volume AGGREGATO per sbloccare il prossimo scaglione di prezzo.
+  const aggTier = tierFor(pool.current);
+  const tierGapKg = aggTier.max === Infinity ? 0 : Math.max(0, aggTier.max - pool.current);
+  const closeTierNow = () => { if (tierGapKg > 0) { setFormat("kg"); setQtySafe(tierGapKg); } };
 
   return (
     <div style={{ background:"#fff", color:C.text, fontFamily:"'Inter',system-ui,sans-serif", minHeight:"100vh", overflowX:"hidden" }}>
@@ -405,29 +427,31 @@ export default function PoolAuctionPage() {
                   <div style={{ fontSize:13, color:C.muted, marginBottom:14 }}>La tua quantità entra subito nel volume aggregato</div>
                 )}
 
-                <div style={{ display:"flex", gap:6, marginBottom:10 }}>
-                  {[["pallet","Pedane"],["kg","Kg personalizzati"]].map(([mode,lab]) => (
-                    <button key={mode} onClick={() => setQtyMode(mode)} style={{ flex:1, padding:"7px", borderRadius:7, border:`1px solid ${qtyMode===mode?C.purple:C.border}`, background:qtyMode===mode?"#FBF7FF":"#fff", color:qtyMode===mode?C.purple:C.muted, fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:"Inter,system-ui" }}>{lab}</button>
+                {/* Formati di vendita: Sacchi/Container compaiono solo se il prodotto
+                    ha il peso di quel formato; "Chiudi scaglione" è un'azione diretta
+                    che inserisce i kg esatti mancanti al prossimo scaglione. */}
+                <div style={{ fontSize:12, fontWeight:600, color:C.muted, marginBottom:6 }}>Formato di vendita</div>
+                <div style={{ display:"flex", gap:6, marginBottom:10, flexWrap:"wrap" }}>
+                  {FORMATS.map(f => (
+                    <button key={f.id} onClick={() => selectFormat(f)} style={{ flex:"1 1 auto", padding:"7px 10px", borderRadius:7, border:`1px solid ${format===f.id?C.purple:C.border}`, background:format===f.id?"#FBF7FF":"#fff", color:format===f.id?C.purple:C.muted, fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:"Inter,system-ui", whiteSpace:"nowrap" }}>{f.label}</button>
                   ))}
+                  {tierGapKg > 0 && (
+                    <button onClick={closeTierNow} title={`Inserisce i ${kg(tierGapKg)} kg che mancano al volume aggregato per sbloccare il prossimo scaglione`} style={{ flex:"1 1 auto", padding:"7px 10px", borderRadius:7, border:`1px dashed ${C.purple}`, background:"#fff", color:C.purple, fontSize:13, fontWeight:700, cursor:"pointer", fontFamily:"Inter,system-ui", whiteSpace:"nowrap" }}>Chiudi scaglione</button>
+                  )}
+                  <button onClick={() => setFormat("kg")} style={{ flex:"1 1 auto", padding:"7px 10px", borderRadius:7, border:`1px solid ${format==="kg"?C.purple:C.border}`, background:format==="kg"?"#FBF7FF":"#fff", color:format==="kg"?C.purple:C.muted, fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:"Inter,system-ui", whiteSpace:"nowrap" }}>Kg personalizzati</button>
                 </div>
 
-                {qtyMode === "pallet" ? (
+                {activeFormat ? (
                   <>
                     <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:8 }}>
-                      <button className="bs-qty-btn" onClick={() => setPalletCount(palletCount-1)}><Minus size={16}/></button>
+                      <button className="bs-qty-btn" onClick={() => setUnitCount(unitCount-1)}><Minus size={16}/></button>
                       <div style={{ flex:1, display:"flex", alignItems:"baseline", justifyContent:"center", gap:6, background:C.bg, border:`1px solid ${belowMin?C.amber:C.border}`, borderRadius:8, padding:"9px 12px" }}>
-                        <input className="bs-num" style={{ width:50, border:"none", outline:"none", background:"transparent", fontSize:20, fontWeight:700, textAlign:"center", color:C.text }} value={palletCount} onChange={e => setPalletCount(parseInt(e.target.value.replace(/\D/g,"")||"0"))}/>
-                        <span style={{ fontSize:14, color:C.muted }}>{palletCount===1?"pallet":"pallet"}</span>
+                        <input className="bs-num" style={{ width:60, border:"none", outline:"none", background:"transparent", fontSize:20, fontWeight:700, textAlign:"center", color:C.text }} value={unitCount} onChange={e => setUnitCount(parseInt(e.target.value.replace(/\D/g,"")||"0"))}/>
+                        <span style={{ fontSize:14, color:C.muted }}>{unitCount===1?activeFormat.one:activeFormat.many}</span>
                       </div>
-                      <button className="bs-qty-btn" onClick={() => setPalletCount(palletCount+1)}><Plus size={16}/></button>
+                      <button className="bs-qty-btn" onClick={() => setUnitCount(unitCount+1)}><Plus size={16}/></button>
                     </div>
-                    <div style={{ fontSize:12, color:C.muted, marginBottom:12 }}>= <b className="bs-num" style={{color:C.text}}>{kg(userQty)} kg</b> totali <span style={{ color:"#94A3B8" }}>(1 pallet = {kg(palletKg)} kg per questo prodotto)</span></div>
-
-                    <div style={{ display:"flex", gap:6, marginBottom:14 }}>
-                      {[1,2,5,10].map(n => (
-                        <button key={n} onClick={() => setPalletCount(n)} style={{ flex:1, padding:"7px", borderRadius:7, border:`1px solid ${palletCount===n?C.purple:C.border}`, background:palletCount===n?"#FBF7FF":"#fff", color:palletCount===n?C.purple:C.muted, fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:"Inter,system-ui" }}>{n} pallet{n===1?"":"s"}</button>
-                      ))}
-                    </div>
+                    <div style={{ fontSize:12, color:C.muted, marginBottom:14 }}>= <b className="bs-num" style={{color:C.text}}>{kg(userQty)} kg</b> totali <span style={{ color:"#94A3B8" }}>(1 {activeFormat.one} = {kg(activeFormat.unitKg)} kg per questo prodotto)</span></div>
                   </>
                 ) : (
                   <>
