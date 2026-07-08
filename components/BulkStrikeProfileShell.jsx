@@ -11,13 +11,32 @@
 // centro dell'header (la dashboard ci mette il toggle Acquirente/Fornitore).
 // Le voci con show:false sono nascoste per il ruolo corrente (flag
 // companies.is_* da getMyCompany, stesso pattern della vecchia sidebar).
-import { useState, useEffect } from "react";
+import { useState, useEffect, useLayoutEffect } from "react";
 import { LayoutGrid, Bell, ShoppingBag, Gavel, MessageSquare, Star, Package, Truck, Shield, ShieldCheck, Settings } from "lucide-react";
 import { BSIcon } from "@/components/BSLogo";
 import NavAuth from "@/components/BulkStrikeNavAuth";
 import { getMyCompany, getNotifications, getUnreadMessagesCount, adminCountPendingSuppliers } from "@/lib/api";
 
 const C = { blue: "#0EA5E9", text: "#0F172A", muted: "#64748B", border: "#E2E8F0", bg: "#F8FAFE", red: "#DC2626" };
+
+// Ogni voce della sidebar naviga con un <a href> (full page load): la shell si
+// rimonta da zero a ogni click e, finché getMyCompany() non risolve, le voci
+// legate al ruolo (Listino prodotti/servizi, Apertura asta, Fornitori da
+// verificare) non esistono — comparivano dopo il fetch spostando tutte le
+// altre. Cache in sessionStorage dell'ultimo stato noto (ruoli + badge),
+// applicata in un layout-effect PRIMA del paint: il primo frame ha già le
+// voci giuste e il menu resta fermo. (Niente stato iniziale da storage nello
+// useState: creerebbe un mismatch di hydration con l'HTML prerenderizzato.)
+const SHELL_CACHE_KEY = "bs_shell_cache";
+const readShellCache = () => {
+  try { return JSON.parse(sessionStorage.getItem(SHELL_CACHE_KEY)) || null; } catch { return null; }
+};
+const writeShellCache = (patch) => {
+  try { sessionStorage.setItem(SHELL_CACHE_KEY, JSON.stringify({ ...(readShellCache() || {}), ...patch })); } catch {}
+};
+// useLayoutEffect emette un warning se eseguito durante il prerender server:
+// su server usiamo useEffect (lì non fa comunque nulla).
+const useIsoLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : useEffect;
 
 function Badge({ n }) {
   if (!n || n <= 0) return null;
@@ -34,12 +53,22 @@ export default function ProfileShell({ active, headerCenter = null, children }) 
   const [msgUnread, setMsgUnread] = useState(0);
   const [pendingSuppliers, setPendingSuppliers] = useState(0);
 
+  // Prima del paint: ripristina l'ultimo stato noto (vedi commento su SHELL_CACHE_KEY).
+  useIsoLayoutEffect(() => {
+    const c = readShellCache();
+    if (!c) return;
+    if (c.company) setCompany(c.company);
+    if (c.notif) setNotifUnread(c.notif);
+    if (c.msg) setMsgUnread(c.msg);
+    if (c.pending) setPendingSuppliers(c.pending);
+  }, []);
+
   useEffect(() => {
-    getMyCompany().then(setCompany).catch(() => {});
-    getNotifications().then((rows) => setNotifUnread((rows || []).filter((r) => !r.is_read).length)).catch(() => {});
-    getUnreadMessagesCount().then((n) => setMsgUnread(n || 0)).catch(() => {});
+    getMyCompany().then((co) => { setCompany(co); writeShellCache({ company: co }); }).catch(() => {});
+    getNotifications().then((rows) => { const n = (rows || []).filter((r) => !r.is_read).length; setNotifUnread(n); writeShellCache({ notif: n }); }).catch(() => {});
+    getUnreadMessagesCount().then((n) => { setMsgUnread(n || 0); writeShellCache({ msg: n || 0 }); }).catch(() => {});
     // Restituisce 0 per i non-admin (guardia lato RPC), quindi la chiamata è innocua.
-    adminCountPendingSuppliers().then((n) => setPendingSuppliers(n || 0)).catch(() => {});
+    adminCountPendingSuppliers().then((n) => { setPendingSuppliers(n || 0); writeShellCache({ pending: n || 0 }); }).catch(() => {});
   }, []);
 
   const SIDEBAR = [
