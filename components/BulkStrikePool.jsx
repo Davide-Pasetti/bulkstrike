@@ -179,19 +179,30 @@ export default function PoolAuctionPage() {
   const projectedTier = tierFor(projected);
   const ceilingNow = currentTier.price;
   const effectiveNow = Math.min(pool.bestBid, ceilingNow);
-  // Prezzo "stimato (live)": riflette lo scaglione che la quantità in sospeso
-  // (userQty) sbloccherebbe — stesso calcolo client-side del segmento di anteprima
-  // sulla barra di progresso, così bar e prezzo si aggiornano insieme.
+  // Prezzo "stimato (live)": il TETTO dello scaglione che la quantità proiettata
+  // (attuale + in sospeso) sblocca — salta al prezzo del nuovo scaglione appena la
+  // barra lo supera, così bar e prezzo si aggiornano insieme. È distinto dal "Miglior
+  // prezzo attuale" (l'offerta più bassa dei fornitori), che può scendere ancora sotto.
   const ceilingProjected = projectedTier.price;
-  const effectiveProjected = Math.min(pool.bestBid, ceilingProjected);
-  const nextThreshold = currentTier.max === Infinity ? null : currentTier.max;
-  const toNext = nextThreshold ? Math.max(0, nextThreshold - pool.current) : 0;
   const crossesTier = projectedTier.max !== currentTier.max;
+  // Scaglione della quantità PROIETTATA (attuale + in sospeso): la barra e il testo
+  // "prossimo scaglione" si riferiscono a QUESTO. Così quando la quantità in sospeso
+  // supera la soglia dello scaglione corrente la barra si resetta verso la soglia
+  // successiva (target = soglia del nuovo scaglione) invece di riempirsi oltre il bordo.
+  const projIdx = (() => { const i = TIERS.findIndex(t => projected <= t.max); return i === -1 ? TIERS.length - 1 : i; })();
+  const barTarget = TIERS[projIdx].max === Infinity ? null : TIERS[projIdx].max;
+  const toNext = barTarget ? Math.max(0, barTarget - projected) : 0;
   const aloneCeiling = tierCeiling(userQty);
-  const savings = Math.max(0, (aloneCeiling - effectiveProjected) * userQty);
+  const savings = Math.max(0, (aloneCeiling - ceilingProjected) * userQty);
   const setQtySafe = (v) => setUserQty(Math.max(100, Math.min(40000, v)));
   const palletKg = realPalletKg || PALLET_KG; // kg di 1 pallet: reale se noto, altrimenti la demo
   const belowMin = userQty < palletKg;
+  // La soglia di 1 pedana vale SOLO per APRIRE una nuova asta, non per partecipare a
+  // una GIÀ ATTIVA (come dice l'avviso a schermo). Un'asta è già attiva se c'è un pool
+  // reale (poolId) o volume aggregato/offerte già presenti. Quindi il blocco
+  // sotto-pedana scatta solo mentre si sta aprendo una nuova asta.
+  const isExistingAuction = !!poolId || pool.current > 0;
+  const mustOpenWithPallet = !isExistingAuction && belowMin;
   // Le aste vanno solo a pallet interi: userQty (kg) resta lo stato reale,
   // palletCount è solo la sua vista in pallet per questo prodotto.
   const palletCount = Math.max(1, Math.round(userQty / palletKg));
@@ -323,22 +334,26 @@ export default function PoolAuctionPage() {
               </div>
             </div>
 
-            {nextThreshold && (
+            {barTarget ? (
               <div style={{ marginBottom:20 }}>
                 <div style={{ display:"flex", justifyContent:"space-between", fontSize:12, marginBottom:6 }}>
-                  <span style={{ color:C.muted }}>Prossimo scaglione: <b style={{ color:C.text }}>{kg(nextThreshold)} kg → tetto {eurKg(tierFor(nextThreshold+1).price)}/kg</b></span>
-                  <span className="bs-num" style={{ color:C.purple, fontWeight:700 }}>{kg(pool.current)} / {kg(nextThreshold)}</span>
+                  <span style={{ color:C.muted }}>Prossimo scaglione: <b style={{ color:C.text }}>{kg(barTarget)} kg → tetto {eurKg(tierFor(barTarget+1).price)}/kg</b></span>
+                  <span className="bs-num" style={{ color:C.purple, fontWeight:700 }}>{kg(Math.min(projected, barTarget))} / {kg(barTarget)}</span>
                 </div>
                 <div style={{ height:16, background:"#EDE4F7", borderRadius:100, overflow:"hidden", display:"flex" }}>
-                  <div style={{ width:`${pool.current/nextThreshold*100}%`, height:"100%", background:`linear-gradient(90deg,${C.purple},#A855F7)`, animation:"fill 1s ease" }}/>
+                  <div style={{ width:`${Math.min(pool.current, barTarget)/barTarget*100}%`, height:"100%", background:`linear-gradient(90deg,${C.purple},#A855F7)`, animation:"fill 1s ease" }}/>
                   {userQty>0 && (
-                    <div style={{ width:`${Math.min((projected-pool.current)/nextThreshold*100, 100-pool.current/nextThreshold*100)}%`, height:"100%", background:`repeating-linear-gradient(45deg,${C.blue},${C.blue} 6px,#38BDF8 6px,#38BDF8 12px)` }}/>
+                    <div style={{ width:`${Math.max(0, Math.min((projected-pool.current)/barTarget*100, 100 - Math.min(pool.current, barTarget)/barTarget*100))}%`, height:"100%", background:`repeating-linear-gradient(45deg,${C.blue},${C.blue} 6px,#38BDF8 6px,#38BDF8 12px)` }}/>
                   )}
                 </div>
                 <div style={{ fontSize:12, color:C.muted, marginTop:6 }}>
-                  Mancano <b className="bs-num" style={{ color:C.purple }}>{kg(toNext)} kg</b> per abbassare il tetto a {eurKg(tierFor(nextThreshold+1).price)}/kg.
-                  {crossesTier && <span style={{ color:C.blue, fontWeight:600 }}> Con la tua quantità lo sblocchi! 🎉</span>}
+                  Mancano <b className="bs-num" style={{ color:C.purple }}>{kg(toNext)} kg</b> per abbassare il tetto a {eurKg(tierFor(barTarget+1).price)}/kg.
+                  {crossesTier && <span style={{ color:C.blue, fontWeight:600 }}> Con la tua quantità sblocchi un tetto più basso! 🎉</span>}
                 </div>
+              </div>
+            ) : (
+              <div style={{ marginBottom:20, fontSize:12.5, color:C.blue, fontWeight:600, background:"#EFF6FF", border:`1px solid #BFDBFE`, borderRadius:10, padding:"10px 12px" }}>
+                🎉 Con questa quantità raggiungi lo scaglione minimo: tetto {eurKg(TIERS[TIERS.length-1].price)}/kg.
               </div>
             )}
 
@@ -383,7 +398,7 @@ export default function PoolAuctionPage() {
               </>
             ) : (
               <>
-                <div style={{ fontSize:15, fontWeight:700, marginBottom:4 }}>{myQty > 0 ? "Aggiungi un quantitativo" : (poolId ? "Aderisci all'asta" : "Apri un'asta")}</div>
+                <div style={{ fontSize:15, fontWeight:700, marginBottom:4 }}>{myQty > 0 ? "Aggiungi un quantitativo" : (isExistingAuction ? "Partecipa all'asta" : "Apri un'asta")}</div>
                 {myQty > 0 ? (
                   <div style={{ fontSize:13, color:C.muted, marginBottom:14, lineHeight:1.5 }}>Hai già aderito con <b style={{color:C.text}}>{kg(myQty)} kg</b>. Il quantitativo qui sotto si aggiunge a quello che hai già.</div>
                 ) : (
@@ -427,7 +442,9 @@ export default function PoolAuctionPage() {
                 {belowMin && (
                   <div style={{ background:"#FFFBEB", border:`1px solid ${C.amber}55`, borderRadius:9, padding:"10px 12px", marginBottom:14, fontSize:12, color:"#92400E", display:"flex", gap:8 }}>
                     <Info size={26} color={C.amber} style={{ flexShrink:0 }}/>
-                    <span>Sotto 1 pallet (<b>{kg(palletKg)} kg</b> per questo prodotto) non puoi aprire un'asta, ma puoi aggiungerti a questa già attiva oppure fare l'<b>Acquisto Rapido</b>.</span>
+                    <span>{isExistingAuction
+                      ? <>Meno di 1 pallet (<b>{kg(palletKg)} kg</b> per questo prodotto): puoi comunque <b>aggiungere</b> questo quantitativo all'asta già attiva. Il minimo di 1 pedana vale solo per <b>aprire</b> una nuova asta.</>
+                      : <>Sotto 1 pallet (<b>{kg(palletKg)} kg</b> per questo prodotto) non puoi aprire un'asta, ma puoi aggiungerti a una già attiva oppure fare l'<b>Acquisto Rapido</b>.</>}</span>
                   </div>
                 )}
 
@@ -441,7 +458,7 @@ export default function PoolAuctionPage() {
                 <div style={{ background:C.bg, borderRadius:10, padding:"14px 16px", marginBottom:14 }}>
                   <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", marginBottom:8 }}>
                     <span style={{ fontSize:13, color:C.muted }}>Prezzo stimato (live)</span>
-                    <span className="bs-num" style={{ fontSize:24, fontWeight:800, color:C.purple }}>{eurKg(effectiveProjected)}<span style={{ fontSize:13, fontWeight:400, color:C.muted }}>/kg</span></span>
+                    <span className="bs-num" style={{ fontSize:24, fontWeight:800, color:C.purple }}>{eurKg(ceilingProjected)}<span style={{ fontSize:13, fontWeight:400, color:C.muted }}>/kg</span></span>
                   </div>
                   <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", paddingTop:8, borderTop:`1px solid ${C.border}` }}>
                     <span style={{ fontSize:13, color:C.muted }}>Risparmio vs Acquisto Rapido</span>
@@ -469,13 +486,13 @@ export default function PoolAuctionPage() {
                   </div>
                 )}
 
-                <button onClick={joinTheAuction} className="bs-btn" style={{ width:"100%", marginBottom:8 }} disabled={!acceptTerms || joining}>{joining ? "Adesione in corso…" : <>{myQty > 0 ? "Aggiungi questo quantitativo all'asta in corso" : (poolId ? "Aderisci all'asta a ribasso all'attuale prezzo" : "Apri un'asta a ribasso all'attuale prezzo")} <ArrowRight size={18}/></>}</button>
+                <button onClick={joinTheAuction} className="bs-btn" style={{ width:"100%", marginBottom:8 }} disabled={!acceptTerms || joining || mustOpenWithPallet}>{joining ? "Adesione in corso…" : <>{myQty > 0 ? "Aggiungi questo quantitativo all'asta in corso" : (isExistingAuction ? "Partecipa all'asta a ribasso all'attuale prezzo" : "Apri un'asta a ribasso all'attuale prezzo")} <ArrowRight size={18}/></>}</button>
                 <button
                   onClick={() => { if (showTargetInput) joinAtTarget(); else setShowTargetInput(true); }}
-                  style={{ width:"100%", background:"transparent", color:C.purple, border:`1.5px solid ${C.purple}`, borderRadius:10, padding:"12px", fontSize:14, fontWeight:700, cursor:(!acceptTerms||joining)?"default":"pointer", opacity:(!acceptTerms||joining)?0.5:1, fontFamily:"Inter,system-ui", display:"flex", alignItems:"center", justifyContent:"center", gap:6, textAlign:"center" }}
-                  disabled={!acceptTerms || joining}
+                  style={{ width:"100%", background:"transparent", color:C.purple, border:`1.5px solid ${C.purple}`, borderRadius:10, padding:"12px", fontSize:14, fontWeight:700, cursor:(!acceptTerms||joining||mustOpenWithPallet)?"default":"pointer", opacity:(!acceptTerms||joining||mustOpenWithPallet)?0.5:1, fontFamily:"Inter,system-ui", display:"flex", alignItems:"center", justifyContent:"center", gap:6, textAlign:"center" }}
+                  disabled={!acceptTerms || joining || mustOpenWithPallet}
                 >
-                  {joining ? "Attivazione in corso…" : showTargetInput ? "Conferma soglia e attiva adesione" : (myQty > 0 ? "Aggiungi altro quantitativo quando il prezzo raggiunge una cifra stabilita" : (poolId ? "Aderisci all'asta a ribasso quando il prezzo raggiunge una cifra stabilita" : "Apri un'asta a ribasso quando il prezzo raggiunge una cifra stabilita"))}
+                  {joining ? "Attivazione in corso…" : showTargetInput ? "Conferma soglia e attiva adesione" : (myQty > 0 ? "Aggiungi altro quantitativo quando il prezzo raggiunge una cifra stabilita" : (isExistingAuction ? "Partecipa all'asta a ribasso quando il prezzo raggiunge una cifra stabilita" : "Apri un'asta a ribasso quando il prezzo raggiunge una cifra stabilita"))}
                 </button>
                 {joinMsg && <div style={{ marginTop:10, fontSize:13, textAlign:"center", color: joinMsg.startsWith("✓") ? C.green : C.red }}>{joinMsg}</div>}
               </>
