@@ -242,12 +242,12 @@ export default function CarrierProfilePage({ inShell = false }) {
 
       <div style={{ maxWidth: 960, margin: "0 auto", padding: "22px 20px 60px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: C.muted, marginBottom: 18 }}>
-          <span onClick={() => { window.location.href = "/"; }} style={{ cursor: "pointer" }}>Home</span><ChevronRight size={13} />
-          <span style={{ color: C.text, fontWeight: 600 }}>Area corrieri</span>
+          <span onClick={() => { window.location.href = "/dashboard"; }} style={{ cursor: "pointer" }}>Profilo</span><ChevronRight size={13} />
+          <span style={{ color: C.text, fontWeight: 600 }}>Listino servizi</span>
         </div>
 
         <h1 style={{ fontSize: 26, fontWeight: 800, letterSpacing: "-0.02em", marginBottom: 20, display: "flex", alignItems: "center", gap: 10 }}>
-          <Truck size={24} color={C.blue} /> Area corrieri
+          <Truck size={24} color={C.blue} /> Listino servizi
         </h1>
 
         {err && <div style={{ marginBottom: 18, padding: "11px 14px", background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 10, fontSize: 13, color: C.red }}>{err}</div>}
@@ -349,12 +349,12 @@ export default function CarrierProfilePage({ inShell = false }) {
               <div style={{ fontSize: 13, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: C.muted, marginBottom: 4 }}><MapPin size={13} style={{ verticalAlign: -2, marginRight: 5 }} />Tariffe</div>
               
               {(profile.rates || []).length > 0 && (
-                <div style={{ marginBottom: 16, overflowX: "auto" }}>
-                  <div className="cp-rate-row" style={{ fontWeight: 800, fontSize: 10.5, color: C.muted, textTransform: "uppercase", minWidth: 760 }}>
+                <div style={{ marginBottom: 16 }}>
+                  <div className="cp-rate-row" style={{ fontWeight: 800, fontSize: 10.5, color: C.muted, textTransform: "uppercase" }}>
                     <span>Nazione</span><span>Regione</span><span>Giorni</span><span>Kg da</span><span>Kg a</span><span>Base €</span><span>€/kg</span><span></span>
                   </div>
                   {(profile.rates || []).map(r => (
-                    <div key={r.id} className="cp-rate-row" style={{ minWidth: 760 }}>
+                    <div key={r.id} className="cp-rate-row">
                       <span>{r.zone_area || "—"}</span>
                       <span style={{ fontSize: 12 }}>{(r.regions || []).length ? r.regions.join(", ") : "Tutta la nazione"}</span>
                       <span className="cp-num">{r.lead_time_days ?? "—"}</span>
