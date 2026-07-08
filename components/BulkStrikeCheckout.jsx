@@ -18,6 +18,7 @@ import { ArrowRight, ArrowLeft, Check, ChevronRight, Package, FileText, AlertTri
 import { getCart, checkoutCart, previewCheckout, getMyCompany, getMyCompanyAddress, getShippingAddresses, addShippingAddress, getSession, poolErrorMessage, getShippingQuotes, stampOrderPaymentMethods } from "@/lib/api";
 import BulkStrikeNav from "@/components/BulkStrikeNav";
 import PaymentMethodSelector from "@/components/checkout/PaymentMethodSelector";
+import { stripeProcessingFee } from "@/lib/payments/paymentConfig";
 import { TrustBadge, IvaChip } from "@/components/BulkStrikeBadges";
 
 const C = { blue: "#0EA5E9", dark: "#0284C7", text: "#0F172A", muted: "#64748B", border: "#E2E8F0", bg: "#F8FAFE", green: "#059669", red: "#DC2626", amber: "#D97706" };
@@ -258,30 +259,24 @@ export default function CheckoutPage() {
   const totalForDisplay = preview?.total ?? null;
   const payReady = quotesReady && selectionsComplete && !previewLoading && !previewErr && preview != null;
 
-  // Costi di servizio escrow (€0,35 fissi per sub-ordine escrow_sepa con imponibile
-  // <= 10.000€): lo stesso costo che il trigger DB applica su order_service_charges,
-  // NON incluso in total_amount. Lo anticipiamo qui nel riepilogo così il totale
-  // mostrato coincide con quello davvero addebitato. Una voce per fornitore idoneo.
-  const ESCROW_SERVICE_FEE = 0.35;
-  const ESCROW_FEE_THRESHOLD = 10000;
-  const escrowFeeCount = (preview?.by_supplier || []).filter(
-    (s) => methodBySupplier[s.supplier_company_id] === "escrow_sepa" && subOrderTotal(s) <= ESCROW_FEE_THRESHOLD
-  ).length;
-  const escrowFeeTotal = escrowFeeCount * ESCROW_SERVICE_FEE;
+  // Costo di ELABORAZIONE PAGAMENTO (tariffa del gestore Stripe) per i sub-ordini
+  // in escrow: SEPA 0,8%, Carta 1,5% + €0,25, sul totale IVA inclusa (×1,22) — la
+  // stessa base total_amount e gli stessi tassi (STRIPE_FEES) usati dai trigger DB
+  // apply_escrow_service_fee / apply_escrow_premium_service_fee. Lo anticipiamo qui
+  // così il totale mostrato coincide con quello davvero addebitato. La fee dipende
+  // dal solo metodo (la soglia €10.000 decide, lato RPC, quale metodo è offerto).
+  const escrowSepaSuppliers = (preview?.by_supplier || []).filter(
+    (s) => methodBySupplier[s.supplier_company_id] === "escrow_sepa"
+  );
+  const escrowFeeTotal = escrowSepaSuppliers.reduce(
+    (a, s) => a + stripeProcessingFee("sepa", subOrderTotal(s) * 1.22), 0
+  );
 
-  // Costi di servizio escrow premium (carta, sub-ordine > €10.000): STIMA all'1,5%
-  // + €0,25 per transazione (tariffa Stripe carte standard SEE; le premium costano
-  // 1,9%) calcolata sull'importo IVA inclusa del sub-ordine (×1,22, stessa stima del
-  // consolidamento escrow) — la stessa base total_amount usata dal trigger DB
-  // apply_escrow_premium_service_fee. L'importo reale dipende dal tipo di carta,
-  // determinato da Stripe all'addebito: per questo in UI la voce è marcata "stima".
-  const PREMIUM_FEE_RATE = 0.015;
-  const PREMIUM_FEE_FIXED = 0.25;
   const premiumFeeSuppliers = (preview?.by_supplier || []).filter(
-    (s) => methodBySupplier[s.supplier_company_id] === "escrow_premium" && subOrderTotal(s) * 1.22 > ESCROW_FEE_THRESHOLD
+    (s) => methodBySupplier[s.supplier_company_id] === "escrow_premium"
   );
   const premiumFeeTotal = premiumFeeSuppliers.reduce(
-    (a, s) => a + (subOrderTotal(s) * 1.22 * PREMIUM_FEE_RATE + PREMIUM_FEE_FIXED), 0
+    (a, s) => a + stripeProcessingFee("card", subOrderTotal(s) * 1.22), 0
   );
 
   const grandTotalForDisplay = totalForDisplay != null ? totalForDisplay + escrowFeeTotal + premiumFeeTotal : null;
@@ -380,7 +375,7 @@ export default function CheckoutPage() {
                 : "Il tuo ordine è registrato, in attesa del costo di spedizione."}
             </p>
             {done.total_paid != null && done.total_paid > 0 && (
-              <p style={{ fontSize: 13.5, color: C.muted, marginBottom: 6 }}>Totale pagato (IVA e spedizione incluse): <b style={{ color: C.text }}>{eur(done.total_paid + escrowFeeTotal)}</b>{escrowFeeTotal > 0 && <span style={{ fontSize: 12, color: C.muted }}> (inclusi {eur(escrowFeeTotal)} di costi di servizio escrow)</span>}</p>
+              <p style={{ fontSize: 13.5, color: C.muted, marginBottom: 6 }}>Totale pagato (IVA e spedizione incluse): <b style={{ color: C.text }}>{eur(done.total_paid + escrowFeeTotal + premiumFeeTotal)}</b>{(escrowFeeTotal + premiumFeeTotal) > 0 && <span style={{ fontSize: 12, color: C.muted }}> (inclusi {eur(escrowFeeTotal + premiumFeeTotal)} di costi di elaborazione pagamento)</span>}</p>
             )}
             <p style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, fontSize: 13, color: C.muted, marginBottom: 26 }}>
               <Mail size={14} /> Conferma inviata a <b style={{ color: C.text }}>{buyerEmail}</b>
@@ -662,6 +657,7 @@ export default function CheckoutPage() {
                         supplierId={s.supplier_company_id}
                         supplierName={s.supplier_name}
                         subOrderTotal={subOrderTotal(s)}
+                        subOrderGross={subOrderTotal(s) * 1.22}
                         value={methodBySupplier[s.supplier_company_id]}
                         onChange={(m) => setMethodBySupplier(prev => ({ ...prev, [s.supplier_company_id]: m }))}
                       />
@@ -744,22 +740,22 @@ export default function CheckoutPage() {
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginTop: 4 }}>
                           <span style={{ fontSize: 12, color: C.muted, fontWeight: 400 }}>di cui spedizione {eur(shippingForDisplay)}</span>
                         </div>
-                        {escrowFeeCount > 0 && (
+                        {escrowSepaSuppliers.length > 0 && (
                           <>
                             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginTop: 8, gap: 10 }}>
-                              <span style={{ fontSize: 12.5, color: C.text, fontWeight: 600 }}>Costi di servizio escrow{escrowFeeCount > 1 ? ` (${escrowFeeCount} × €0,35)` : ""}</span>
-                              <span className="co-num" style={{ whiteSpace: "nowrap", fontSize: 13, fontWeight: 700 }}>{escrowFeeCount === 1 ? "€0,35" : eur(escrowFeeTotal)}</span>
+                              <span style={{ fontSize: 12.5, color: C.text, fontWeight: 600 }}>Costo di elaborazione pagamento (SEPA){escrowSepaSuppliers.length > 1 ? ` (${escrowSepaSuppliers.length} transazioni)` : ""}</span>
+                              <span className="co-num" style={{ whiteSpace: "nowrap", fontSize: 13, fontWeight: 700 }}>{eur(escrowFeeTotal)}</span>
                             </div>
-                            <div style={{ fontSize: 11, color: C.muted, marginTop: 3, lineHeight: 1.5 }}>Costo fisso di transazione SEPA del provider di pagamento, non una commissione BulkStrike.</div>
+                            <div style={{ fontSize: 11, color: C.muted, marginTop: 3, lineHeight: 1.5 }}>0,8% del totale ordine + €0,35 (tariffa SEPA del gestore di pagamento), non una commissione BulkStrike.</div>
                           </>
                         )}
                         {premiumFeeSuppliers.length > 0 && (
                           <>
                             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginTop: 8, gap: 10 }}>
-                              <span style={{ fontSize: 12.5, color: C.text, fontWeight: 600 }}>Costi di servizio escrow premium{premiumFeeSuppliers.length > 1 ? ` (${premiumFeeSuppliers.length} transazioni)` : ""} <span style={{ fontWeight: 500, color: C.muted }}>— stima</span></span>
+                              <span style={{ fontSize: 12.5, color: C.text, fontWeight: 600 }}>Costo di elaborazione pagamento (Carta){premiumFeeSuppliers.length > 1 ? ` (${premiumFeeSuppliers.length} transazioni)` : ""} <span style={{ fontWeight: 500, color: C.muted }}>— stima</span></span>
                               <span className="co-num" style={{ whiteSpace: "nowrap", fontSize: 13, fontWeight: 700 }}>{eur(premiumFeeTotal)}</span>
                             </div>
-                            <div style={{ fontSize: 11, color: C.muted, marginTop: 3, lineHeight: 1.5 }}>Stima all&apos;1,5% + €0,25 per transazione (tariffa carte standard SEE del provider): l&apos;importo effettivo dipende dal tipo di carta ed è determinato all&apos;addebito. Non è una commissione BulkStrike.</div>
+                            <div style={{ fontSize: 11, color: C.muted, marginTop: 3, lineHeight: 1.5 }}>Stima all&apos;1,5% + €0,25 del totale ordine (tariffa carte standard SEE del gestore): l&apos;importo effettivo dipende dal tipo di carta ed è determinato all&apos;addebito. Non è una commissione BulkStrike.</div>
                           </>
                         )}
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginTop: 8 }}>
@@ -776,7 +772,7 @@ export default function CheckoutPage() {
                   <div style={{ fontSize: 12.5, color: C.muted, marginBottom: 16, lineHeight: 1.6 }}>
                     {preview.by_supplier.map(s => (
                       <div key={s.supplier_company_id}>
-                        <b style={{ color: C.text }}>{s.supplier_name}</b>: {({ escrow_sepa: "Pagamento in garanzia (SEPA)", escrow_premium: "Pagamento in garanzia premium (carta)", bonifico_anticipato: "Bonifico bancario anticipato", termini_dilazionati: "Pagamento dilazionato" })[methodBySupplier[s.supplier_company_id]] || "—"}
+                        <b style={{ color: C.text }}>{s.supplier_name}</b>: {({ escrow_sepa: "Escrow — SEPA (addebito diretto)", escrow_premium: "Escrow — Carta", bonifico_anticipato: "Bonifico bancario anticipato", termini_dilazionati: "Pagamento dilazionato" })[methodBySupplier[s.supplier_company_id]] || "—"}
                       </div>
                     ))}
                     <span onClick={() => goToStep(3)} style={{ fontWeight: 700, cursor: "pointer", textDecoration: "underline" }}>Cambia metodo di pagamento</span>
