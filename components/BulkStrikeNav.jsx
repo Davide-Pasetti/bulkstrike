@@ -16,14 +16,12 @@ import { BSIcon } from "@/components/BSLogo";
 
 const C = { border: "#E2E8F0", text: "#0F172A", muted: "#64748B" };
 
-// Fixed link set — same labels/order everywhere. "Come funziona" points at the
-// Home anchor with a leading "/" so it works from any page, not just the Home.
+// Fixed link set — same labels/order everywhere.
 const LINKS = [
   ["Aste attive", "/pool"],
   ["Prodotti", "/catalogo"],
   ["Fornitori", "/fornitori"],
   ["Corrieri", "/corrieri"],
-  ["Come funziona", "/#come-funziona"],
 ];
 
 export default function BulkStrikeNav() {
