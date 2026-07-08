@@ -24,18 +24,18 @@
 
 import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import { escrowMethodKind, stripeProcessingFee } from '@/lib/payments/paymentConfig';
+
+// Testo escrow (uguale per entrambi i metodi: mostrato una volta sola).
+const ESCROW_EXPLANATION =
+  'L\u2019escrow (o deposito a garanzia) \u00e8 un accordo in cui un terzo neutrale (banca/societ\u00e0 fiduciaria) detiene il denaro per conto di due parti. Il depositario rilascia il denaro solo quando il cliente riceve la merce, tutelando sia chi compra sia chi vende da inadempienze.';
+const ESCROW_COST_SENTENCE =
+  'Il costo di elaborazione del pagamento (calcolato in automatico qui sotto in base al metodo scelto) viene addebitato dal gestore di pagamento, non \u00e8 una commissione BulkStrike.';
+const METHOD_LABEL = { card: 'Carta', sepa: 'SEPA (addebito diretto)' };
+const METHOD_FORMULA = { card: '1,5% + \u20ac0,25', sepa: '0,8% + \u20ac0,35' };
+const fmtEur = (n) => '\u20ac' + Number(n || 0).toFixed(2).replace('.', ',');
 
 const ETICHETTE = {
-  escrow_sepa: {
-    titolo: 'Pagamento protetto (deposito in garanzia)',
-    descr: 'Addebito SEPA sul tuo conto. I fondi restano in deposito presso l\u2019istituto di pagamento e vengono rilasciati al fornitore solo dopo la consegna confermata.',
-    nota: 'Commissione servizio di garanzia esposta separatamente al riepilogo.',
-  },
-  escrow_premium: {
-    titolo: 'Pagamento protetto premium (deposito in garanzia)',
-    descr: 'Come il pagamento protetto, per ordini di importo elevato. Pagamento con carta, fondi rilasciati al fornitore solo dopo la consegna confermata.',
-    nota: 'Servizio opzionale con commissione maggiorata, esposta separatamente prima della conferma.',
-  },
   bonifico_anticipato: {
     titolo: 'Bonifico bancario anticipato',
     descr: 'Paghi la merce direttamente al fornitore, il cui IBAN ti viene mostrato qui in piattaforma dopo la conferma.',
@@ -59,6 +59,7 @@ export default function PaymentMethodSelector({
   supplierId,
   supplierName,
   subOrderTotal,
+  subOrderGross, // totale IVA inclusa (base fee); fallback: subOrderTotal * 1.22
   value,
   onChange,
 }) {
@@ -109,6 +110,14 @@ export default function PaymentMethodSelector({
   const richiestaDisponibile = metodi.some((m) => m.method === 'request_terms_available');
   const selezionabili = metodi.filter((m) => m.method !== 'request_terms_available');
 
+  // La soglia €10.000 (lato RPC) decide QUALE metodo escrow è offerto: SEPA
+  // sotto soglia, Carta sopra. Qui i due si unificano in un'unica voce "Escrow".
+  const escrowOpt = selezionabili.find((m) => escrowMethodKind(m.method));
+  const altri = selezionabili.filter((m) => !escrowMethodKind(m.method));
+  const escrowKind = escrowOpt ? escrowMethodKind(escrowOpt.method) : null;
+  const gross = subOrderGross != null ? subOrderGross : (subOrderTotal || 0) * 1.22;
+  const escrowFee = escrowKind ? stripeProcessingFee(escrowKind, gross) : 0;
+
   return (
     <div className="pms">
       <style>{`
@@ -121,6 +130,9 @@ export default function PaymentMethodSelector({
         .pms-titolo { font-size: 14.5px; font-weight: 600; color: #1a2530; }
         .pms-descr { font-size: 13px; color: #44525f; margin-top: 3px; line-height: 1.5; }
         .pms-nota { font-size: 12px; color: #0C4A6E; margin-top: 5px; }
+        .pms-metodo { font-size: 12.5px; color: #1a2530; margin-top: 7px; }
+        .pms-fee { font-size: 13px; color: #1a2530; margin-top: 7px; background: #f2f8fc; border: 1px solid #d7e6f1; border-radius: 8px; padding: 8px 10px; }
+        .pms-fee b { color: #0C4A6E; }
         .pms-avviso { background: #fdf6ec; border: 1px solid #e8d5b0; border-radius: 10px; padding: 12px 14px; margin: 4px 0 10px; }
         .pms-avviso .pms-titolo { color: #7a5a1e; font-size: 13px; }
         .pms-avviso ul { margin: 6px 0 0; padding-left: 18px; font-size: 12.5px; color: #6b5320; line-height: 1.6; }
@@ -135,7 +147,30 @@ export default function PaymentMethodSelector({
 
       <div className="pms-fornitore">Pagamento — {supplierName}</div>
 
-      {selezionabili.map((m) => {
+      {escrowOpt && (
+        <label className={`pms-opzione${value === escrowOpt.method ? ' attiva' : ''}`}>
+          <input
+            type="radio"
+            name={`metodo-${supplierId}`}
+            checked={value === escrowOpt.method}
+            onChange={() => onChange?.(escrowOpt.method)}
+          />
+          <div>
+            <div className="pms-titolo">Escrow (deposito di garanzia)</div>
+            <div className="pms-descr">{ESCROW_EXPLANATION}</div>
+            <div className="pms-metodo">
+              Metodo di addebito per questo importo: <b>{METHOD_LABEL[escrowKind]}</b>
+            </div>
+            <div className="pms-descr">{ESCROW_COST_SENTENCE}</div>
+            <div className="pms-fee">
+              Costo di elaborazione del pagamento ({METHOD_LABEL[escrowKind]},{' '}
+              {METHOD_FORMULA[escrowKind]} del totale ordine): <b>{fmtEur(escrowFee)}</b>
+            </div>
+          </div>
+        </label>
+      )}
+
+      {altri.map((m) => {
         const info = ETICHETTE[m.method];
         const attiva = value === m.method;
         return (

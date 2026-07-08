@@ -13,7 +13,7 @@
 //   e riviste prima del salvataggio. Nessun salvataggio automatico.
 // - Duplicazione one-click di una variante (con scaglioni inclusi).
 import { useState, useEffect, useMemo } from "react";
-import { Plus, X, Check, Trash2, Pencil, AlertTriangle, Layers, Search, ChevronRight, Clock, Package, ShieldCheck, Copy, FileUp } from "lucide-react";
+import { Plus, X, Check, Trash2, Pencil, AlertTriangle, Layers, Search, ChevronRight, Clock, Package, ShieldCheck, Copy, FileUp, FileText } from "lucide-react";
 import {
   getSession, getMyCompany, poolErrorMessage, searchProducts,
   getMySupplierListings, addSupplierProductVariant, updateSupplierProductVariant,
@@ -21,6 +21,7 @@ import {
 } from "@/lib/api";
 import { supabase } from "@/lib/supabase"; // per invocare la edge function del PDF senza toccare lib/api
 import BulkStrikeNav from "@/components/BulkStrikeNav";
+import BulkStrikeProductDocs from "@/components/BulkStrikeProductDocs";
 
 const C = { blue:"#0EA5E9", dark:"#0284C7", text:"#0F172A", muted:"#64748B", border:"#E2E8F0", bg:"#F8FAFE", green:"#059669", red:"#DC2626", amber:"#D97706", purple:"#7C3AED" };
 const eurKg = (n) => n == null ? "—" : "€" + Number(n).toLocaleString("it-IT", { minimumFractionDigits:2, maximumFractionDigits:2 });
@@ -57,6 +58,10 @@ export default function MyProductsPage({ inShell = false }) {
   const [attributes, setAttributes] = useState([]);
   const [tiers, setTiers] = useState([emptyTier()]);
   const [saving, setSaving] = useState(false);
+
+  // ---- Documenti & certificati per prodotto (pannello espandibile) ----
+  const [docsOpen, setDocsOpen] = useState({}); // { [productId]: true }
+  const toggleDocs = (pid) => setDocsOpen(m => ({ ...m, [pid]: !m[pid] }));
 
   // ---- Import da PDF (AI) ----
   const [pdfParsing, setPdfParsing] = useState(false);
@@ -578,8 +583,14 @@ export default function MyProductsPage({ inShell = false }) {
                       <Layers size={16} color={C.blue}/>
                       <span style={{ fontSize:15, fontWeight:700 }}>{product?.canonical_name || "Prodotto"}</span>
                       <span style={{ fontSize:12, color:C.muted }}>{variants.length} {variants.length===1?"variante":"varianti"}</span>
-                      <button onClick={() => openAddForm(product)} style={{ marginLeft:"auto", background:"none", border:"none", color:C.blue, fontSize:12.5, fontWeight:600, cursor:"pointer", display:"flex", alignItems:"center", gap:4 }}><Plus size={13}/> Nuova variante per questo prodotto</button>
+                      {product?.id && (
+                        <button onClick={() => toggleDocs(product.id)} style={{ marginLeft:"auto", background:"none", border:`1px solid ${docsOpen[product.id] ? C.blue : C.border}`, borderRadius:8, color:docsOpen[product.id] ? C.blue : C.muted, fontSize:12, fontWeight:600, cursor:"pointer", display:"flex", alignItems:"center", gap:5, padding:"6px 11px" }}><FileText size={13}/> Documenti & certificati</button>
+                      )}
+                      <button onClick={() => openAddForm(product)} style={{ marginLeft: product?.id ? 0 : "auto", background:"none", border:"none", color:C.blue, fontSize:12.5, fontWeight:600, cursor:"pointer", display:"flex", alignItems:"center", gap:4 }}><Plus size={13}/> Nuova variante per questo prodotto</button>
                     </div>
+                    {product?.id && docsOpen[product.id] && (
+                      <BulkStrikeProductDocs productId={product.id} productName={product.canonical_name} />
+                    )}
                     <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
                       {variants.map(v => {
                         const hasAttrs = Object.keys(v.variant_attributes || {}).length > 0;

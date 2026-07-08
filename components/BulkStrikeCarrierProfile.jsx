@@ -242,12 +242,12 @@ export default function CarrierProfilePage({ inShell = false }) {
 
       <div style={{ maxWidth: 960, margin: "0 auto", padding: "22px 20px 60px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: C.muted, marginBottom: 18 }}>
-          <span onClick={() => { window.location.href = "/"; }} style={{ cursor: "pointer" }}>Home</span><ChevronRight size={13} />
-          <span style={{ color: C.text, fontWeight: 600 }}>Area corrieri</span>
+          <span onClick={() => { window.location.href = "/dashboard"; }} style={{ cursor: "pointer" }}>Profilo</span><ChevronRight size={13} />
+          <span style={{ color: C.text, fontWeight: 600 }}>Listino servizi</span>
         </div>
 
         <h1 style={{ fontSize: 26, fontWeight: 800, letterSpacing: "-0.02em", marginBottom: 20, display: "flex", alignItems: "center", gap: 10 }}>
-          <Truck size={24} color={C.blue} /> Area corrieri
+          <Truck size={24} color={C.blue} /> Listino servizi
         </h1>
 
         {err && <div style={{ marginBottom: 18, padding: "11px 14px", background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 10, fontSize: 13, color: C.red }}>{err}</div>}
@@ -349,12 +349,12 @@ export default function CarrierProfilePage({ inShell = false }) {
               <div style={{ fontSize: 13, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: C.muted, marginBottom: 4 }}><MapPin size={13} style={{ verticalAlign: -2, marginRight: 5 }} />Tariffe</div>
               
               {(profile.rates || []).length > 0 && (
-                <div style={{ marginBottom: 16, overflowX: "auto" }}>
-                  <div className="cp-rate-row" style={{ fontWeight: 800, fontSize: 10.5, color: C.muted, textTransform: "uppercase", minWidth: 760 }}>
+                <div style={{ marginBottom: 16 }}>
+                  <div className="cp-rate-row" style={{ fontWeight: 800, fontSize: 10.5, color: C.muted, textTransform: "uppercase" }}>
                     <span>Nazione</span><span>Regione</span><span>Giorni</span><span>Kg da</span><span>Kg a</span><span>Base €</span><span>€/kg</span><span></span>
                   </div>
                   {(profile.rates || []).map(r => (
-                    <div key={r.id} className="cp-rate-row" style={{ minWidth: 760 }}>
+                    <div key={r.id} className="cp-rate-row">
                       <span>{r.zone_area || "—"}</span>
                       <span style={{ fontSize: 12 }}>{(r.regions || []).length ? r.regions.join(", ") : "Tutta la nazione"}</span>
                       <span className="cp-num">{r.lead_time_days ?? "—"}</span>
@@ -372,31 +372,31 @@ export default function CarrierProfilePage({ inShell = false }) {
               )}
 
               <div style={{ background: C.bg, borderRadius: 10, padding: 14 }}>
-                <div style={{ overflowX: "auto", marginBottom: 12 }}>
-                <div style={{ display: "flex", gap: 10, minWidth: "max-content" }}>
-                <div style={{ flexShrink: 0, width: 120 }}>
+                {/* Griglia responsive: i campi vanno a capo su più righe quando non
+                    c'è spazio, invece di richiedere lo scorrimento orizzontale. */}
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 10, marginBottom: 12 }}>
+                <div>
                   <span style={labelStyle}>Nazione</span>
                   <select value={rateForm.zoneArea} onChange={e => setRateForm({ ...rateForm, zoneArea: e.target.value })} style={inputStyle}>
                     {COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
                 </div>
-                <div style={{ flexShrink: 0, width: 150 }}>
+                <div>
                   <span style={labelStyle}>Regione (facoltativa)</span>
                   <RegionPicker value={rateForm.regions} onChange={v => setRateForm({ ...rateForm, regions: v })} />
                 </div>
-                <div style={{ flexShrink: 0, width: 100 }}><span style={labelStyle}>Giorni di spedizione</span><input type="number" min={1} value={rateForm.leadTimeDays} onChange={e => setRateForm({ ...rateForm, leadTimeDays: e.target.value })} style={inputStyle} placeholder="gg" /></div>
+                <div><span style={labelStyle}>Giorni di spedizione</span><input type="number" min={1} value={rateForm.leadTimeDays} onChange={e => setRateForm({ ...rateForm, leadTimeDays: e.target.value })} style={inputStyle} placeholder="gg" /></div>
                 {pricingMode === "distance" && (
                   <>
-                    <div style={{ flexShrink: 0, width: 90 }}><span style={labelStyle}>Km da</span><input type="number" value={rateForm.distanceMinKm} onChange={e => setRateForm({ ...rateForm, distanceMinKm: e.target.value })} style={inputStyle} placeholder="0" /></div>
-                    <div style={{ flexShrink: 0, width: 100 }}><span style={labelStyle}>Km a</span><input type="number" value={rateForm.distanceMaxKm} onChange={e => setRateForm({ ...rateForm, distanceMaxKm: e.target.value })} style={inputStyle} placeholder="illimitato" /></div>
+                    <div><span style={labelStyle}>Km da</span><input type="number" value={rateForm.distanceMinKm} onChange={e => setRateForm({ ...rateForm, distanceMinKm: e.target.value })} style={inputStyle} placeholder="0" /></div>
+                    <div><span style={labelStyle}>Km a</span><input type="number" value={rateForm.distanceMaxKm} onChange={e => setRateForm({ ...rateForm, distanceMaxKm: e.target.value })} style={inputStyle} placeholder="illimitato" /></div>
                   </>
                 )}
-                <div style={{ flexShrink: 0, width: 80 }}><span style={labelStyle}>Kg da</span><input type="number" value={rateForm.weightMinKg} onChange={e => setRateForm({ ...rateForm, weightMinKg: e.target.value })} style={inputStyle} /></div>
-                <div style={{ flexShrink: 0, width: 100 }}><span style={labelStyle}>Kg a</span><input type="number" value={rateForm.weightMaxKg} onChange={e => setRateForm({ ...rateForm, weightMaxKg: e.target.value })} style={inputStyle} placeholder="illimitato" /></div>
-                <div style={{ flexShrink: 0, width: 100 }}><span style={labelStyle}>Tariffa base €</span><input type="number" value={rateForm.baseFee} onChange={e => setRateForm({ ...rateForm, baseFee: e.target.value })} style={inputStyle} /></div>
-                {pricingMode === "distance" && <div style={{ flexShrink: 0, width: 90 }}><span style={labelStyle}>€/km</span><input type="number" step="0.01" value={rateForm.perKmFee} onChange={e => setRateForm({ ...rateForm, perKmFee: e.target.value })} style={inputStyle} /></div>}
-                <div style={{ flexShrink: 0, width: 130 }}><span style={labelStyle}>Tariffa aggiuntiva €/kg</span><input type="number" step="0.01" value={rateForm.perKgFee} onChange={e => setRateForm({ ...rateForm, perKgFee: e.target.value })} style={inputStyle} /></div>
-                </div>
+                <div><span style={labelStyle}>Kg da</span><input type="number" value={rateForm.weightMinKg} onChange={e => setRateForm({ ...rateForm, weightMinKg: e.target.value })} style={inputStyle} /></div>
+                <div><span style={labelStyle}>Kg a</span><input type="number" value={rateForm.weightMaxKg} onChange={e => setRateForm({ ...rateForm, weightMaxKg: e.target.value })} style={inputStyle} placeholder="illimitato" /></div>
+                <div><span style={labelStyle}>Tariffa base €</span><input type="number" value={rateForm.baseFee} onChange={e => setRateForm({ ...rateForm, baseFee: e.target.value })} style={inputStyle} /></div>
+                {pricingMode === "distance" && <div><span style={labelStyle}>€/km</span><input type="number" step="0.01" value={rateForm.perKmFee} onChange={e => setRateForm({ ...rateForm, perKmFee: e.target.value })} style={inputStyle} /></div>}
+                <div><span style={labelStyle}>Tariffa aggiuntiva €/kg</span><input type="number" step="0.01" value={rateForm.perKgFee} onChange={e => setRateForm({ ...rateForm, perKgFee: e.target.value })} style={inputStyle} /></div>
                 </div>
                 <button onClick={addRate} disabled={rateBusy} style={{ width: "100%", background: C.blue, color: "#fff", border: "none", borderRadius: 8, padding: "11px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, fontSize: 14, fontWeight: 700, fontFamily: "Inter,system-ui" }}><Plus size={15} /> {rateForm.id ? "Salva modifica" : "Aggiungi tariffa"}</button>
               </div>

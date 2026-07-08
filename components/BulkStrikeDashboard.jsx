@@ -136,6 +136,10 @@ function NotifRow({ n, onRead, compact }) {
 export default function Dashboard() {
   const [role, setRole] = useState("buyer");
   const [section, setSection] = useState("overview");
+  // La sezione reale è nel querystring (?section=), ma si conosce solo lato client:
+  // finché non è risolta mostriamo uno skeleton, così non si vede per un istante la
+  // sezione di default (Panoramica) prima di quella richiesta (Avvisi/Aste/Account).
+  const [ready, setReady] = useState(false);
   const [mats, setMats] = useState(SEED_MATS);
   const [notifs, setNotifs] = useState(SEED_NOTIFS);
   const [q, setQ] = useState("");
@@ -171,6 +175,7 @@ export default function Dashboard() {
     // Le notifiche sono state accorpate in "alerts": i vecchi link ?section=notifs
     // devono continuare a funzionare.
     if (s) setSection(s === "notifs" ? "alerts" : s);
+    setReady(true); // sezione risolta: si può mostrare il contenuto
   }, []);
 
   const cur = mats[role];
@@ -313,6 +318,19 @@ export default function Dashboard() {
         .bs-card { background:#fff; border:1px solid #E2E8F0; border-radius:14px; }
         @media (max-width:820px){ .bs-stats4 { grid-template-columns:repeat(2,1fr) !important; } .bs-2col { grid-template-columns:1fr !important; } .bs-form2 { grid-template-columns:1fr !important; } }
       `}</style>
+      {!ready ? (
+        <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+          <div style={{ height:26, width:220, background:"#EEF2F7", borderRadius:8 }}/>
+          <div style={{ height:14, width:340, maxWidth:"80%", background:"#F1F5F9", borderRadius:6 }}/>
+          <div className="bs-stats4" style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:14, marginTop:6 }}>
+            {[0,1,2,3].map(i => <div key={i} className="bs-card" style={{ height:96, background:"#F8FAFC" }}/>)}
+          </div>
+          <div className="bs-2col" style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:18 }}>
+            <div className="bs-card" style={{ height:220, background:"#F8FAFC" }}/>
+            <div className="bs-card" style={{ height:220, background:"#F8FAFC" }}/>
+          </div>
+        </div>
+      ) : (
       <>
 
           {/* ===== OVERVIEW ===== */}
@@ -654,6 +672,7 @@ export default function Dashboard() {
             </>
           )}
       </>
+      )}
     </ProfileShell>
   );
 }

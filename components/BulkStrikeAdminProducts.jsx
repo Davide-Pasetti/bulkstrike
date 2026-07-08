@@ -87,7 +87,7 @@ export default function AdminProductsPage({ inShell = false }) {
 
   return wrap(
     <>
-      <h1 style={{ fontSize: 26, fontWeight: 800, letterSpacing: "-0.02em", marginBottom: 6 }}>Minimo per aprire un'asta</h1>
+      <h1 style={{ fontSize: 26, fontWeight: 800, letterSpacing: "-0.02em", marginBottom: 6 }}>Apertura asta</h1>
       <p style={{ fontSize: 14, color: C.muted, marginBottom: 20, lineHeight: 1.6, maxWidth: 640 }}>
         Per ogni prodotto, il numero minimo di <b>pedane</b> necessarie per <b>aprire</b> una nuova asta a ribasso.
         Il vincolo è applicato lato server in <span className="mono">open_pool</span> e non è aggirabile. Chi si <i>aggiunge</i> a un'asta già aperta non è soggetto a questo minimo.
