@@ -19,7 +19,7 @@ import {
 import BulkStrikeNav from "@/components/BulkStrikeNav";
 
 const C = { blue: "#0EA5E9", text: "#0F172A", muted: "#64748B", border: "#E2E8F0", bg: "#F8FAFE", green: "#059669", red: "#DC2626", amber: "#D97706", purple: "#7C3AED" };
-const GRID = "34px 1.5fr 1fr 96px 108px 108px 150px 176px";
+const GRID = "26px 1.5fr 1fr 80px 96px 92px 58px 84px";
 const TIPO = { producer: "Produttore", distributor: "Distributore" };
 
 export default function AdminSuppliersPage({ inShell = false }) {
@@ -171,9 +171,9 @@ export default function AdminSuppliersPage({ inShell = false }) {
         </div>
       )}
 
-      <div style={{ overflowX: "auto", border: `1px solid ${C.border}`, borderRadius: 14 }}>
-        <div style={{ minWidth: 940 }}>
-          <div style={{ display: "grid", gridTemplateColumns: GRID, gap: 12, padding: "12px 16px", background: C.bg, alignItems: "center" }}>
+      <div style={{ border: `1px solid ${C.border}`, borderRadius: 14, overflow: "hidden" }}>
+        <div>
+          <div style={{ display: "grid", gridTemplateColumns: GRID, gap: 8, padding: "11px 14px", background: C.bg, alignItems: "center" }}>
             <input type="checkbox" checked={allSelected} onChange={toggleAll} aria-label="Seleziona tutti"
               ref={el => { if (el) el.indeterminate = selCount > 0 && !allSelected; }}
               style={{ width: 16, height: 16, accentColor: C.blue, cursor: "pointer" }} />
@@ -194,7 +194,7 @@ export default function AdminSuppliersPage({ inShell = false }) {
             const on = selected.has(row.id);
             const delKey = `del:${row.id}`;
             return (
-              <div key={row.id} style={{ display: "grid", gridTemplateColumns: GRID, gap: 12, padding: "12px 16px", borderTop: `1px solid ${C.border}`, alignItems: "center", fontSize: 13.5, background: on ? "#F0F9FF" : "transparent" }}>
+              <div key={row.id} style={{ display: "grid", gridTemplateColumns: GRID, gap: 8, padding: "10px 14px", borderTop: `1px solid ${C.border}`, alignItems: "center", fontSize: 13, background: on ? "#F0F9FF" : "transparent" }}>
                 <input type="checkbox" checked={on} onChange={() => toggleOne(row.id)} aria-label={`Seleziona ${row.legal_name}`}
                   style={{ width: 16, height: 16, accentColor: C.blue, cursor: "pointer" }} />
                 <div style={{ minWidth: 0 }}>
@@ -207,28 +207,25 @@ export default function AdminSuppliersPage({ inShell = false }) {
                   )}
                 </div>
                 <span style={{ color: C.muted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{row.sector_hint || "—"}</span>
-                <span style={{ color: C.muted }}>{row.country || "—"}</span>
+                <span style={{ color: C.muted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{row.country || "—"}</span>
                 <span style={{ color: C.muted }}>{row.employee_count_range || "—"}</span>
                 <span style={{ color: C.muted }}>{TIPO[row.supplier_type] || "—"}</span>
-                <span>
-                  {row.vat_pending ? (
-                    <span title="Partita IVA non ancora recuperata/confermata" style={{ display: "inline-flex", alignItems: "center", gap: 5, background: "#FEF3C7", color: C.amber, border: "1px solid #FDE68A", borderRadius: 999, padding: "3px 9px", fontSize: 11.5, fontWeight: 700 }}>
-                      <AlertTriangle size={12} /> Da confermare
-                    </span>
-                  ) : (
-                    <span style={{ display: "inline-flex", alignItems: "center", gap: 5, color: C.green, fontSize: 12, fontWeight: 700 }}>
-                      <Check size={13} /> Confermata
-                    </span>
-                  )}
+                {/* P.IVA: solo icona con tooltip, per non allargare la colonna */}
+                <span title={row.vat_pending ? "P.IVA da confermare" : "P.IVA confermata"} style={{ display: "flex", justifyContent: "center", cursor: "help" }}>
+                  {row.vat_pending
+                    ? <AlertTriangle size={16} color={C.amber} aria-label="P.IVA da confermare" />
+                    : <Check size={16} color={C.green} aria-label="P.IVA confermata" />}
                 </span>
-                <div style={{ display: "flex", gap: 6 }}>
-                  <button disabled={busy} onClick={() => run("verify", [row.id])}
-                    style={{ background: C.green, color: "#fff", border: "none", borderRadius: 8, padding: "7px 11px", fontSize: 12.5, fontWeight: 700, cursor: busy ? "default" : "pointer", display: "inline-flex", alignItems: "center", gap: 5 }}>
-                    <ShieldCheck size={13} /> Verifica
+                {/* Azioni: bottoni solo icona con tooltip (Scarta a due passi) */}
+                <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
+                  <button disabled={busy} onClick={() => run("verify", [row.id])} title="Verifica (pubblica sul sito)" aria-label="Verifica"
+                    style={{ background: C.green, color: "#fff", border: "none", borderRadius: 8, width: 32, height: 32, cursor: busy ? "default" : "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    <ShieldCheck size={15} />
                   </button>
                   <button disabled={busy} onClick={() => guarded(delKey, "discard", [row.id])}
-                    style={{ background: confirm === delKey ? C.red : "#fff", color: confirm === delKey ? "#fff" : C.red, border: `1.5px solid ${C.red}`, borderRadius: 8, padding: "7px 11px", fontSize: 12.5, fontWeight: 700, cursor: busy ? "default" : "pointer", display: "inline-flex", alignItems: "center", gap: 5, whiteSpace: "nowrap" }}>
-                    <Trash2 size={13} />{confirm === delKey ? "Confermi?" : "Scarta"}
+                    title={confirm === delKey ? "Clicca di nuovo per eliminare" : "Scarta (elimina definitivamente)"} aria-label="Scarta"
+                    style={{ background: confirm === delKey ? C.red : "#fff", color: confirm === delKey ? "#fff" : C.red, border: `1.5px solid ${C.red}`, borderRadius: 8, width: 32, height: 32, cursor: busy ? "default" : "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    <Trash2 size={15} />
                   </button>
                 </div>
               </div>

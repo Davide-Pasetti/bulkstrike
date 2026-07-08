@@ -51,7 +51,7 @@ export default function ProfileShell({ active, headerCenter = null, children }) 
     { id: "preferiti", label: "Fornitori preferiti",    icon: Star,          href: "/preferiti" },
     { id: "prodotti",  label: "Listino prodotti",       icon: Package,       href: "/i-miei-prodotti", show: !!company?.is_supplier },
     { id: "servizi",   label: "Listino servizi",        icon: Truck,         href: "/corriere",        show: !!company?.is_carrier },
-    { id: "admin",     label: "Admin",                  icon: Shield,        href: "/admin/prodotti",  show: !!company?.is_platform_admin },
+    { id: "admin",     label: "Apertura asta",          icon: Shield,        href: "/admin/prodotti",  show: !!company?.is_platform_admin },
     { id: "admin-fornitori", label: "Fornitori da verificare", icon: ShieldCheck, href: "/admin/fornitori", show: !!company?.is_platform_admin, badge: pendingSuppliers },
     { id: "account",   label: "Account",                icon: Settings,      href: "/dashboard?section=account" },
   ];
