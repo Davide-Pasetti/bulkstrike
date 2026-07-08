@@ -5,8 +5,8 @@
 //  · fornitore: segna come spedito quando l'escrow è versato
 // Tutte le transizioni sono validate server-side (RPC dedicate).
 import { useState, useEffect } from "react";
-import { ChevronRight, Check, Truck, CreditCard, PackageCheck, Star, ShieldCheck, FileText, Clock, AlertTriangle, ArrowRight, MapPin, MessageSquareWarning, MessageCircle, X, Landmark, Lock } from "lucide-react";
-import { getOrderDetail, getSession, markOrderPaidDemo, markOrderShipped, confirmDelivery, raiseDispute, poolErrorMessage, getSupplierIbanForOrder } from "@/lib/api";
+import { ChevronRight, Check, Truck, CreditCard, PackageCheck, Star, ShieldCheck, FileText, Clock, AlertTriangle, ArrowRight, MapPin, MessageSquareWarning, MessageCircle, X, Landmark, Lock, Download, QrCode, Tag, Mail, RefreshCw } from "lucide-react";
+import { getOrderDetail, getSession, markOrderPaidDemo, markOrderShipped, confirmDelivery, raiseDispute, poolErrorMessage, getSupplierIbanForOrder, setOrderLot, fetchOrderQrObjectUrl, getMyCompany, adminListOrderEmails, adminResendOrderEmail } from "@/lib/api";
 import BulkStrikeNav from "@/components/BulkStrikeNav";
 import CopyButton from "@/components/CopyButton";
 
@@ -56,9 +56,23 @@ export default function OrderPage() {
   const [ibanLoading, setIbanLoading] = useState(false);
   const [ibanErr, setIbanErr] = useState("");
 
+  // Etichetta QR (solo fornitore).
+  const [qrUrl, setQrUrl] = useState("");
+  const [qrLoading, setQrLoading] = useState(false);
+  const [qrErr, setQrErr] = useState("");
+
+  // Numero di lotto (solo fornitore).
+  const [lot, setLot] = useState("");
+  const [lotSaving, setLotSaving] = useState(false);
+  const [lotSaved, setLotSaved] = useState(false);
+
+  // Admin: email dell'ordine (reinvio).
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [orderEmails, setOrderEmails] = useState([]);
+
   async function reload(id) {
     const o = await getOrderDetail(id);
-    if (o) setOrder(o); else setNotFound(true);
+    if (o) { setOrder(o); setLot(o.lot_number || ""); } else setNotFound(true);
   }
 
   useEffect(() => {
@@ -68,9 +82,60 @@ export default function OrderPage() {
       const session = await getSession().catch(() => null);
       if (!session) { setNeedLogin(true); setLoading(false); return; }
       try { await reload(id); } catch (e) { setNotFound(true); }
+      // Determina se il visualizzatore è admin di piattaforma (una sola volta).
+      try {
+        const company = await getMyCompany();
+        if (company?.is_platform_admin) {
+          setIsAdmin(true);
+          try { setOrderEmails(await adminListOrderEmails(id)); } catch (e) {}
+        }
+      } catch (e) {}
       setLoading(false);
     })();
   }, []);
+
+  // Rilascia il blob URL del QR quando cambia o allo smontaggio.
+  useEffect(() => () => { if (qrUrl) URL.revokeObjectURL(qrUrl); }, [qrUrl]);
+
+  async function downloadQr() {
+    setQrErr(""); setQrLoading(true);
+    try {
+      const objUrl = await fetchOrderQrObjectUrl(order.id);
+      setQrUrl(objUrl); // conservato per l'anteprima; revocato allo smontaggio
+      const a = document.createElement("a");
+      a.href = objUrl;
+      a.download = `qr-ordine-${String(order.id).slice(0, 8)}.png`;
+      document.body.appendChild(a); a.click(); a.remove();
+    } catch (e) {
+      setQrErr(poolErrorMessage(e));
+    } finally {
+      setQrLoading(false);
+    }
+  }
+
+  async function saveLot() {
+    setLotSaving(true); setErr(""); setLotSaved(false);
+    try {
+      await setOrderLot(order.id, lot);
+      setOrder(o => ({ ...o, lot_number: lot }));
+      setLotSaved(true);
+      setTimeout(() => setLotSaved(false), 2500);
+    } catch (e) {
+      setErr(poolErrorMessage(e));
+    } finally {
+      setLotSaving(false);
+    }
+  }
+
+  async function resendEmail(row) {
+    setErr("");
+    try {
+      await adminResendOrderEmail(order.id, row.kind);
+      setOrderEmails(rows => rows.map(r => r.id === row.id ? { ...r, status: "queued" } : r));
+    } catch (e) {
+      setErr(poolErrorMessage(e));
+    }
+  }
 
   async function doAction(fn, doneMsg) {
     setActing(true); setErr(""); setJustDone("");
@@ -121,6 +186,14 @@ export default function OrderPage() {
   const st = order ? statusOf(order.status) : null;
   const idx = order ? stepIndex(order.status) : -1;
   const isBuyer = order?.role === "buyer";
+  const isSupplier = order?.role === "supplier";
+
+  // Documenti prodotto scaricabili (SDS, scheda tecnica, certificati).
+  const productDocs = order ? [
+    order.scheda_sicurezza_url && { label: "Scheda di sicurezza (SDS)", url: order.scheda_sicurezza_url },
+    order.scheda_tecnica_url && { label: "Scheda tecnica", url: order.scheda_tecnica_url },
+    ...(order.certificates || []).filter(c => c.file_url).map(c => ({ label: `Certificato ${c.label || c.cert_type}`, url: c.file_url, expiry: c.expiry_date })),
+  ].filter(Boolean) : [];
 
   return (
     <div style={{ background:"#fff", color:C.text, fontFamily:"'Inter',system-ui,sans-serif", minHeight:"100vh", colorScheme:"light" }}>
@@ -329,6 +402,83 @@ export default function OrderPage() {
                     <div><div style={{ fontSize:11, color:C.muted }}>Modalità</div><div style={{ fontWeight:600 }}>{order.mode === "instant" ? "Acquisto rapido" : order.mode === "pool" ? "Asta a ribasso" : order.mode}</div></div>
                   </div>
                 </div>
+
+                {/* DOCUMENTI PRODOTTO — visibili sia all'acquirente sia al fornitore */}
+                <div className="od-card">
+                  <div style={{ fontSize:13, fontWeight:800, textTransform:"uppercase", letterSpacing:"0.05em", color:C.muted, marginBottom:12, display:"flex", alignItems:"center", gap:7 }}><FileText size={14}/> Documenti prodotto</div>
+                  {productDocs.length === 0 ? (
+                    <div style={{ fontSize:13, color:C.muted }}>Nessun documento disponibile</div>
+                  ) : (
+                    <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                      {productDocs.map((d, i) => (
+                        <a key={i} href={d.url} target="_blank" rel="noopener noreferrer"
+                           style={{ display:"inline-flex", alignItems:"center", gap:8, fontSize:13.5, color:C.blue, fontWeight:600, textDecoration:"none" }}>
+                          <Download size={14}/> {d.label}
+                          {d.expiry && <span style={{ fontSize:11.5, color:C.muted, fontWeight:400 }}>· scad. {new Date(d.expiry).toLocaleDateString("it-IT")}</span>}
+                        </a>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* ETICHETTA QR — solo fornitore */}
+                {isSupplier && (
+                  <div className="od-card">
+                    <div style={{ fontSize:13, fontWeight:800, textTransform:"uppercase", letterSpacing:"0.05em", color:C.muted, marginBottom:10, display:"flex", alignItems:"center", gap:7 }}><QrCode size={14}/> Etichetta QR</div>
+                    <p style={{ fontSize:13, color:C.muted, lineHeight:1.6, marginBottom:12 }}>Applica questa etichetta sul DDT di spedizione.</p>
+                    <button onClick={downloadQr} disabled={qrLoading}
+                            style={{ background:C.blue, color:"#fff", border:"none", borderRadius:10, padding:"11px 20px", fontSize:13.5, fontWeight:700, cursor:qrLoading?"default":"pointer", opacity:qrLoading?0.6:1, display:"inline-flex", alignItems:"center", gap:8, fontFamily:"Inter,system-ui" }}>
+                      <Download size={15}/> {qrLoading ? "Preparazione…" : "Scarica etichetta QR"}
+                    </button>
+                    {qrErr && <div style={{ fontSize:12.5, color:C.red, marginTop:10 }}>{qrErr}</div>}
+                    {qrUrl && <div style={{ marginTop:14 }}><img src={qrUrl} alt="Etichetta QR ordine" style={{ width:150, height:150, border:`1px solid ${C.border}`, borderRadius:10, padding:6, background:"#fff" }}/></div>}
+                  </div>
+                )}
+
+                {/* NUMERO DI LOTTO — solo fornitore */}
+                {isSupplier && (
+                  <div className="od-card">
+                    <div style={{ fontSize:13, fontWeight:800, textTransform:"uppercase", letterSpacing:"0.05em", color:C.muted, marginBottom:10, display:"flex", alignItems:"center", gap:7 }}><Tag size={14}/> Numero di lotto</div>
+                    <p style={{ fontSize:13, color:C.muted, lineHeight:1.6, marginBottom:12 }}>Il lotto che indichi qui comparirà nell'email di consegna inviata all'acquirente.</p>
+                    <div style={{ display:"flex", gap:10, flexWrap:"wrap", alignItems:"center" }}>
+                      <input value={lot} onChange={e => setLot(e.target.value)} placeholder="Es. L2026-0142"
+                             style={{ flex:"1 1 200px", minWidth:160, border:`1.5px solid ${C.border}`, borderRadius:8, padding:"10px 12px", fontSize:13.5, outline:"none", fontFamily:"Inter,system-ui" }}/>
+                      <button onClick={saveLot} disabled={lotSaving}
+                              style={{ background:C.blue, color:"#fff", border:"none", borderRadius:10, padding:"11px 20px", fontSize:13.5, fontWeight:700, cursor:lotSaving?"default":"pointer", opacity:lotSaving?0.6:1, display:"inline-flex", alignItems:"center", gap:7, fontFamily:"Inter,system-ui" }}>
+                        {lotSaving ? "Salvataggio…" : "Salva lotto"}
+                      </button>
+                      {lotSaved && <span style={{ fontSize:13, color:C.green, fontWeight:700, display:"inline-flex", alignItems:"center", gap:5 }}><Check size={15}/> Salvato</span>}
+                    </div>
+                  </div>
+                )}
+
+                {/* ADMIN — email dell'ordine (reinvio) */}
+                {isAdmin && (
+                  <div className="od-card" style={{ borderColor:C.purple, background:"#FAF5FF" }}>
+                    <div style={{ fontSize:13, fontWeight:800, textTransform:"uppercase", letterSpacing:"0.05em", color:C.purple, marginBottom:10, display:"flex", alignItems:"center", gap:7 }}><Mail size={14}/> Admin · Email dell'ordine</div>
+                    {orderEmails.length === 0 ? (
+                      <div style={{ fontSize:13, color:C.muted }}>Nessuna email registrata per questo ordine.</div>
+                    ) : (
+                      <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                        {orderEmails.map(row => (
+                          <div key={row.id} style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap", border:`1px solid ${C.border}`, borderRadius:9, padding:"9px 11px", background:"#fff" }}>
+                            <div style={{ flex:1, minWidth:180 }}>
+                              <div style={{ fontSize:13, fontWeight:700 }}>{row.subject || row.kind}</div>
+                              <div style={{ fontSize:11.5, color:C.muted }}>
+                                <span className="od-num">{row.kind}</span> · {row.status}
+                                {row.created_at && <> · {new Date(row.created_at).toLocaleString("it-IT")}</>}
+                              </div>
+                            </div>
+                            <button onClick={() => resendEmail(row)}
+                                    style={{ background:"transparent", color:C.purple, border:`1.5px solid ${C.purple}`, borderRadius:8, padding:"7px 13px", fontSize:12.5, fontWeight:700, cursor:"pointer", display:"inline-flex", alignItems:"center", gap:6, fontFamily:"Inter,system-ui" }}>
+                              <RefreshCw size={13}/> Reinvia
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {order.shipping_address && (
                   <div className="od-card">
