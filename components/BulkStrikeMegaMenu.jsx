@@ -16,14 +16,16 @@
 // mostrano settori + conteggi, non tile fotografiche.
 import { useState, useEffect, useRef, useCallback } from "react";
 import { LayoutGrid, ChevronDown, ChevronRight, ArrowRight } from "lucide-react";
-import { getMacroAreas } from "@/lib/api";
+import { getMacroAreas, getMacroAreasCached } from "@/lib/api";
 
 const C = { border: "#E2E8F0", text: "#0F172A", muted: "#64748B", blue: "#0EA5E9", dark: "#0D2137", bg: "#F8FAFE" };
 
 export default function MegaMenu() {
-  const [taxonomy, setTaxonomy] = useState([]);
+  // Stato iniziale dalla cache sincrona: al remount della pagina (swap shell
+  // statica → dinamica di cacheComponents) il bottone/pannello non flasha.
+  const [taxonomy, setTaxonomy] = useState(() => getMacroAreasCached() || []);
   const [open, setOpen] = useState(false);
-  const [activeId, setActiveId] = useState(null);
+  const [activeId, setActiveId] = useState(() => getMacroAreasCached()?.[0]?.id ?? null);
   const openTimer = useRef(null);
   const closeTimer = useRef(null);
   const triggerRef = useRef(null);
@@ -32,7 +34,7 @@ export default function MegaMenu() {
   useEffect(() => {
     getMacroAreas().then((t) => {
       setTaxonomy(t || []);
-      if (t?.length) setActiveId(t[0].id);
+      if (t?.length) setActiveId((prev) => prev ?? t[0].id);
     }).catch(() => {});
   }, []);
 
@@ -152,7 +154,7 @@ export default function MegaMenu() {
 // ─── Versione mobile: accordion dentro il menu hamburger ────────────────────
 // Tap sulla macro-area espande i settori (tap-to-open, niente hover).
 export function MegaMenuMobile() {
-  const [taxonomy, setTaxonomy] = useState([]);
+  const [taxonomy, setTaxonomy] = useState(() => getMacroAreasCached() || []);
   const [openId, setOpenId] = useState(null);
 
   useEffect(() => {

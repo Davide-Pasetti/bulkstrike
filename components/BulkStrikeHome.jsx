@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { Bot, ArrowRight, Check, Clock, ChevronRight, TrendingDown, ChevronDown } from "lucide-react";
-import { getMacroAreas, getSectorProducts } from "@/lib/api";
+import { getMacroAreas, getMacroAreasCached, getSectorProducts } from "@/lib/api";
 import BulkStrikeNav from "@/components/BulkStrikeNav";
 import BulkStrikeChatWidget from "@/components/BulkStrikeChatWidget";
 import { BSIcon } from "@/components/BSLogo";
@@ -72,6 +72,12 @@ const AI_MSGS = [
   { u:false, t:"✅ Iscritto. 4t · Acido Citrico E330 · €0,99/kg all-in.\nTi avviso quando l'asta si completa. 🚀" },
 ];
 
+// Selezione della strip discovery preservata a livello di modulo: come la
+// cache della tassonomia, sopravvive al remount della pagina client (swap
+// shell statica → dinamica di cacheComponents), così il box sotto-aree
+// aperto non si chiude da solo.
+let _discoverySel = { macro: null, sector: null };
+
 // ─── MAIN ───────────────────────────────────────────────────────────────────
 function CookieBanner() {
   const [show, setShow] = useState(false);
@@ -99,11 +105,15 @@ export default function BulkStrikeLight() {
   const [activeTab, setActiveTab]   = useState("acquirente");
   const [count, setCount]           = useState({ pools:0, materials:0, countries:0, volume:0 });
 
-  const [macros, setMacros]               = useState([]);
-  const [activeMacro, setActiveMacro]     = useState(null);
-  const [activeSector, setActiveSector]   = useState(null);
+  // Stato iniziale dalla cache sincrona: al remount della pagina (swap shell
+  // statica → dinamica di cacheComponents) il box categorie non flasha vuoto.
+  const [macros, setMacros]               = useState(() => getMacroAreasCached() || []);
+  const [activeMacro, setActiveMacroState]   = useState(() => _discoverySel.macro);
+  const [activeSector, setActiveSectorState] = useState(() => _discoverySel.sector);
   const [sectorProducts, setSectorProducts] = useState([]);
   const [loadingProducts, setLoadingProducts] = useState(false);
+  const setActiveMacro  = (m) => { _discoverySel.macro = m; setActiveMacroState(m); };
+  const setActiveSector = (s) => { _discoverySel.sector = s; setActiveSectorState(s); };
 
   useEffect(() => {
     const targets = { pools:142, materials:2400, countries:38, volume:12 };
@@ -118,13 +128,22 @@ export default function BulkStrikeLight() {
 
   useEffect(() => { getMacroAreas().then(setMacros).catch(() => {}); }, []);
 
-  // apre una sotto-area e carica SOLO i suoi prodotti (filtro rigoroso per settore)
-  const openSector = (sec) => {
-    if (activeSector?.id === sec.id) { setActiveSector(null); setSectorProducts([]); return; }
-    setActiveSector(sec); setSectorProducts([]); setLoadingProducts(true);
+  const loadSectorProducts = (sec) => {
+    setSectorProducts([]); setLoadingProducts(true);
     getSectorProducts(sec.id)
       .then((ps) => { setSectorProducts(ps); setLoadingProducts(false); })
       .catch(() => setLoadingProducts(false));
+  };
+
+  // dopo un remount con sotto-area già aperta (selezione preservata sopra),
+  // ricarica i suoi prodotti
+  useEffect(() => { if (activeSector) loadSectorProducts(activeSector); }, []);
+
+  // apre una sotto-area e carica SOLO i suoi prodotti (filtro rigoroso per settore)
+  const openSector = (sec) => {
+    if (activeSector?.id === sec.id) { setActiveSector(null); setSectorProducts([]); return; }
+    setActiveSector(sec);
+    loadSectorProducts(sec);
   };
 
   const C = { blue:"#0EA5E9", dark:"#0284C7", text:"#0F172A", muted:"#64748B", border:"#E2E8F0", bg:"#F8FAFE", green:"#059669", red:"#DC2626", amber:"#D97706" };
