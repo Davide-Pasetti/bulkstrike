@@ -12,9 +12,9 @@
 // Le voci con show:false sono nascoste per il ruolo corrente (flag
 // companies.is_* da getMyCompany, stesso pattern della vecchia sidebar).
 import { useState, useEffect } from "react";
-import { LayoutGrid, Bell, ShoppingBag, Gavel, MessageSquare, Star, Package, Truck, Shield, Settings } from "lucide-react";
+import { LayoutGrid, Bell, ShoppingBag, Gavel, MessageSquare, Star, Package, Truck, Shield, ShieldCheck, Settings } from "lucide-react";
 import { BSIcon } from "@/components/BSLogo";
-import { getMyCompany, getNotifications, getUnreadMessagesCount } from "@/lib/api";
+import { getMyCompany, getNotifications, getUnreadMessagesCount, adminCountPendingSuppliers } from "@/lib/api";
 
 const C = { blue: "#0EA5E9", text: "#0F172A", muted: "#64748B", border: "#E2E8F0", bg: "#F8FAFE", red: "#DC2626" };
 
@@ -31,11 +31,14 @@ export default function ProfileShell({ active, headerCenter = null, children }) 
   const [company, setCompany] = useState(null);
   const [notifUnread, setNotifUnread] = useState(0);
   const [msgUnread, setMsgUnread] = useState(0);
+  const [pendingSuppliers, setPendingSuppliers] = useState(0);
 
   useEffect(() => {
     getMyCompany().then(setCompany).catch(() => {});
     getNotifications().then((rows) => setNotifUnread((rows || []).filter((r) => !r.is_read).length)).catch(() => {});
     getUnreadMessagesCount().then((n) => setMsgUnread(n || 0)).catch(() => {});
+    // Restituisce 0 per i non-admin (guardia lato RPC), quindi la chiamata è innocua.
+    adminCountPendingSuppliers().then((n) => setPendingSuppliers(n || 0)).catch(() => {});
   }, []);
 
   const initials = (company?.legal_name || "B S").split(/\s+/).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
@@ -50,6 +53,7 @@ export default function ProfileShell({ active, headerCenter = null, children }) 
     { id: "prodotti",  label: "Listino prodotti",       icon: Package,       href: "/i-miei-prodotti", show: !!company?.is_supplier },
     { id: "servizi",   label: "Listino servizi",        icon: Truck,         href: "/corriere",        show: !!company?.is_carrier },
     { id: "admin",     label: "Admin",                  icon: Shield,        href: "/admin/prodotti",  show: !!company?.is_platform_admin },
+    { id: "admin-fornitori", label: "Fornitori da verificare", icon: ShieldCheck, href: "/admin/fornitori", show: !!company?.is_platform_admin, badge: pendingSuppliers },
     { id: "account",   label: "Account",                icon: Settings,      href: "/dashboard?section=account" },
   ];
 
