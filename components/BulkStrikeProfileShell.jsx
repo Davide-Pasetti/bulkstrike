@@ -14,6 +14,7 @@
 import { useState, useEffect } from "react";
 import { LayoutGrid, Bell, ShoppingBag, Gavel, MessageSquare, Star, Package, Truck, Shield, ShieldCheck, Settings } from "lucide-react";
 import { BSIcon } from "@/components/BSLogo";
+import NavAuth from "@/components/BulkStrikeNavAuth";
 import { getMyCompany, getNotifications, getUnreadMessagesCount, adminCountPendingSuppliers } from "@/lib/api";
 
 const C = { blue: "#0EA5E9", text: "#0F172A", muted: "#64748B", border: "#E2E8F0", bg: "#F8FAFE", red: "#DC2626" };
@@ -40,8 +41,6 @@ export default function ProfileShell({ active, headerCenter = null, children }) 
     // Restituisce 0 per i non-admin (guardia lato RPC), quindi la chiamata è innocua.
     adminCountPendingSuppliers().then((n) => setPendingSuppliers(n || 0)).catch(() => {});
   }, []);
-
-  const initials = (company?.legal_name || "B S").split(/\s+/).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
 
   const SIDEBAR = [
     { id: "overview",  label: "Panoramica",             icon: LayoutGrid,    href: "/dashboard?section=overview" },
@@ -80,13 +79,9 @@ export default function ProfileShell({ active, headerCenter = null, children }) 
 
           {headerCenter ? <div style={{ marginLeft: "auto" }}>{headerCenter}</div> : <div style={{ marginLeft: "auto" }} />}
 
-          {/* campanella → sezione avvisi */}
-          <a href="/dashboard?section=alerts" aria-label="Avvisi" style={{ position: "relative", width: 40, height: 40, borderRadius: 10, border: `1px solid ${C.border}`, background: "#fff", display: "flex", alignItems: "center", justifyContent: "center", textDecoration: "none" }}>
-            <Bell size={18} color={C.text} />
-            {notifUnread > 0 && <span style={{ position: "absolute", top: -5, right: -5, minWidth: 18, height: 18, padding: "0 4px", borderRadius: 9, background: C.red, color: "#fff", fontSize: 10, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", border: "2px solid #fff" }}>{notifUnread}</span>}
-          </a>
-
-          <div style={{ width: 38, height: 38, borderRadius: 10, background: "linear-gradient(135deg,#0D2137,#0C4A6E)", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 800 }}>{initials}</div>
+          {/* Stesso elemento in alto a destra della Home: carrello + menu account
+              (NavAuth condiviso), così avatar e menu a tendina sono identici ovunque. */}
+          <NavAuth />
         </div>
       </header>
 

@@ -480,7 +480,7 @@ export default function CheckoutPage() {
 
                   <label style={{ fontSize: 12.5, fontWeight: 600, color: C.muted, display: "block", marginBottom: 6 }}>Indirizzo di fatturazione *</label>
                   <select className="co-input" value={billingAddressId} onChange={e => setBillingAddressId(e.target.value)} style={{ marginBottom: 8 }}>
-                    {companyAddress && <option value="__legal__">Sede legale — {companyAddress}</option>}
+                    {companyAddress && <option value="__legal__">{companyName || `Sede legale — ${companyAddress}`}</option>}
                     {addresses.map(a => (
                       <option key={a.id} value={a.id}>{a.label ? `${a.label} — ` : ""}{a.address}</option>
                     ))}
