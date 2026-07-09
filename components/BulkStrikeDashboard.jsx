@@ -3,6 +3,7 @@ import {
   getMyCompany, updateCompany, signOut, requestAccountDeletionCode, confirmAccountDeletion,
   getWatchedMaterials, addWatchedMaterial, removeWatchedMaterial, updateMaterialAlert,
   getNotifications, markNotificationRead, markAllNotificationsRead, subscribeNotifications,
+  getMyPools,
 } from "@/lib/api";
 import { Bell, Search, Plus, TrendingDown, Zap, Factory, Check, X, Gavel, Inbox, Clock, Boxes, ChevronRight, Trophy, Send, Package, Truck, LogOut, AlertTriangle } from "lucide-react";
 import ProfileShell from "@/components/BulkStrikeProfileShell";
@@ -55,15 +56,15 @@ const SEED_NOTIFS = {
     { id:4, type:"pool",    mat:"Acido metatartarico",    text:"Asta a ribasso in chiusura tra 6 ore — ultima occasione per offrire", time:"1 giorno fa", unread:false, action:"Fai un'offerta" },
   ],
 };
-const SEED_POOLS = {
-  buyer: [
-    { mat:"Acido tartarico L(+)", price:"1,62", companies:9, suppliers:4, closesIn:"3g 11h", status:{ label:"Stai partecipando · 8t", tone:C.blue } },
-    { mat:"Bentonite",            price:"0,94", companies:5, suppliers:3, closesIn:"1g 4h",  status:{ label:"Stai partecipando · 3t", tone:C.blue } },
-  ],
-  supplier: [
-    { mat:"Acido tartarico L(+)",  price:"1,62", companies:9, suppliers:4, closesIn:"3g 11h", status:{ label:"Sei stato superato", tone:C.red } },
-    { mat:"Bitartrato di potassio",price:"3,10", companies:4, suppliers:2, closesIn:"2g 2h",  status:{ label:"Sei in testa", tone:C.green } },
-  ],
+// Formattazioni per la lista "Aste personali" (dati reali via getMyPools).
+const eurKg = (n) => n == null ? "—" : Number(n).toLocaleString("it-IT", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const tonnes = (kg) => `${(Number(kg) / 1000).toLocaleString("it-IT", { maximumFractionDigits: 1 })} t`;
+const closesInLabel = (iso) => {
+  if (!iso) return "—";
+  const s = Math.floor((new Date(iso) - Date.now()) / 1000);
+  if (s <= 0) return "conclusa";
+  const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60);
+  return d > 0 ? `${d}g ${h}h` : h > 0 ? `${h}h ${m}m` : `${m}m`;
 };
 
 const NOTIF_STYLE = {
@@ -135,6 +136,7 @@ function NotifRow({ n, onRead, compact }) {
 
 export default function Dashboard() {
   const [role, setRole] = useState("buyer");
+  const [myPools, setMyPools] = useState(null); // null = in caricamento; [] = nessuna asta
   const [section, setSection] = useState("overview");
   // La sezione reale è nel querystring (?section=), ma si conosce solo lato client:
   // finché non è risolta mostriamo uno skeleton, così non si vede per un istante la
@@ -178,10 +180,31 @@ export default function Dashboard() {
     setReady(true); // sezione risolta: si può mostrare il contenuto
   }, []);
 
+  // Aste reali dell'azienda (sostituisce i dati demo): fonte unica con la pagina
+  // asta, così "Aste personali" e "Hai già aderito" restano sempre coerenti.
+  useEffect(() => {
+    getMyPools().then(setMyPools).catch(() => setMyPools([]));
+  }, []);
+
   const cur = mats[role];
   const curNotifs = notifs[role];
   const defs = ALERT_DEFS[role];
-  const pools = SEED_POOLS[role];
+  const poolsLoading = myPools === null;
+  // Compratore: aste a cui partecipo (my_quantity_kg). Fornitore: aste su cui ho
+  // offerto (my_bid_price). Mappate nella forma attesa dalle card.
+  const pools = (myPools || [])
+    .filter(p => role === "supplier" ? p.my_bid_price != null : p.my_quantity_kg != null)
+    .map(p => ({
+      id: p.pool_id,
+      mat: p.product_name,
+      price: eurKg(p.best_price_per_kg),
+      companies: Number(p.participants) || 0,
+      suppliers: Number(p.suppliers) || 0,
+      closesIn: closesInLabel(p.closes_at),
+      status: role === "supplier"
+        ? { label: `Tua offerta €${eurKg(p.my_bid_price)}/kg`, tone: C.blue }
+        : { label: `Stai partecipando · ${tonnes(p.my_quantity_kg)}`, tone: C.blue },
+    }));
   const unread = curNotifs.filter(n=>n.unread).length;
   const activeAlerts = Object.values(cur).reduce((sum,a)=>sum+Object.values(a).filter(Boolean).length,0);
 
@@ -373,7 +396,9 @@ export default function Dashboard() {
                     <button onClick={()=>setSection("pools")} style={{ background:"none", border:"none", color:C.blue, fontSize:12.5, fontWeight:600, cursor:"pointer", fontFamily:"Inter,system-ui" }}>Gestisci</button>
                   </div>
                   <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-                    {pools.map((p,i)=>(
+                    {poolsLoading ? <div style={{ fontSize:13, color:C.muted, padding:"6px 0" }}>Caricamento…</div>
+                     : pools.length === 0 ? <div style={{ fontSize:13, color:C.muted, padding:"6px 0" }}>Non partecipi ancora ad alcuna asta.</div>
+                     : pools.map((p,i)=>(
                       <div key={i} style={{ border:`1px solid ${C.border}`, borderRadius:11, padding:"12px 14px" }}>
                         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6 }}>
                           <span style={{ fontSize:13.5, fontWeight:700 }}>{p.mat}</span>
@@ -549,7 +574,9 @@ export default function Dashboard() {
               )}
 
               <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
-                {pools.map((p,i)=>(
+                {poolsLoading ? <div className="bs-card" style={{ padding:18, fontSize:14, color:C.muted }}>Caricamento…</div>
+                 : pools.length === 0 ? <div className="bs-card" style={{ padding:18, fontSize:14, color:C.muted }}>{role==="supplier"?"Non stai competendo in alcuna asta.":"Non partecipi ad alcuna asta. Apri o unisciti a un'asta dalla pagina di un prodotto."}</div>
+                 : pools.map((p,i)=>(
                   <div key={i} className="bs-card" style={{ padding:18 }}>
                     <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:14, flexWrap:"wrap", gap:8 }}>
                       <div>
