@@ -13,7 +13,7 @@
 // focus visibile su tutte le voci, chiusura su click fuori.
 import { useState, useEffect, useRef, useCallback } from "react";
 import {
-  User, Gavel, Package, MessageSquare, Star, ShoppingCart, MapPin, Receipt,
+  User, Gavel, Package, MessageSquare, Star, ShoppingCart, LayoutGrid, Receipt,
   Factory, LifeBuoy, LogOut, ChevronDown,
 } from "lucide-react";
 import { getMyCompany, signOut, getUnreadMessagesCount } from "@/lib/api";
@@ -125,16 +125,19 @@ export default function AccountMenu({ email, cartCount = 0 }) {
             </span>
           </div>
 
-          <Item href="/dashboard?section=account" icon={User} label="Il mio profilo" />
-          <Item href="/dashboard?section=pools" icon={Gavel} label="Le mie aste attive" note={company?.is_buyer && company?.is_supplier ? "acquisti e vendite" : undefined} />
-          <Item href="/ordini" icon={Package} label="I miei ordini" />
+          {/* Voci condivise col menu laterale: STESSI nomi e stesso ordine relativo
+              (Panoramica, Ordini, Aste personali, Messaggi, Fornitori preferiti, Account). */}
+          <Item href="/dashboard?section=overview" icon={LayoutGrid} label="Panoramica" />
+          <Item href="/ordini" icon={Package} label="Ordini" />
+          <Item href="/dashboard?section=pools" icon={Gavel} label="Aste personali" note={company?.is_buyer && company?.is_supplier ? "acquisti e vendite" : undefined} />
           {FEATURE_MESSAGING && <Item href="/messaggi" icon={MessageSquare} label="Messaggi" badge={unread} />}
           {FEATURE_FOLLOWS && <Item href="/preferiti" icon={Star} label="Fornitori preferiti" />}
-          <Item href="/carrello" icon={ShoppingCart} label="Carrello" badge={cartCount} />
+          <Item href="/dashboard?section=account" icon={User} label="Account" />
 
           <div style={{ height: 1, background: C.border, margin: "6px 6px" }} />
 
-          <Item href="/dashboard?section=account" icon={MapPin} label="Indirizzi di spedizione" />
+          {/* Utility di accesso rapido (non presenti nel laterale). */}
+          <Item href="/carrello" icon={ShoppingCart} label="Carrello" badge={cartCount} />
           <Item href="/dashboard?section=account" icon={Receipt} label="Fatturazione" note="dati IBAN e pagamento" />
           {company && !company.is_supplier && (
             <Item href="/dashboard?section=account" icon={Factory} label="Diventa fornitore" note="vendi le tue materie prime" />
