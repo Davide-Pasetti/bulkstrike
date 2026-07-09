@@ -114,7 +114,7 @@ export default function PoolAuctionPage() {
       const [detail, bids, parts, waiting] = await Promise.all([
         getPoolDetail(id), getPoolBids(id), getPoolParticipants(id).catch(() => []), getPoolTargetJoins(id).catch(() => []),
       ]);
-      const bd = (bids || []).map((b, i) => ({ tag: b.anon_label, origin: "", flag: "", bid: b.price_per_kg, when: relTime(b.created_at), leader: i === 0 }));
+      const bd = (bids || []).map((b, i) => ({ tag: b.anon_label, origin: "", flag: "", bid: b.price_per_kg, when: relTime(b.created_at), leader: i === 0, won: b.status === "winning" }));
       const total = detail.total_volume_kg || 0;
       setBidders(bd);
       // Anonimo: solo città/paese e kg, mai il nome dell'azienda.
@@ -133,6 +133,12 @@ export default function PoolAuctionPage() {
         bestBid: detail.best_price_per_kg ?? (bd[0]?.bid ?? tierFor(total).price),
         bestSupplier: bd[0]?.tag || "—",
         bids: bd.length,
+        // Stato/esito per la pagina di un'asta conclusa (null sull'asta demo).
+        status: detail.status || "open",
+        finalPrice: detail.final_price_per_kg != null ? Number(detail.final_price_per_kg) : null,
+        winnerName: detail.winner_name || null,
+        myOrderId: detail.my_order_id || null,
+        closesAt: detail.closes_at || null,
       });
       setSecs(Math.max(0, Math.floor((new Date(detail.closes_at) - Date.now()) / 1000)));
     } catch (e) {
@@ -185,6 +191,12 @@ export default function PoolAuctionPage() {
   }
 
   const d = Math.floor(secs/86400), h = Math.floor((secs%86400)/3600), m = Math.floor((secs%3600)/60), s = secs%60;
+
+  // Asta conclusa: la pagina diventa un RIEPILOGO/ESITO (niente countdown, niente
+  // pannello di adesione, offerte come storico con vincitore rivelato).
+  const concluded = pool.status === "closed" || pool.status === "cancelled";
+  const closedDate = pool.closesAt ? new Date(pool.closesAt).toLocaleDateString("it-IT", { day:"2-digit", month:"long", year:"numeric" }) : "";
+  const finalPrice = pool.finalPrice ?? pool.bestBid;
 
   const projected = pool.current + userQty;
   const currentTier = tierFor(pool.current);
@@ -304,7 +316,9 @@ export default function PoolAuctionPage() {
           <div>
             <div style={{ display:"flex", gap:8, marginBottom:8, flexWrap:"wrap", alignItems:"center" }}>
               <span className="bs-chip" style={{ background:"#FBF7FF", color:C.purple }}><Gavel size={12}/> Asta a ribasso · per prodotto</span>
-              <span className="bs-chip" style={{ background:"#FEF2F2", color:C.red }}><span className="bs-live-dot"/> Live</span>
+              {concluded
+                ? <span className="bs-chip" style={{ background:"#F1F5F9", color:C.muted }}><Check size={12}/> Asta terminata</span>
+                : <span className="bs-chip" style={{ background:"#FEF2F2", color:C.red }}><span className="bs-live-dot"/> Live</span>}
               <span className="bs-chip" style={{ background:"#EFF6FF", color:"#1D4ED8" }}>{pool.enum}</span>
             </div>
             <h1 style={{ fontSize:30, fontWeight:800, letterSpacing:"-0.02em", marginBottom:6 }}>{pool.product}</h1>
@@ -312,17 +326,24 @@ export default function PoolAuctionPage() {
               <Award size={14} color={C.green}/> Standard garantito: <b style={{ color:C.text }}>{pool.standard}</b>
             </div>
           </div>
-          <div style={{ textAlign:"center", background:C.bg, border:`1px solid ${C.border}`, borderRadius:12, padding:"12px 18px" }}>
-            <div style={{ fontSize:11, color:C.muted, marginBottom:6, display:"flex", alignItems:"center", gap:4, justifyContent:"center" }}><Clock size={12}/> Chiusura tra (ciclo 7 giorni)</div>
-            <div style={{ display:"flex", gap:8, justifyContent:"center" }}>
-              {[[d,"g"],[h,"h"],[m,"m"],[s,"s"]].map(([val,lab],i) => (
-                <div key={i} style={{ minWidth:42 }}>
-                  <div className="bs-num" style={{ fontSize:24, fontWeight:800, color:C.text }}>{String(val).padStart(2,"0")}</div>
-                  <div style={{ fontSize:10, color:C.muted }}>{lab}</div>
-                </div>
-              ))}
+          {concluded ? (
+            <div style={{ textAlign:"center", background:C.bg, border:`1px solid ${C.border}`, borderRadius:12, padding:"12px 18px" }}>
+              <div style={{ fontSize:11, color:C.muted, marginBottom:6, display:"flex", alignItems:"center", gap:4, justifyContent:"center" }}><Check size={12}/> Asta conclusa</div>
+              <div className="bs-num" style={{ fontSize:20, fontWeight:800, color:C.text }}>{closedDate || "—"}</div>
             </div>
-          </div>
+          ) : (
+            <div style={{ textAlign:"center", background:C.bg, border:`1px solid ${C.border}`, borderRadius:12, padding:"12px 18px" }}>
+              <div style={{ fontSize:11, color:C.muted, marginBottom:6, display:"flex", alignItems:"center", gap:4, justifyContent:"center" }}><Clock size={12}/> Chiusura tra (ciclo 7 giorni)</div>
+              <div style={{ display:"flex", gap:8, justifyContent:"center" }}>
+                {[[d,"g"],[h,"h"],[m,"m"],[s,"s"]].map(([val,lab],i) => (
+                  <div key={i} style={{ minWidth:42 }}>
+                    <div className="bs-num" style={{ fontSize:24, fontWeight:800, color:C.text }}>{String(val).padStart(2,"0")}</div>
+                    <div style={{ fontSize:10, color:C.muted }}>{lab}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* TWO LEVERS */}
@@ -350,13 +371,15 @@ export default function PoolAuctionPage() {
           <div>
             <div style={{ display:"flex", gap:24, flexWrap:"wrap", marginBottom:22 }}>
               <div>
-                <div style={{ fontSize:12, color:C.muted, marginBottom:2 }}>Miglior prezzo attuale</div>
+                <div style={{ fontSize:12, color:C.muted, marginBottom:2 }}>{concluded ? "Prezzo di chiusura" : "Miglior prezzo attuale"}</div>
                 <div style={{ display:"flex", alignItems:"baseline", gap:8 }}>
-                  <span className="bs-num" style={{ fontSize:38, fontWeight:800, color:C.purple }}>{eurKg(effectiveNow)}</span>
+                  <span className="bs-num" style={{ fontSize:38, fontWeight:800, color:C.purple }}>{eurKg(concluded ? finalPrice : effectiveNow)}</span>
                   <span style={{ fontSize:14, color:C.muted }}>/kg</span>
-                  <span style={{ fontSize:12, color:C.green, display:"flex", alignItems:"center", gap:2 }}><TrendingDown size={12}/> in calo</span>
+                  {!concluded && <span style={{ fontSize:12, color:C.green, display:"flex", alignItems:"center", gap:2 }}><TrendingDown size={12}/> in calo</span>}
                 </div>
-                <div style={{ fontSize:12, color:C.muted, marginTop:2 }}>offerto da <b style={{ color:C.text }}>{pool.bestSupplier}</b> · {pool.bids} fornitori in gara</div>
+                <div style={{ fontSize:12, color:C.muted, marginTop:2 }}>{concluded
+                  ? (pool.winnerName ? <>aggiudicata a <b style={{ color:C.text }}>{pool.winnerName}</b></> : <>{pool.bids} offerte ricevute</>)
+                  : <>offerto da <b style={{ color:C.text }}>{pool.bestSupplier}</b> · {pool.bids} fornitori in gara</>}</div>
               </div>
               <div style={{ borderLeft:`1px solid ${C.border}`, paddingLeft:24 }}>
                 <div style={{ fontSize:12, color:C.muted, marginBottom:2 }}>Volume aggregato</div>
@@ -365,7 +388,7 @@ export default function PoolAuctionPage() {
               </div>
             </div>
 
-            {barTarget ? (
+            {!concluded && (barTarget ? (
               <div style={{ marginBottom:20 }}>
                 <div style={{ display:"flex", justifyContent:"space-between", fontSize:12, marginBottom:6 }}>
                   <span style={{ color:C.muted }}>Prossimo scaglione: <b style={{ color:C.text }}>{kg(barTarget)} kg → tetto {eurKg(tierFor(barTarget).price)}/kg</b></span>
@@ -386,20 +409,22 @@ export default function PoolAuctionPage() {
               <div style={{ marginBottom:20, fontSize:12.5, color:C.blue, fontWeight:600, background:"#EFF6FF", border:`1px solid #BFDBFE`, borderRadius:10, padding:"10px 12px" }}>
                 🎉 Con questa quantità raggiungi lo scaglione minimo: tetto {eurKg(TIERS[TIERS.length-1].price)}/kg.
               </div>
-            )}
+            ))}
 
             <div style={{ background:"#fff", border:`1px solid ${C.border}`, borderRadius:12, padding:16 }}>
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
-                <span style={{ fontSize:13, fontWeight:700, display:"flex", alignItems:"center", gap:6 }}><Gavel size={14} color={C.purple}/> Offerte dei fornitori (live)</span>
-                <span style={{ fontSize:11, color:C.muted }}>identità svelata alla chiusura</span>
+                <span style={{ fontSize:13, fontWeight:700, display:"flex", alignItems:"center", gap:6 }}><Gavel size={14} color={C.purple}/> {concluded ? "Offerte dei fornitori · esito finale" : "Offerte dei fornitori (live)"}</span>
+                <span style={{ fontSize:11, color:C.muted }}>{concluded ? "identità del vincitore svelata" : "identità svelata alla chiusura"}</span>
               </div>
               {bidders.map((b,i) => (
                 <div key={i} style={{ display:"flex", alignItems:"center", gap:10, padding:"9px 0", borderBottom:i<bidders.length-1?`1px solid #F1F5F9`:"none" }}>
-                  <span style={{ fontSize:13, fontWeight:600, minWidth:96 }}>{b.tag}</span>
+                  <span style={{ fontSize:13, fontWeight:600, minWidth:96 }}>{concluded && b.won && pool.winnerName ? pool.winnerName : b.tag}</span>
                   <span style={{ fontSize:13 }}>{b.flag}</span>
                   <span style={{ fontSize:12, color:C.muted, flex:1 }}>{b.when}</span>
-                  {b.leader && <span className="bs-chip" style={{ background:"#DCFCE7", color:C.green }}>★ leader</span>}
-                  <span className="bs-num" style={{ fontSize:15, fontWeight:700, color:b.leader?C.green:C.text, minWidth:64, textAlign:"right" }}>{eurKg(b.bid)}</span>
+                  {concluded
+                    ? (b.won && <span className="bs-chip" style={{ background:"#DCFCE7", color:C.green }}><Award size={12}/> Vincitore</span>)
+                    : (b.leader && <span className="bs-chip" style={{ background:"#DCFCE7", color:C.green }}>★ leader</span>)}
+                  <span className="bs-num" style={{ fontSize:15, fontWeight:700, color:(concluded?b.won:b.leader)?C.green:C.text, minWidth:64, textAlign:"right" }}>{eurKg(b.bid)}</span>
                 </div>
               ))}
             </div>
@@ -407,7 +432,44 @@ export default function PoolAuctionPage() {
 
           {/* RIGHT: join */}
           <div style={{ background:"#fff", border:`1px solid ${C.border}`, borderRadius:14, padding:20 }}>
-            {joined ? (
+            {concluded ? (
+              <>
+                <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:6 }}>
+                  <div style={{ width:34, height:34, borderRadius:"50%", background:"#F1F5F9", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}><Check size={18} color={C.muted}/></div>
+                  <div style={{ fontSize:15, fontWeight:700 }}>Asta terminata</div>
+                </div>
+                <div style={{ fontSize:13, color:C.muted, marginBottom:16, lineHeight:1.5 }}>{closedDate ? <>Chiusa il <b style={{color:C.text}}>{closedDate}</b>. </> : null}L'esito è definitivo: non è più possibile aderire.</div>
+                <div style={{ background:C.bg, borderRadius:10, padding:"14px 16px", marginBottom:14 }}>
+                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", marginBottom:8 }}>
+                    <span style={{ fontSize:13, color:C.muted }}>Prezzo di chiusura</span>
+                    <span className="bs-num" style={{ fontSize:22, fontWeight:800, color:C.purple }}>{eurKg(finalPrice)}<span style={{ fontSize:12, fontWeight:400, color:C.muted }}>/kg</span></span>
+                  </div>
+                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", paddingTop:8, borderTop:`1px solid ${C.border}` }}>
+                    <span style={{ fontSize:13, color:C.muted }}>Volume aggregato finale</span>
+                    <span className="bs-num" style={{ fontSize:16, fontWeight:800, color:C.text }}>{kg(pool.current)} kg</span>
+                  </div>
+                  {pool.winnerName && (
+                    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", gap:10, paddingTop:8, borderTop:`1px solid ${C.border}`, marginTop:8 }}>
+                      <span style={{ fontSize:13, color:C.muted, whiteSpace:"nowrap" }}>Fornitore vincitore</span>
+                      <span style={{ fontSize:13, fontWeight:700, color:C.text, textAlign:"right" }}>{pool.winnerName}</span>
+                    </div>
+                  )}
+                  {myQty > 0 && (
+                    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", paddingTop:8, borderTop:`1px solid ${C.border}`, marginTop:8 }}>
+                      <span style={{ fontSize:13, color:C.muted }}>Il tuo quantitativo</span>
+                      <span className="bs-num" style={{ fontSize:13, fontWeight:700, color:C.text }}>{kg(myQty)} kg</span>
+                    </div>
+                  )}
+                </div>
+                {pool.myOrderId ? (
+                  <button onClick={() => { window.location.href = `/ordine?id=${pool.myOrderId}`; }} className="bs-btn" style={{ width:"100%" }}>Vai al tuo ordine <ArrowRight size={18}/></button>
+                ) : myQty > 0 ? (
+                  <button onClick={() => { window.location.href = "/ordini"; }} className="bs-btn" style={{ width:"100%" }}>Vai ai tuoi ordini <ArrowRight size={18}/></button>
+                ) : (
+                  <button onClick={() => { window.location.href = "/pool"; }} style={{ width:"100%", background:"transparent", color:C.purple, border:`1.5px solid ${C.purple}`, borderRadius:10, padding:"12px", fontSize:14, fontWeight:700, cursor:"pointer", fontFamily:"Inter,system-ui", display:"flex", alignItems:"center", justifyContent:"center", gap:6 }}>Vedi le aste attive <ArrowRight size={16}/></button>
+                )}
+              </>
+            ) : joined ? (
               <>
                 <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:6 }}>
                   <div style={{ width:34, height:34, borderRadius:"50%", background:"#DCFCE7", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}><Check size={18} color={C.green}/></div>

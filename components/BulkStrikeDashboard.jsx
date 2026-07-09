@@ -194,17 +194,47 @@ export default function Dashboard() {
   // offerto (my_bid_price). Mappate nella forma attesa dalle card.
   const pools = (myPools || [])
     .filter(p => role === "supplier" ? p.my_bid_price != null : p.my_quantity_kg != null)
-    .map(p => ({
-      id: p.pool_id,
-      mat: p.product_name,
-      price: eurKg(p.best_price_per_kg),
-      companies: Number(p.participants) || 0,
-      suppliers: Number(p.suppliers) || 0,
-      closesIn: closesInLabel(p.closes_at),
-      status: role === "supplier"
-        ? { label: `Tua offerta €${eurKg(p.my_bid_price)}/kg`, tone: C.blue }
-        : { label: `Stai partecipando · ${tonnes(p.my_quantity_kg)}`, tone: C.blue },
-    }));
+    .map(p => {
+      const concluded = p.status === "closed" || p.status === "cancelled";
+      const cancelled = p.status === "cancelled";
+      return {
+        id: p.pool_id,
+        mat: p.product_name,
+        price: eurKg(p.best_price_per_kg),
+        companies: Number(p.participants) || 0,
+        suppliers: Number(p.suppliers) || 0,
+        closesIn: concluded ? (cancelled ? "annullata" : "conclusa") : closesInLabel(p.closes_at),
+        concluded,
+        status: concluded
+          ? { label: cancelled ? "Annullata" : `Conclusa · €${eurKg(p.best_price_per_kg)}/kg`, tone: C.muted }
+          : role === "supplier"
+            ? { label: `Tua offerta €${eurKg(p.my_bid_price)}/kg`, tone: C.blue }
+            : { label: `Stai partecipando · ${tonnes(p.my_quantity_kg)}`, tone: C.blue },
+      };
+    });
+  const activePools = pools.filter(p => !p.concluded);
+  const concludedPools = pools.filter(p => p.concluded);
+  const renderPoolCard = (p, i) => (
+    <div key={p.id || i} className="bs-card" style={{ padding:18 }}>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:14, flexWrap:"wrap", gap:8 }}>
+        <div>
+          <div style={{ fontSize:16, fontWeight:800, marginBottom:4 }}>{p.mat}</div>
+          <span style={{ fontSize:12, fontWeight:700, color:p.status.tone, background:`${p.status.tone}14`, padding:"3px 9px", borderRadius:6 }}>{p.status.label}</span>
+        </div>
+        <span style={{ fontSize:12, color:C.muted, display:"flex", alignItems:"center", gap:4 }}>
+          {p.concluded ? <><Check size={12}/> Conclusa</> : <><Clock size={12}/> chiude tra {p.closesIn}</>}
+        </span>
+      </div>
+      <div style={{ display:"flex", gap:24, flexWrap:"wrap", marginBottom:16 }}>
+        <div><div style={{ fontSize:11, color:C.muted }}>{p.concluded ? "Prezzo di chiusura" : "Miglior prezzo ora"}</div><div className="bs-num" style={{ fontSize:18, fontWeight:800, color:C.purple }}>€{p.price}/kg</div></div>
+        <div><div style={{ fontSize:11, color:C.muted }}>Aziende aggregate</div><div className="bs-num" style={{ fontSize:18, fontWeight:800 }}>{p.companies}</div></div>
+        <div><div style={{ fontSize:11, color:C.muted }}>Fornitori in gara</div><div className="bs-num" style={{ fontSize:18, fontWeight:800 }}>{p.suppliers}</div></div>
+      </div>
+      <button onClick={() => { window.location.href = p.id ? `/pool?id=${p.id}` : "/pool"; }} style={{ background:C.purple, color:"#fff", border:"none", borderRadius:9, padding:"10px 18px", fontSize:14, fontWeight:700, cursor:"pointer", fontFamily:"Inter,system-ui", display:"inline-flex", alignItems:"center", gap:7 }}>
+        {p.concluded ? <>Vedi esito <ChevronRight size={15}/></> : role==="buyer" ? <>Vai all'asta <ChevronRight size={15}/></> : <><Zap size={15}/> Rilancia offerta</>}
+      </button>
+    </div>
+  );
   const unread = curNotifs.filter(n=>n.unread).length;
   const activeAlerts = Object.values(cur).reduce((sum,a)=>sum+Object.values(a).filter(Boolean).length,0);
 
@@ -398,7 +428,7 @@ export default function Dashboard() {
                   <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
                     {poolsLoading ? <div style={{ fontSize:13, color:C.muted, padding:"6px 0" }}>Caricamento…</div>
                      : pools.length === 0 ? <div style={{ fontSize:13, color:C.muted, padding:"6px 0" }}>Non partecipi ancora ad alcuna asta.</div>
-                     : pools.map((p,i)=>(
+                     : [...activePools, ...concludedPools].map((p,i)=>(
                       <div key={i} style={{ border:`1px solid ${C.border}`, borderRadius:11, padding:"12px 14px" }}>
                         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6 }}>
                           <span style={{ fontSize:13.5, fontWeight:700 }}>{p.mat}</span>
@@ -573,29 +603,26 @@ export default function Dashboard() {
                 </div>
               )}
 
-              <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
-                {poolsLoading ? <div className="bs-card" style={{ padding:18, fontSize:14, color:C.muted }}>Caricamento…</div>
-                 : pools.length === 0 ? <div className="bs-card" style={{ padding:18, fontSize:14, color:C.muted }}>{role==="supplier"?"Non stai competendo in alcuna asta.":"Non partecipi ad alcuna asta. Apri o unisciti a un'asta dalla pagina di un prodotto."}</div>
-                 : pools.map((p,i)=>(
-                  <div key={i} className="bs-card" style={{ padding:18 }}>
-                    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:14, flexWrap:"wrap", gap:8 }}>
-                      <div>
-                        <div style={{ fontSize:16, fontWeight:800, marginBottom:4 }}>{p.mat}</div>
-                        <span style={{ fontSize:12, fontWeight:700, color:p.status.tone, background:`${p.status.tone}14`, padding:"3px 9px", borderRadius:6 }}>{p.status.label}</span>
-                      </div>
-                      <span style={{ fontSize:12, color:C.muted, display:"flex", alignItems:"center", gap:4 }}><Clock size={12}/> chiude tra {p.closesIn}</span>
-                    </div>
-                    <div style={{ display:"flex", gap:24, flexWrap:"wrap", marginBottom:16 }}>
-                      <div><div style={{ fontSize:11, color:C.muted }}>Miglior prezzo ora</div><div className="bs-num" style={{ fontSize:18, fontWeight:800, color:C.purple }}>€{p.price}/kg</div></div>
-                      <div><div style={{ fontSize:11, color:C.muted }}>Aziende aggregate</div><div className="bs-num" style={{ fontSize:18, fontWeight:800 }}>{p.companies}</div></div>
-                      <div><div style={{ fontSize:11, color:C.muted }}>Fornitori in gara</div><div className="bs-num" style={{ fontSize:18, fontWeight:800 }}>{p.suppliers}</div></div>
-                    </div>
-                    <button onClick={() => { window.location.href = p.id ? `/pool?id=${p.id}` : "/pool"; }} style={{ background:C.purple, color:"#fff", border:"none", borderRadius:9, padding:"10px 18px", fontSize:14, fontWeight:700, cursor:"pointer", fontFamily:"Inter,system-ui", display:"inline-flex", alignItems:"center", gap:7 }}>
-                      {role==="buyer" ? <>Vai all'asta <ChevronRight size={15}/></> : <><Zap size={15}/> Rilancia offerta</>}
-                    </button>
-                  </div>
-                ))}
-              </div>
+              {poolsLoading ? (
+                <div className="bs-card" style={{ padding:18, fontSize:14, color:C.muted }}>Caricamento…</div>
+              ) : pools.length === 0 ? (
+                <div className="bs-card" style={{ padding:18, fontSize:14, color:C.muted }}>{role==="supplier"?"Non stai competendo in alcuna asta.":"Non partecipi ad alcuna asta. Apri o unisciti a un'asta dalla pagina di un prodotto."}</div>
+              ) : (
+                <>
+                  {activePools.length > 0 && (
+                    <>
+                      <div style={{ fontSize:12, fontWeight:800, textTransform:"uppercase", letterSpacing:"0.05em", color:C.muted, margin:"2px 0 10px" }}>In corso · {activePools.length}</div>
+                      <div style={{ display:"flex", flexDirection:"column", gap:14, marginBottom:concludedPools.length ? 28 : 0 }}>{activePools.map(renderPoolCard)}</div>
+                    </>
+                  )}
+                  {concludedPools.length > 0 && (
+                    <>
+                      <div style={{ fontSize:12, fontWeight:800, textTransform:"uppercase", letterSpacing:"0.05em", color:C.muted, margin:"2px 0 10px" }}>Concluse · {concludedPools.length}</div>
+                      <div style={{ display:"flex", flexDirection:"column", gap:14 }}>{concludedPools.map(renderPoolCard)}</div>
+                    </>
+                  )}
+                </>
+              )}
             </>
           )}
 
