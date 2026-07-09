@@ -49,8 +49,16 @@ const PALLET_KG = 1000;        // peso di 1 pallet demo, usato solo se il prodot
 const eur = (n) => n.toLocaleString("it-IT", { style:"currency", currency:"EUR", maximumFractionDigits:0 });
 const eurKg = (n) => "€" + n.toLocaleString("it-IT", { minimumFractionDigits:2, maximumFractionDigits:2 });
 const kg = (n) => n.toLocaleString("it-IT");
-function tierCeiling(qty){ for(const t of TIERS) if(qty<=t.max) return t.price; return 2.10; }
-function tierFor(vol){ for(let i=0;i<TIERS.length;i++) if(vol<=TIERS[i].max) return TIERS[i]; return TIERS[TIERS.length-1]; }
+// UNICO punto di calcolo dello scaglione per un volume, usato ovunque (prezzo
+// stimato live, barra, scaglione attuale, risparmio, gap "Chiudi scaglione").
+// Raggiungere la soglia di una fascia (il suo .max) SBLOCCA subito la fascia
+// successiva: confronto "vol < max" ≡ "vol >= soglia". Così a esattamente
+// 5000/20000/50000 kg il tetto è già quello dello scaglione più basso, senza
+// l'off-by-one che obbligava ad aggiungere +1 kg. Un eventuale ritocco al
+// confine si applica automaticamente a tutti i punti che derivano da qui.
+function tierIndexFor(vol){ for(let i=0;i<TIERS.length;i++) if(vol<TIERS[i].max) return i; return TIERS.length-1; }
+function tierFor(vol){ return TIERS[tierIndexFor(vol)]; }
+function tierCeiling(vol){ return tierFor(vol).price; }
 
 function relTime(iso) {
   if (!iso) return "";
@@ -193,7 +201,7 @@ export default function PoolAuctionPage() {
   // "prossimo scaglione" si riferiscono a QUESTO. Così quando la quantità in sospeso
   // supera la soglia dello scaglione corrente la barra si resetta verso la soglia
   // successiva (target = soglia del nuovo scaglione) invece di riempirsi oltre il bordo.
-  const projIdx = (() => { const i = TIERS.findIndex(t => projected <= t.max); return i === -1 ? TIERS.length - 1 : i; })();
+  const projIdx = tierIndexFor(projected);
   const barTarget = TIERS[projIdx].max === Infinity ? null : TIERS[projIdx].max;
   const toNext = barTarget ? Math.max(0, barTarget - projected) : 0;
   const aloneCeiling = tierCeiling(userQty);
@@ -286,7 +294,8 @@ export default function PoolAuctionPage() {
 
         {/* BREADCRUMB */}
         <div style={{ display:"flex", alignItems:"center", gap:8, fontSize:13, color:C.muted, marginBottom:18, flexWrap:"wrap" }}>
-          <span>Home</span><ChevronRight size={13}/><span>Asta a ribasso · attive</span><ChevronRight size={13}/>
+          <span onClick={() => { window.location.href = "/"; }} style={{ cursor:"pointer" }}>Home</span><ChevronRight size={13}/>
+          <span onClick={() => { window.location.href = "/pool"; }} style={{ cursor:"pointer" }}>Asta a ribasso · attive</span><ChevronRight size={13}/>
           <span style={{ color:C.text, fontWeight:600 }}>{pool.product}</span>
         </div>
 
@@ -359,7 +368,7 @@ export default function PoolAuctionPage() {
             {barTarget ? (
               <div style={{ marginBottom:20 }}>
                 <div style={{ display:"flex", justifyContent:"space-between", fontSize:12, marginBottom:6 }}>
-                  <span style={{ color:C.muted }}>Prossimo scaglione: <b style={{ color:C.text }}>{kg(barTarget)} kg → tetto {eurKg(tierFor(barTarget+1).price)}/kg</b></span>
+                  <span style={{ color:C.muted }}>Prossimo scaglione: <b style={{ color:C.text }}>{kg(barTarget)} kg → tetto {eurKg(tierFor(barTarget).price)}/kg</b></span>
                   <span className="bs-num" style={{ color:C.purple, fontWeight:700 }}>{kg(Math.min(projected, barTarget))} / {kg(barTarget)}</span>
                 </div>
                 <div style={{ height:16, background:"#EDE4F7", borderRadius:100, overflow:"hidden", display:"flex" }}>
@@ -369,7 +378,7 @@ export default function PoolAuctionPage() {
                   )}
                 </div>
                 <div style={{ fontSize:12, color:C.muted, marginTop:6 }}>
-                  Mancano <b className="bs-num" style={{ color:C.purple }}>{kg(toNext)} kg</b> per abbassare il tetto a {eurKg(tierFor(barTarget+1).price)}/kg.
+                  Mancano <b className="bs-num" style={{ color:C.purple }}>{kg(toNext)} kg</b> per abbassare il tetto a {eurKg(tierFor(barTarget).price)}/kg.
                   {crossesTier && <span style={{ color:C.blue, fontWeight:600 }}> Con la tua quantità sblocchi un tetto più basso! 🎉</span>}
                 </div>
               </div>
