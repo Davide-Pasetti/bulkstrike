@@ -65,8 +65,9 @@ export default function MegaMenu() {
 
   useEffect(() => () => clearTimers(), []);
 
-  if (taxonomy.length === 0) return null;
-  const active = taxonomy.find((m) => m.id === activeId) || taxonomy[0];
+  // Il bottone è SEMPRE renderizzato (mai return null): così non "flasha" via
+  // quando la tassonomia arriva o quando cacheComponents rimonta la shell.
+  const active = taxonomy.find((m) => m.id === activeId) || taxonomy[0] || null;
 
   return (
     <div ref={wrapRef} onPointerEnter={scheduleOpen} onPointerLeave={scheduleClose} style={{ position: "relative", flexShrink: 0 }}>
@@ -91,12 +92,19 @@ export default function MegaMenu() {
         <ChevronDown size={15} style={{ transform: open ? "rotate(180deg)" : "none", transition: "transform .15s" }} />
       </button>
 
-      {open && (
+      {/* Pannello: montato UNA volta (quando la tassonomia è pronta) e mai
+          smontato al toggle — l'apertura/chiusura è solo una transizione CSS di
+          opacità/visibilità. Così non "sparisce e ricompare" e il contenuto
+          resta stabile. paddingTop:8 fa da ponte trasparente sul gap col bottone
+          (niente zona morta che chiude il menu passando col mouse). */}
+      {active && (
         <div
           role="region"
           aria-label="Categorie prodotti"
-          style={{ position: "absolute", top: "calc(100% + 8px)", left: 0, zIndex: 60, display: "flex", width: "min(920px, calc(100vw - 48px))", maxHeight: "min(560px, calc(100vh - 120px))", background: "#fff", border: `1px solid ${C.border}`, borderRadius: 16, boxShadow: "0 18px 50px rgba(13,33,55,.16)", overflow: "hidden" }}
+          aria-hidden={!open}
+          style={{ position: "absolute", top: "100%", left: 0, zIndex: 60, paddingTop: 8, width: "min(920px, calc(100vw - 48px))", opacity: open ? 1 : 0, visibility: open ? "visible" : "hidden", transform: open ? "translateY(0)" : "translateY(-6px)", transition: "opacity .14s ease, transform .14s ease, visibility .14s", pointerEvents: open ? "auto" : "none" }}
         >
+          <div style={{ display: "flex", width: "100%", maxHeight: "min(560px, calc(100vh - 120px))", background: "#fff", border: `1px solid ${C.border}`, borderRadius: 16, boxShadow: "0 18px 50px rgba(13,33,55,.16)", overflow: "hidden" }}>
           {/* Colonna sinistra — macro-aree */}
           <div style={{ width: 280, flexShrink: 0, borderRight: `1px solid ${C.border}`, overflowY: "auto", padding: "10px 8px", background: "#fff" }}>
             {taxonomy.map((m) => (
@@ -144,6 +152,7 @@ export default function MegaMenu() {
                 <div style={{ fontSize: 12.5, color: C.muted }}>Nessun settore in questa area.</div>
               )}
             </div>
+          </div>
           </div>
         </div>
       )}
