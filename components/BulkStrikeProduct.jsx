@@ -1,7 +1,8 @@
 import { useState, useMemo, useEffect } from "react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { Search, ArrowRight, Check, Clock, ChevronDown, ChevronRight, ChevronUp, Star, Shield, Truck, FileText, Download, Plus, Minus, Beaker, TrendingDown, Users, Gavel, Info, ShoppingCart } from "lucide-react";
-import { getProduct, getOpenPoolForProduct, getPriceReference, getProductBreadcrumb, getSession, openPool, upsertCartItem, poolErrorMessage, searchProducts, getCart } from "@/lib/api";
+import { getProduct, getOpenPoolForProduct, getPriceReference, getProductBreadcrumb, getSession, openPool, upsertCartItem, poolErrorMessage, searchProducts, getCart, isFollowingProduct } from "@/lib/api";
+import ProductFollowButton from "@/components/BulkStrikeProductFollow";
 import BulkStrikeNav from "@/components/BulkStrikeNav";
 import BulkStrikeChatWidget from "@/components/BulkStrikeChatWidget";
 import { BSIcon } from "@/components/BSLogo";
@@ -170,6 +171,7 @@ export default function ProductPage() {
   const [pool, setPool] = useState(SEED_POOL);
   const [qa, setQa] = useState(SEED_QA);
   const [productId, setProductId] = useState(null);
+  const [followingProduct, setFollowingProduct] = useState(false);
   const [priceRef, setPriceRef] = useState(null);
   const [loading, setLoading] = useState(true);
   const [crumb, setCrumb] = useState(null); // { macro, sector } reali del prodotto
@@ -181,6 +183,7 @@ export default function ProductPage() {
   const [searchResults, setSearchResults] = useState([]);
   const [searchOpen, setSearchOpen] = useState(false);
   const [cartSupplierIds, setCartSupplierIds] = useState(new Set()); // fornitori già presenti nel tuo carrello → spedizione si consolida
+  useEffect(() => { if (productId) isFollowingProduct(productId).then(setFollowingProduct).catch(() => {}); }, [productId]);
 
   // se sei loggato, sappiamo da quali fornitori hai già roba nel carrello: la spedizione
   // di un nuovo prodotto dello stesso fornitore si unisce a quella già "pagata" da quei prodotti
@@ -450,6 +453,11 @@ export default function ProductPage() {
             </div>
             <h1 style={{ fontSize:32, fontWeight:800, letterSpacing:"-0.02em", marginBottom:6 }}>{product.name}</h1>
             <p style={{ fontSize:14, color:C.muted }}>{product.form} · Purezza {product.purityRange} · CAS {product.cas}</p>
+            {productId && (
+              <div style={{ marginTop:10 }}>
+                <ProductFollowButton productId={productId} following={followingProduct} onChange={setFollowingProduct} muted={C.muted} border={C.border} />
+              </div>
+            )}
           </div>
           <div style={{ textAlign:"right" }}>
             <div style={{ fontSize:12, color:C.muted }}>Prezzo indicativo da</div>

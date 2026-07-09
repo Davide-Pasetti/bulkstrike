@@ -9,9 +9,10 @@
 // dropdown di suggerimenti (nome+CAS+E-number+sinonimi) e, in parallelo,
 // filtra live la griglia mentre digiti (onQueryChange → setQ).
 import { useState, useEffect, useMemo } from "react";
-import { ChevronRight, X, Flame, Package, SlidersHorizontal, ShieldCheck, Gavel, Layers, FileCheck2, Boxes } from "lucide-react";
-import { getCatalog, getMacroAreas } from "@/lib/api";
+import { ChevronRight, X, Flame, Package, SlidersHorizontal, ShieldCheck, Gavel, Layers, FileCheck2, Boxes, Star } from "lucide-react";
+import { getCatalog, getMacroAreas, getMyFollowedProducts, getSession } from "@/lib/api";
 import BulkStrikeNav from "@/components/BulkStrikeNav";
+import ProductFollowButton from "@/components/BulkStrikeProductFollow";
 import { BSIcon } from "@/components/BSLogo";
 import { IvaChip } from "@/components/BulkStrikeBadges";
 
@@ -41,6 +42,9 @@ export default function CatalogPage() {
   const [poolOnly, setPoolOnly] = useState(false);
   const [sort, setSort] = useState("name");
   const [showFilters, setShowFilters] = useState(false);
+  const [favOnly, setFavOnly] = useState(true);          // default: solo preferiti
+  const [followedIds, setFollowedIds] = useState(null);  // Set | null (non caricato)
+  const [loggedIn, setLoggedIn] = useState(false);
 
   useEffect(() => {
     Promise.all([getCatalog(), getMacroAreas()])
@@ -50,7 +54,23 @@ export default function CatalogPage() {
     if (sp.get("macro")) setActiveMacro(sp.get("macro"));
     if (sp.get("sector")) setActiveSector(sp.get("sector"));
     if (sp.get("q")) setQ(sp.get("q"));
+    getSession().then(s => {
+      if (!s) { setLoggedIn(false); return; }
+      setLoggedIn(true);
+      getMyFollowedProducts()
+        .then(list => setFollowedIds(new Set((list || []).map(x => x.product_id))))
+        .catch(() => setFollowedIds(new Set()));
+    }).catch(() => setLoggedIn(false));
   }, []);
+
+  const hasFavs = !!(followedIds && followedIds.size > 0);
+  // Preferiti attivo solo se loggato, con almeno un preferito e toggle ON.
+  const favActive = loggedIn && hasFavs && favOnly;
+  const toggleFollow = (productId, next) => setFollowedIds(prev => {
+    const set = new Set(prev || []);
+    if (next) set.add(productId); else set.delete(productId);
+    return set;
+  });
 
   const filtered = useMemo(() => {
     let list = all;
@@ -62,6 +82,7 @@ export default function CatalogPage() {
     if (activeMacro) list = list.filter(p => (p.macros || []).includes(activeMacro));
     if (activeSector) list = list.filter(p => (p.sectors || []).includes(activeSector));
     if (poolOnly) list = list.filter(p => p.has_pool);
+    if (favActive) list = list.filter(p => followedIds.has(p.id));
     const mn = parseFloat(minP), mx = parseFloat(maxP);
     if (!isNaN(mn)) list = list.filter(p => p.best_price != null && p.best_price >= mn);
     if (!isNaN(mx)) list = list.filter(p => p.best_price != null && p.best_price <= mx);
@@ -71,7 +92,7 @@ export default function CatalogPage() {
     else if (sort === "suppliers") list.sort((a, b) => (b.supplier_count || 0) - (a.supplier_count || 0));
     else list.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
     return list;
-  }, [all, q, activeMacro, activeSector, poolOnly, minP, maxP, sort]);
+  }, [all, q, activeMacro, activeSector, poolOnly, minP, maxP, sort, favActive, followedIds]);
 
   const activeMacroObj = macros.find(m => m.slug === activeMacro);
   const activeSectorObj = (activeMacroObj?.sub_areas || []).find(s => s.slug === activeSector);
@@ -122,6 +143,12 @@ export default function CatalogPage() {
             <button className="cat-filter-toggle" onClick={() => setShowFilters(true)} style={{ alignItems: "center", gap: 7, padding: "8px 14px", borderRadius: 9, border: `1px solid ${C.border}`, background: "#fff", cursor: "pointer", fontSize: 13, fontWeight: 600, color: C.text }}>
               <SlidersHorizontal size={15} /> Filtri{activeCount > 0 ? ` · ${activeCount}` : ""}
             </button>
+            {loggedIn && hasFavs && (
+              <button onClick={() => setFavOnly(v => !v)} title={favOnly ? "Mostra tutte le materie prime" : "Mostra solo i preferiti"}
+                style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 12px", borderRadius: 9, border: `1px solid ${favOnly ? "#FDE68A" : C.border}`, background: favOnly ? "#FEF3C7" : "#fff", color: favOnly ? "#B45309" : C.text, fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "Inter,system-ui" }}>
+                <Star size={14} fill={favOnly ? "#D97706" : "none"} color={favOnly ? "#D97706" : C.muted} /> Preferiti
+              </button>
+            )}
             <span style={{ fontSize: 13, color: C.muted }}>Ordina</span>
             <select value={sort} onChange={(e) => setSort(e.target.value)} style={{ padding: "8px 12px", borderRadius: 9, border: `1px solid ${C.border}`, background: "#fff", fontSize: 13, fontFamily: "Inter,system-ui", color: C.text, cursor: "pointer" }}>
               <option value="name">Nome (A→Z)</option>
@@ -208,6 +235,12 @@ export default function CatalogPage() {
               </div>
             )}
 
+            {loggedIn && followedIds && !hasFavs && (
+              <div style={{ display: "flex", alignItems: "center", gap: 10, background: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: 12, padding: "12px 16px", marginBottom: 14, fontSize: 13.5, color: "#92400E" }}>
+                <Star size={17} color="#D97706" style={{ flexShrink: 0 }} />
+                <span>Segui le materie prime che ti interessano con la <b>stella</b> ⭐ sulle card: la prossima volta le ritrovi subito qui, filtrate come <b>Preferiti</b>.</span>
+              </div>
+            )}
             {loading ? (
               <div style={{ padding: "60px 0", textAlign: "center", color: C.muted, fontSize: 14 }}>Caricamento catalogo…</div>
             ) : filtered.length === 0 ? (
@@ -225,7 +258,10 @@ export default function CatalogPage() {
                       <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, color: C.muted, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 100, padding: "3px 9px", maxWidth: "100%", overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>
                       <span>{activeSectorObj?.icon || p.primary_icon || "📦"}</span>{activeSectorObj?.name || p.primary_sector || "Materie prime"}
                       </span>
-                      {p.has_pool && <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 10, fontWeight: 800, color: "#B45309", background: "#FEF3C7", borderRadius: 100, padding: "3px 8px", flexShrink: 0 }}><Flame size={11} />ASTA</span>}
+                      <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }} onClick={(e) => e.stopPropagation()}>
+                        {p.has_pool && <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 10, fontWeight: 800, color: "#B45309", background: "#FEF3C7", borderRadius: 100, padding: "3px 8px", flexShrink: 0 }}><Flame size={11} />ASTA</span>}
+                        <ProductFollowButton productId={p.id} following={!!(followedIds && followedIds.has(p.id))} onChange={(next) => toggleFollow(p.id, next)} compact muted={C.muted} border={C.border} />
+                      </div>
                     </div>
                     <div style={{ fontSize: 15, fontWeight: 700, lineHeight: 1.25, flex: 1 }}>{p.name}</div>
                     {(p.cas_number || p.e_number) && (

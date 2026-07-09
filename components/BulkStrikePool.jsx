@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
-import { getPoolDetail, getPoolBids, getPoolParticipants, getPoolTargetJoins, joinPool, joinPoolAtTarget, getMyTargetJoin, cancelTargetJoin, poolErrorMessage } from "@/lib/api";
+import { getPoolDetail, getPoolBids, getPoolParticipants, getPoolTargetJoins, joinPool, joinPoolAtTarget, getMyTargetJoin, cancelTargetJoin, poolErrorMessage, isFollowingProduct } from "@/lib/api";
 import BulkStrikeNav from "@/components/BulkStrikeNav";
+import ProductFollowButton from "@/components/BulkStrikeProductFollow";
+import { TIERS, tierIndexFor, tierFor, tierCeiling } from "@/lib/tiers";
 import BulkStrikeChatWidget from "@/components/BulkStrikeChatWidget";
 import { BSIcon } from "@/components/BSLogo";
 import { Search, ArrowRight, Check, Clock, ChevronRight, Shield, Users, TrendingDown, Plus, Minus, Info, Gavel, Award } from "lucide-react";
@@ -19,12 +21,6 @@ const SEED_POOL = {
   bids: 4,
 };
 
-const TIERS = [
-  { max:5000,  price:2.80, label:"1–5 t" },
-  { max:20000, price:2.55, label:"5–20 t" },
-  { max:50000, price:2.30, label:"20–50 t" },
-  { max:Infinity, price:2.10, label:"50 t+" },
-];
 
 const SEED_BIDDERS = [
   { tag:"Fornitore #3", origin:"Cina",      flag:"🇨🇳", bid:2.27, when:"12 min fa", leader:true },
@@ -49,16 +45,6 @@ const PALLET_KG = 1000;        // peso di 1 pallet demo, usato solo se il prodot
 const eur = (n) => n.toLocaleString("it-IT", { style:"currency", currency:"EUR", maximumFractionDigits:0 });
 const eurKg = (n) => "€" + n.toLocaleString("it-IT", { minimumFractionDigits:2, maximumFractionDigits:2 });
 const kg = (n) => n.toLocaleString("it-IT");
-// UNICO punto di calcolo dello scaglione per un volume, usato ovunque (prezzo
-// stimato live, barra, scaglione attuale, risparmio, gap "Chiudi scaglione").
-// Raggiungere la soglia di una fascia (il suo .max) SBLOCCA subito la fascia
-// successiva: confronto "vol < max" ≡ "vol >= soglia". Così a esattamente
-// 5000/20000/50000 kg il tetto è già quello dello scaglione più basso, senza
-// l'off-by-one che obbligava ad aggiungere +1 kg. Un eventuale ritocco al
-// confine si applica automaticamente a tutti i punti che derivano da qui.
-function tierIndexFor(vol){ for(let i=0;i<TIERS.length;i++) if(vol<TIERS[i].max) return i; return TIERS.length-1; }
-function tierFor(vol){ return TIERS[tierIndexFor(vol)]; }
-function tierCeiling(vol){ return tierFor(vol).price; }
 
 function relTime(iso) {
   if (!iso) return "";
@@ -95,6 +81,8 @@ export default function PoolAuctionPage() {
   const [myQty, setMyQty] = useState(0); // quanto ho già messo in questo pool (anche da sessioni precedenti)
   const [showTargetInput, setShowTargetInput] = useState(false);
   const [targetPrice, setTargetPrice] = useState("");
+  const [productId, setProductId] = useState(null);       // per il bottone "Segui" prodotto
+  const [followingProduct, setFollowingProduct] = useState(false);
 
   useEffect(() => {
     const t = setInterval(() => setSecs(s => s>0 ? s-1 : 0), 1000);
@@ -121,6 +109,7 @@ export default function PoolAuctionPage() {
       setParticipants((parts || []).map(p => ({ who: regionLabel(p.city, p.country), qty: p.quantity_kg, when: "" })));
       setPendingJoins(waiting || []);
       setMyQty(Number(detail.my_quantity_kg) || 0);
+      if (detail.product?.id) { setProductId(detail.product.id); isFollowingProduct(detail.product.id).then(setFollowingProduct).catch(() => {}); }
       if (detail.pallet_kg) setRealPalletKg(Number(detail.pallet_kg));
       if (detail.sacco_kg) setRealSaccoKg(Number(detail.sacco_kg));
       if (detail.container_kg) setRealContainerKg(Number(detail.container_kg));
@@ -325,6 +314,11 @@ export default function PoolAuctionPage() {
             <div style={{ fontSize:14, color:C.muted, display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}>
               <Award size={14} color={C.green}/> Standard garantito: <b style={{ color:C.text }}>{pool.standard}</b>
             </div>
+            {productId && (
+              <div style={{ marginTop:12 }}>
+                <ProductFollowButton productId={productId} following={followingProduct} onChange={setFollowingProduct} muted={C.muted} border={C.border} />
+              </div>
+            )}
           </div>
           {concluded ? (
             <div style={{ textAlign:"center", background:C.bg, border:`1px solid ${C.border}`, borderRadius:12, padding:"12px 18px" }}>

@@ -6,9 +6,12 @@
 // toolbar con ricerca + ordinamento, griglia di card, footer. Dati dalla RPC
 // pubblica get_active_pools (la tabella pools è preclusa agli anonimi da RLS).
 import { useState, useEffect, useMemo } from "react";
-import { ChevronRight, Clock, Users, Gavel, Search, ArrowRight } from "lucide-react";
-import { getActivePools } from "@/lib/api";
+import { ChevronRight, Clock, Users, Gavel, Search, ArrowRight, Star } from "lucide-react";
+import { getActivePools, getMyFollowedProducts, getSession } from "@/lib/api";
+import { nextTierGap } from "@/lib/tiers";
 import BulkStrikeNav from "@/components/BulkStrikeNav";
+import ProductFollowButton from "@/components/BulkStrikeProductFollow";
+import CategorySelect from "@/components/BulkStrikeCategorySelect";
 import { BSIcon } from "@/components/BSLogo";
 
 const C = { blue: "#0EA5E9", text: "#0F172A", muted: "#64748B", border: "#E2E8F0", bg: "#F8FAFE", green: "#059669", red: "#DC2626", amber: "#D97706", purple: "#7C3AED" };
@@ -31,12 +34,28 @@ export default function PoolListPage() {
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
   const [sort, setSort] = useState("closing");
+  const [category, setCategory] = useState(null);         // slug macro | null
+  const [favOnly, setFavOnly] = useState(true);           // default: solo preferiti
+  const [followedIds, setFollowedIds] = useState(null);   // Set | null (non caricato)
+  const [loggedIn, setLoggedIn] = useState(false);
 
   useEffect(() => {
     getActivePools()
       .then((p) => { setPools(p || []); setLoading(false); })
       .catch(() => setLoading(false));
+    getSession().then(s => {
+      if (!s) { setLoggedIn(false); return; }
+      setLoggedIn(true);
+      getMyFollowedProducts()
+        .then(list => setFollowedIds(new Set((list || []).map(x => x.product_id))))
+        .catch(() => setFollowedIds(new Set()));
+    }).catch(() => setLoggedIn(false));
   }, []);
+
+  const hasFavs = !!(followedIds && followedIds.size > 0);
+  // Il filtro preferiti si applica SOLO se: loggato, con almeno un preferito e toggle ON.
+  // Così se non hai preferiti (o non sei loggato) la pagina non risulta mai vuota.
+  const favActive = loggedIn && hasFavs && favOnly;
 
   const filtered = useMemo(() => {
     let list = pools;
@@ -44,12 +63,20 @@ export default function PoolListPage() {
     if (s) list = list.filter(p =>
       (p.product_name || "").toLowerCase().includes(s) ||
       (p.product_enum || "").toLowerCase().includes(s));
+    if (category) list = list.filter(p => (p.macros || []).includes(category));
+    if (favActive) list = list.filter(p => followedIds.has(p.product_id));
     list = [...list];
     if (sort === "volume") list.sort((a, b) => (b.total_volume_kg || 0) - (a.total_volume_kg || 0));
     else if (sort === "name") list.sort((a, b) => (a.product_name || "").localeCompare(b.product_name || ""));
     else list.sort((a, b) => new Date(a.closes_at) - new Date(b.closes_at));
     return list;
-  }, [pools, q, sort]);
+  }, [pools, q, sort, category, favActive, followedIds]);
+
+  const toggleFollow = (productId, next) => setFollowedIds(prev => {
+    const set = new Set(prev || []);
+    if (next) set.add(productId); else set.delete(productId);
+    return set;
+  });
 
   return (
     <div style={{ background: "#fff", color: C.text, fontFamily: "'Inter',system-ui,sans-serif", minHeight: "100vh", colorScheme: "light" }}>
@@ -87,6 +114,14 @@ export default function PoolListPage() {
               <Search size={14} color={C.muted} />
               <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Cerca prodotto o E-number…" style={{ border: "none", outline: "none", fontSize: 13, fontFamily: "Inter,system-ui", width: 190, background: "transparent", color: C.text }} />
             </div>
+            {loggedIn && hasFavs && (
+              <button onClick={() => setFavOnly(v => !v)} title={favOnly ? "Mostra tutte le aste" : "Mostra solo i preferiti"}
+                style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 12px", borderRadius: 9, border: `1px solid ${favOnly ? "#FDE68A" : C.border}`, background: favOnly ? "#FEF3C7" : "#fff", color: favOnly ? "#B45309" : C.text, fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "Inter,system-ui" }}>
+                <Star size={14} fill={favOnly ? "#D97706" : "none"} color={favOnly ? "#D97706" : C.muted} /> Preferiti
+              </button>
+            )}
+            <span style={{ fontSize: 13, color: C.muted }}>Categoria</span>
+            <CategorySelect value={category} onChange={setCategory} colors={C} />
             <span style={{ fontSize: 13, color: C.muted }}>Ordina</span>
             <select value={sort} onChange={(e) => setSort(e.target.value)} style={{ padding: "8px 12px", borderRadius: 9, border: `1px solid ${C.border}`, background: "#fff", fontSize: 13, fontFamily: "Inter,system-ui", color: C.text, cursor: "pointer" }}>
               <option value="closing">Chiusura più vicina</option>
@@ -96,6 +131,12 @@ export default function PoolListPage() {
           </div>
         </div>
 
+        {loggedIn && followedIds && !hasFavs && (
+          <div style={{ display: "flex", alignItems: "center", gap: 10, background: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: 12, padding: "12px 16px", marginBottom: 16, fontSize: 13.5, color: "#92400E" }}>
+            <Star size={17} color="#D97706" style={{ flexShrink: 0 }} />
+            <span>Segui i prodotti che ti interessano con la <b>stella</b> ⭐ sulle card: la prossima volta li ritrovi subito qui, filtrati come <b>Preferiti</b>.</span>
+          </div>
+        )}
         {loading ? (
           <div style={{ padding: "60px 0", textAlign: "center", color: C.muted, fontSize: 14 }}>Caricamento aste…</div>
         ) : filtered.length === 0 ? (
@@ -117,9 +158,12 @@ export default function PoolListPage() {
                     <span className="pool-live-dot" style={p.status === "final_phase" ? { background: C.amber } : undefined} />
                     {p.status === "final_phase" ? "Fase finale" : "Live"}
                   </span>
-                  <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11.5, color: C.muted }}>
-                    <Clock size={12} /> {timeLeft(p.status === "final_phase" && p.final_phase_ends_at ? p.final_phase_ends_at : p.closes_at)}
-                  </span>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }} onClick={(e) => e.stopPropagation()}>
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11.5, color: C.muted }}>
+                      <Clock size={12} /> {timeLeft(p.status === "final_phase" && p.final_phase_ends_at ? p.final_phase_ends_at : p.closes_at)}
+                    </span>
+                    <ProductFollowButton productId={p.product_id} following={!!(followedIds && followedIds.has(p.product_id))} onChange={(next) => toggleFollow(p.product_id, next)} compact muted={C.muted} border={C.border} />
+                  </div>
                 </div>
 
                 <div style={{ flex: 1 }}>
@@ -131,7 +175,7 @@ export default function PoolListPage() {
                   <div style={{ background: "#FBF7FF", borderRadius: 9, padding: "9px 12px" }}>
                     <div style={{ fontSize: 10.5, color: C.muted, marginBottom: 2 }}>Miglior prezzo</div>
                     <div style={{ fontSize: 17, fontWeight: 900, color: C.purple, letterSpacing: "-0.02em" }}>
-                      {p.best_price_per_kg != null ? <>{eurKg(p.best_price_per_kg)}<span style={{ fontSize: 11, color: C.muted, fontWeight: 600 }}>/kg</span></> : <span style={{ fontSize: 13, fontWeight: 700, color: C.muted }}>in attesa di offerte</span>}
+                      {Number(p.num_bids) > 0 && p.best_price_per_kg != null ? <>{eurKg(p.best_price_per_kg)}<span style={{ fontSize: 11, color: C.muted, fontWeight: 600 }}>/kg</span></> : <span style={{ fontSize: 13, fontWeight: 700, color: C.muted }}>In attesa di offerte</span>}
                     </div>
                   </div>
                   <div style={{ background: C.bg, borderRadius: 9, padding: "9px 12px" }}>
@@ -139,6 +183,15 @@ export default function PoolListPage() {
                     <div style={{ fontSize: 17, fontWeight: 900, letterSpacing: "-0.02em" }}>{kg(p.total_volume_kg)}<span style={{ fontSize: 11, color: C.muted, fontWeight: 600 }}> kg</span></div>
                   </div>
                 </div>
+
+                {Number(p.num_bids) > 0 && p.best_price_per_kg != null && (() => {
+                  const g = nextTierGap(p.total_volume_kg);
+                  return g && g.gap > 0 ? (
+                    <div style={{ fontSize: 11.5, color: C.muted, marginTop: -4 }}>
+                      Mancano <b style={{ color: C.text }}>{kg(g.gap)} kg</b> per sbloccare <b style={{ color: C.purple }}>{eurKg(g.nextPrice)}/kg</b>
+                    </div>
+                  ) : null;
+                })()}
 
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, borderTop: `1px solid ${C.border}`, paddingTop: 10 }}>
                   <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12, color: C.muted }}>
