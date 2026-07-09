@@ -75,7 +75,7 @@ export default function ProfileShell({ active, headerCenter = null, children }) 
     { id: "overview",  label: "Panoramica",             icon: LayoutGrid,    href: "/dashboard?section=overview" },
     { id: "alerts",    label: "Avvisi & materie prime", icon: Bell,          href: "/dashboard?section=alerts", badge: notifUnread },
     { id: "ordini",    label: "Ordini",                 icon: ShoppingBag,   href: "/ordini" },
-    { id: "pools",     label: "Aste attive",            icon: Gavel,         href: "/dashboard?section=pools" },
+    { id: "pools",     label: "Aste personali",         icon: Gavel,         href: "/dashboard?section=pools" },
     { id: "messaggi",  label: "Messaggi",               icon: MessageSquare, href: "/messaggi", badge: msgUnread },
     { id: "preferiti", label: "Fornitori preferiti",    icon: Star,          href: "/preferiti" },
     { id: "prodotti",  label: "Listino prodotti",       icon: Package,       href: "/i-miei-prodotti", show: !!company?.is_supplier },

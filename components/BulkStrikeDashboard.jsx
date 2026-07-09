@@ -369,7 +369,7 @@ export default function Dashboard() {
                 {/* active pools */}
                 <div className="bs-card" style={{ padding:18 }}>
                   <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:12 }}>
-                    <div style={{ fontSize:15, fontWeight:700 }}>Aste attive</div>
+                    <div style={{ fontSize:15, fontWeight:700 }}>Aste personali</div>
                     <button onClick={()=>setSection("pools")} style={{ background:"none", border:"none", color:C.blue, fontSize:12.5, fontWeight:600, cursor:"pointer", fontFamily:"Inter,system-ui" }}>Gestisci</button>
                   </div>
                   <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
@@ -465,7 +465,7 @@ export default function Dashboard() {
           {/* ===== POOLS ===== */}
           {section==="pools" && (
             <>
-              <h1 style={{ fontSize:23, fontWeight:800, marginBottom:4 }}>Aste attive</h1>
+              <h1 style={{ fontSize:23, fontWeight:800, marginBottom:4 }}>Aste personali</h1>
               <p style={{ fontSize:14, color:C.muted, marginBottom:20 }}>{role==="buyer"?"Le aste a ribasso a cui stai partecipando. Il prezzo può solo scendere fino alla chiusura.":"Le aste a ribasso in cui stai competendo. Rilancia per restare il più conveniente."}</p>
 
               {/* FINAL PHASE — post-close counter-offers (supplier only) */}
