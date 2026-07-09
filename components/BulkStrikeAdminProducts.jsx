@@ -9,8 +9,8 @@
 // a mostrare l'UI giusta.
 // ============================================================
 import { useState, useEffect, useMemo } from "react";
-import { Search, Check, ShieldAlert } from "lucide-react";
-import { getSession, getMyCompany, adminListProductsPoolMin, adminSetProductPoolMin, adminSetProductFormats, poolErrorMessage } from "@/lib/api";
+import { Search, Check, ShieldAlert, AlertTriangle } from "lucide-react";
+import { getSession, getMyCompany, adminListProductsPoolMin, adminSetProductPoolMin, adminSetProductFormats, adminSetProductUnit, poolErrorMessage } from "@/lib/api";
 import BulkStrikeNav from "@/components/BulkStrikeNav";
 
 const C = { blue: "#0EA5E9", text: "#0F172A", muted: "#64748B", border: "#E2E8F0", bg: "#F8FAFE", green: "#059669", red: "#DC2626", amber: "#D97706", purple: "#7C3AED" };
@@ -24,6 +24,7 @@ export default function AdminProductsPage({ inShell = false }) {
   const [edits, setEdits] = useState({});     // { [productId]: string }
   const [savingId, setSavingId] = useState(null);
   const [savedId, setSavedId] = useState(null);
+  const [savingUnitId, setSavingUnitId] = useState(null);
   const [err, setErr] = useState("");
   const [query, setQuery] = useState("");
 
@@ -86,6 +87,19 @@ export default function AdminProductsPage({ inShell = false }) {
     finally { setSavingId(null); }
   }
 
+  // Tipo prodotto: 'kg' solido | 'L' liquido. Il click e' una decisione esplicita
+  // dell'admin, quindi azzera anche il flag "da verificare" (lato DB e in UI).
+  // Riclicca lo stesso tipo su un prodotto "da verificare" = conferma la bozza.
+  async function saveUnit(row, unit) {
+    if (row.default_unit === unit && !row.unit_needs_review) return;
+    setSavingUnitId(row.id); setErr("");
+    try {
+      await adminSetProductUnit(row.id, unit);
+      setRows(prev => prev.map(r => r.id === row.id ? { ...r, default_unit: unit, unit_needs_review: false } : r));
+    } catch (e) { setErr(poolErrorMessage(e)); }
+    finally { setSavingUnitId(null); }
+  }
+
   const wrap = (children) => (
     <div style={{ background: "#fff", color: C.text, fontFamily: "'Inter',system-ui,sans-serif", minHeight: "100vh", colorScheme: "light" }}>
       {!inShell && <BulkStrikeNav />}
@@ -127,8 +141,8 @@ export default function AdminProductsPage({ inShell = false }) {
       {err && <div style={{ fontSize: 13, color: C.red, marginBottom: 12 }}>{err}</div>}
 
       <div style={{ border: `1px solid ${C.border}`, borderRadius: 14, overflow: "hidden" }}>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 110px 110px 110px 220px", gap: 12, padding: "12px 16px", background: C.bg, fontSize: 11, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.04em", color: C.muted }}>
-          <span>Prodotto</span><span>1 pallet (kg)</span><span>1 sacco (kg)</span><span>1 container (kg)</span><span>Minimo pedane per aprire</span>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 168px 110px 110px 110px 220px", gap: 12, padding: "12px 16px", background: C.bg, fontSize: 11, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.04em", color: C.muted }}>
+          <span>Prodotto</span><span>Tipo prodotto</span><span>1 pallet (kg)</span><span>1 sacco (kg)</span><span>1 container (kg)</span><span>Minimo pedane per aprire</span>
         </div>
         {filtered.length === 0 ? (
           <div style={{ padding: "28px 16px", textAlign: "center", color: C.muted, fontSize: 14 }}>Nessun prodotto.</div>
@@ -147,8 +161,26 @@ export default function AdminProductsPage({ inShell = false }) {
               style={{ width, textAlign: "center", padding: "7px 8px", border: `1.5px solid ${C.border}`, borderRadius: 8, fontSize: 13.5, fontWeight: 700, outline: "none", fontFamily: "'JetBrains Mono',monospace" }} />
           );
           return (
-            <div key={row.id} style={{ display: "grid", gridTemplateColumns: "1fr 110px 110px 110px 220px", gap: 12, padding: "12px 16px", borderTop: `1px solid ${C.border}`, alignItems: "center", fontSize: 13.5 }}>
+            <div key={row.id} style={{ display: "grid", gridTemplateColumns: "1fr 168px 110px 110px 110px 220px", gap: 12, padding: "12px 16px", borderTop: `1px solid ${C.border}`, alignItems: "center", fontSize: 13.5 }}>
               <span style={{ fontWeight: 600 }}>{row.canonical_name}</span>
+              <div style={{ display: "flex", flexDirection: "column", gap: 5, alignItems: "flex-start" }}>
+                <div style={{ display: "flex", border: `1px solid ${C.border}`, borderRadius: 8, overflow: "hidden", opacity: savingUnitId === row.id ? 0.6 : 1 }}>
+                  {[["kg", "Solido"], ["L", "Liquido"]].map(([u, lab], i) => {
+                    const active = row.default_unit === u;
+                    return (
+                      <button key={u} onClick={() => saveUnit(row, u)} disabled={savingUnitId === row.id}
+                        style={{ padding: "6px 9px", fontSize: 12, fontWeight: 700, border: "none", borderLeft: i === 1 ? `1px solid ${C.border}` : "none", cursor: savingUnitId === row.id ? "default" : "pointer", background: active ? C.purple : "#fff", color: active ? "#fff" : C.muted, fontFamily: "Inter,system-ui", whiteSpace: "nowrap" }}>
+                        {lab}<span style={{ fontWeight: 400, opacity: 0.8 }}> ·{u}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+                {row.unit_needs_review && (
+                  <span title="Classificazione proposta automaticamente: da confermare" style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 10.5, fontWeight: 700, color: C.amber, background: "#FFFBEB", border: `1px solid ${C.amber}55`, borderRadius: 6, padding: "2px 6px" }}>
+                    <AlertTriangle size={11} /> da verificare
+                  </span>
+                )}
+              </div>
               {numInput("pallet", s.pallet)}
               {numInput("sacco", s.sacco, { placeholder: "—" })}
               {numInput("container", s.container, { placeholder: "—" })}
