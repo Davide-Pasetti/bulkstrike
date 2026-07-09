@@ -464,9 +464,14 @@ export default function PoolAuctionPage() {
                   </>
                 ) : (
                   <>
-                    <div style={{ display:"flex", alignItems:"baseline", justifyContent:"center", gap:6, background:C.bg, border:`1px solid ${belowMin?C.amber:C.border}`, borderRadius:8, padding:"9px 12px", marginBottom:8 }}>
-                      <input className="bs-num" style={{ width:90, border:"none", outline:"none", background:"transparent", fontSize:20, fontWeight:700, textAlign:"center", color:C.text }} value={userQty} onChange={e => setQtySafe(parseInt(e.target.value.replace(/\D/g,"")||"0"))}/>
-                      <span style={{ fontSize:14, color:C.muted }}>kg</span>
+                    {/* Kg liberi: stessi controlli − / + dei formati, con passo di 100 kg. */}
+                    <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:8 }}>
+                      <button className="bs-qty-btn" onClick={() => setQtySafe(userQty-100)}><Minus size={16}/></button>
+                      <div style={{ flex:1, display:"flex", alignItems:"baseline", justifyContent:"center", gap:6, background:C.bg, border:`1px solid ${belowMin?C.amber:C.border}`, borderRadius:8, padding:"9px 12px" }}>
+                        <input className="bs-num" style={{ width:90, border:"none", outline:"none", background:"transparent", fontSize:20, fontWeight:700, textAlign:"center", color:C.text }} value={userQty} onChange={e => setQtySafe(parseInt(e.target.value.replace(/\D/g,"")||"0"))}/>
+                        <span style={{ fontSize:14, color:C.muted }}>kg</span>
+                      </div>
+                      <button className="bs-qty-btn" onClick={() => setQtySafe(userQty+100)}><Plus size={16}/></button>
                     </div>
                     <div style={{ fontSize:12, color:C.muted, marginBottom:14 }}>= <b className="bs-num" style={{color:C.text}}>{palletCount}</b> pedane circa <span style={{ color:"#94A3B8" }}>(≈ {(userQty/palletKg).toFixed(2)} · 1 pallet = {kg(palletKg)} kg per questo prodotto)</span></div>
                   </>
