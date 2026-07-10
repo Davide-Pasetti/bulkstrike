@@ -198,12 +198,17 @@ export default function PoolAuctionPage() {
   // prezzo attuale" (l'offerta più bassa dei fornitori), che può scendere ancora sotto.
   const ceilingProjected = projectedTier.price;
   const crossesTier = projectedTier.max !== currentTier.max;
-  // Scaglione della quantità PROIETTATA (attuale + in sospeso): la barra e il testo
-  // "prossimo scaglione" si riferiscono a QUESTO. Così quando la quantità in sospeso
-  // supera la soglia dello scaglione corrente la barra si resetta verso la soglia
-  // successiva (target = soglia del nuovo scaglione) invece di riempirsi oltre il bordo.
-  const projIdx = tierIndexFor(projected);
-  const barTarget = TIERS[projIdx].max === Infinity ? null : TIERS[projIdx].max;
+  // Fascia che la barra sta RIEMPIENDO: il confine subito sopra il volume REALE
+  // attuale. La quantità in sospeso avanza alla fascia successiva solo quando SUPERA
+  // (strettamente) quel confine: se lo raggiunge ESATTAMENTE (es. "Chiudi scaglione"
+  // che atterra sul bordo), la barra resta su questa fascia e si legge PIENA al 100%.
+  // Con anche solo +1 kg oltre il confine si entra nella fascia successiva e la barra
+  // si resetta sui suoi confini. (tierIndexFor usa "<" e da solo, sul bordo esatto,
+  // salterebbe subito alla fascia lontana facendo apparire parziale una fascia appena
+  // completata: qui usiamo ">" stretto per tenere la barra sulla fascia che si chiude.)
+  let barIdx = tierIndexFor(pool.current);
+  while (TIERS[barIdx].max !== Infinity && projected > TIERS[barIdx].max) barIdx++;
+  const barTarget = TIERS[barIdx].max === Infinity ? null : TIERS[barIdx].max;
   const toNext = barTarget ? Math.max(0, barTarget - projected) : 0;
   const aloneCeiling = tierCeiling(userQty);
   const savings = Math.max(0, (aloneCeiling - ceilingProjected) * userQty);
@@ -395,8 +400,12 @@ export default function PoolAuctionPage() {
                   )}
                 </div>
                 <div style={{ fontSize:12, color:C.muted, marginTop:6 }}>
-                  Mancano <b className="bs-num" style={{ color:C.purple }}>{kg(toNext)} kg</b> per abbassare il tetto a {eurKg(tierFor(barTarget).price)}/kg.
-                  {crossesTier && <span style={{ color:C.blue, fontWeight:600 }}> Con la tua quantità sblocchi un tetto più basso! 🎉</span>}
+                  {toNext > 0 ? (
+                    <>Mancano <b className="bs-num" style={{ color:C.purple }}>{kg(toNext)} kg</b> per abbassare il tetto a {eurKg(tierFor(barTarget).price)}/kg.
+                    {crossesTier && <span style={{ color:C.blue, fontWeight:600 }}> Con la tua quantità sblocchi un tetto più basso! 🎉</span>}</>
+                  ) : (
+                    <span style={{ color:C.blue, fontWeight:600 }}>🎉 Scaglione completato: tetto abbassato a {eurKg(tierFor(barTarget).price)}/kg.</span>
+                  )}
                 </div>
               </div>
             ) : (
