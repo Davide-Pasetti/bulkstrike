@@ -77,12 +77,6 @@ const TICKER = [
   { name:"Cloruro di Sodio",   price:"€0,18", change:+0.5 },
 ];
 
-const POOLS = [
-  { id:1, name:"Acido Citrico E330", grade:"Food Grade · Anidro", target:20000, current:12400, price:"€0,81", savings:"13%", orig:"€0,93", expires:"4g 12h", flags:"🇨🇳 🇮🇹 🇩🇪", tag:"Chimica", hot:false },
-  { id:2, name:"Polipropilene GP",   grade:"Vergine H030S",       target:10000, current:9100,  price:"€0,98", savings:"12%", orig:"€1,12", expires:"8h 30m",flags:"🇰🇷 🇩🇪 🇮🇹", tag:"Plastiche",hot:true  },
-  { id:3, name:"Carbonato di Calcio",grade:"Industrial 98%",      target:50000, current:38200, price:"€0,29", savings:"15%", orig:"€0,34", expires:"1g 8h", flags:"🇨🇳 🇹🇷",    tag:"Minerali", hot:false },
-];
-
 const CHART_DATA = {
   "Acido Citrico":  [{t:"Gen",v:0.95},{t:"Feb",v:0.92},{t:"Mar",v:0.89},{t:"Apr",v:0.91},{t:"Mag",v:0.87},{t:"Giu",v:0.85},{t:"Lug",v:0.83},{t:"Ago",v:0.81}],
   "Polipropilene":  [{t:"Gen",v:1.18},{t:"Feb",v:1.15},{t:"Mar",v:1.14},{t:"Apr",v:1.16},{t:"Mag",v:1.13},{t:"Giu",v:1.11},{t:"Lug",v:1.09},{t:"Ago",v:1.12}],
@@ -139,8 +133,10 @@ export default function BulkStrikeLight() {
   const [activeChart, setActiveChart] = useState("Acido Citrico");
   const [activeTab, setActiveTab]   = useState("acquirente");
   const [count, setCount]           = useState({ pools:0, materials:0, countries:0, volume:0 });
-  // Asta in evidenza: undefined = in caricamento, null = nessuna asta attiva, oggetto = asta scelta.
-  const [featured, setFeatured]     = useState(undefined);
+  // Aste attive: undefined = in caricamento, [] = nessuna, array = aste ordinate.
+  // Un'unica fetch alimenta sia il box "in evidenza" sia la griglia "Aste attive ora".
+  const [pools, setPools]           = useState(undefined);
+  const [favIds, setFavIds]         = useState(null); // Set dei product_id preferiti (null = non loggato/non caricato)
   // Rimozione del box su schermi stretti: non basta nasconderlo via CSS, va tolto
   // dal render (stesso breakpoint 768px usato nel resto della Home).
   const [isMobile, setIsMobile]     = useState(false);
@@ -168,29 +164,24 @@ export default function BulkStrikeLight() {
 
   useEffect(() => { getMacroAreas().then(setMacros).catch(() => {}); }, []);
 
-  // Seleziona l'asta in evidenza. get_active_pools() torna già ordinato per
-  // closes_at asc (stessa RPC/ordinamento "Chiusura più vicina" di /pool):
-  //  · loggato con preferiti che matchano un'asta aperta → la loro più imminente;
-  //  · altrimenti → l'asta aperta con chiusura più vicina su tutta la piattaforma.
+  // Carica le aste attive UNA volta. get_active_pools() torna già ordinato per
+  // closes_at asc (stessa RPC/ordinamento "Chiusura più vicina" di /pool). I
+  // preferiti dell'utente loggato hanno priorità nella selezione (vedi orderedPools).
   useEffect(() => {
     let alive = true;
     (async () => {
       try {
-        const pools = await getActivePools();               // già ordinate per chiusura
+        const ps = await getActivePools();                  // già ordinate per chiusura
         if (!alive) return;
-        if (!pools || pools.length === 0) { setFeatured(null); return; }
-        let pick = null;
+        setPools(ps || []);
         const session = await getSession().catch(() => null);
         if (session) {
           try {
             const favs = await getMyFollowedProducts();
-            const favIds = new Set((favs || []).map(f => f.product_id));
-            if (favIds.size > 0) pick = pools.find(p => favIds.has(p.product_id)) || null;
-          } catch { /* preferiti non disponibili → fallback a tutta la piattaforma */ }
+            if (alive) setFavIds(new Set((favs || []).map(f => f.product_id)));
+          } catch { /* preferiti non disponibili → nessuna priorità preferiti */ }
         }
-        if (!pick) pick = pools[0];                          // chiusura più imminente in piattaforma
-        if (alive) setFeatured(pick || null);
-      } catch { if (alive) setFeatured(null); }
+      } catch { if (alive) setPools([]); }
     })();
     return () => { alive = false; };
   }, []);
@@ -224,9 +215,30 @@ export default function BulkStrikeLight() {
 
   const C = { blue:"#0EA5E9", dark:"#0284C7", text:"#0F172A", muted:"#64748B", border:"#E2E8F0", bg:"#F8FAFE", green:"#059669", red:"#DC2626", amber:"#D97706" };
 
-  // Asta reale selezionata (oggetto) e relativi dati derivati per il box in evidenza.
-  const fp = (featured && typeof featured === "object") ? featured : null;
+  // Aste ordinate con PRIORITÀ ai preferiti: prima le aste sui prodotti seguiti
+  // (già ordinate per chiusura), poi le altre. Alimenta sia il box in evidenza
+  // (prima asta) sia la griglia "Aste attive ora" (prime 3).
+  const poolsLoading = pools === undefined;
+  const orderedPools = (() => {
+    if (!Array.isArray(pools) || pools.length === 0) return [];
+    if (favIds && favIds.size > 0) {
+      const fav = pools.filter(p => favIds.has(p.product_id));
+      const rest = pools.filter(p => !favIds.has(p.product_id));
+      return [...fav, ...rest];
+    }
+    return pools;
+  })();
+  const fp = orderedPools[0] || null;      // box "asta più vicina"
   const box = fp ? deriveFeatured(fp) : null;
+  const top3 = orderedPools.slice(0, 3);   // griglia "Aste attive ora"
+  // Etichetta categoria compatta dal primo macro-slug REALE del prodotto (o null se
+  // il prodotto non ha un settore/macro assegnato → badge omesso, niente valori finti).
+  const macroLabel = (p) => {
+    const slug = Array.isArray(p.macros) ? p.macros[0] : null;
+    if (!slug) return null;
+    const m = macros.find(x => x.slug === slug);
+    return m ? m.name.split(/[,&]/)[0].trim() : null;
+  };
 
   return (
     <div style={{ backgroundColor:"#FFFFFF", color:C.text, fontFamily:"'Inter',system-ui,sans-serif", minHeight:"100vh", overflowX:"hidden", colorScheme:"light" }}>
@@ -412,7 +424,7 @@ export default function BulkStrikeLight() {
           {/* Hero pool card — asta REALE più vicina alla chiusura (preferiti se
               disponibili). Rimossa dal DOM su mobile: sotto c'è già "Aste attive ora". */}
           {!isMobile && (
-            featured === undefined ? (
+            poolsLoading ? (
               // Skeleton di caricamento (evita il flash del contenuto finto)
               <div style={{ background:"#fff", border:`1px solid ${C.border}`, borderRadius:16, padding:24, boxShadow:"0 4px 24px rgba(14,165,233,0.08)" }}>
                 <div style={{ fontSize:11, color:C.muted, marginBottom:12 }}>Asta più vicina alla chiusura</div>
@@ -523,55 +535,87 @@ export default function BulkStrikeLight() {
             Vedi tutti <ChevronRight size={16} />
           </button>
         </div>
-        <div className="bs-grid-3" style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:20 }}>
-          {POOLS.map(pool => {
-            const pct = Math.round((pool.current/pool.target)*100);
-            return (
-              <div key={pool.id} className="bs-card">
-                <div style={{ display:"flex", justifyContent:"space-between", marginBottom:14, flexWrap:"wrap", gap:8 }}>
-                  <div>
-                    <div style={{ display:"flex", gap:6, marginBottom:8, flexWrap:"wrap" }}>
-                      <span style={{ background:"#EFF6FF", color:"#1D4ED8", borderRadius:4, padding:"2px 8px", fontSize:11, fontWeight:600 }}>{pool.tag}</span>
-                      {pool.hot && <span style={{ background:"#FFF1F2", color:C.red, borderRadius:4, padding:"2px 8px", fontSize:11, fontWeight:600 }}>🔥 Quasi pieno</span>}
-                    </div>
-                    <h3 style={{ fontSize:17, fontWeight:700, marginBottom:2, color:C.text }}>{pool.name}</h3>
-                    <p style={{ fontSize:13, color:C.muted }}>{pool.grade}</p>
-                  </div>
-                  <div style={{ textAlign:"right" }}>
-                    <div style={{ display:"flex", alignItems:"center", gap:4, justifyContent:"flex-end", fontSize:12, color:C.muted }}>
-                      <Clock size={11} /> {pool.expires}
-                    </div>
-                    <div style={{ fontSize:14, marginTop:4 }}>{pool.flags}</div>
-                  </div>
-                </div>
+        {poolsLoading ? (
+          // Skeleton: 3 card placeholder mentre carica (niente contenuto finto)
+          <div className="bs-grid-3" style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:20 }}>
+            {[0,1,2].map(i => (
+              <div key={i} className="bs-card">
+                <div style={{ height:16, width:"40%", background:"#F1F5F9", borderRadius:5, marginBottom:10 }} />
+                <div style={{ height:18, width:"70%", background:"#F1F5F9", borderRadius:5, marginBottom:18 }} />
                 <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:16 }}>
-                  <div style={{ background:C.bg, borderRadius:10, padding:"12px 14px" }}>
-                    <div style={{ fontSize:11, color:C.muted, marginBottom:2 }}>Prezzo asta</div>
-                    <div className="bs-num" style={{ fontSize:20, fontWeight:700, color:C.blue }}>{pool.price}<span style={{ fontSize:11 }}>/kg</span></div>
-                  </div>
-                  <div style={{ background:C.bg, borderRadius:10, padding:"12px 14px" }}>
-                    <div style={{ fontSize:11, color:C.muted, marginBottom:2 }}>Risparmio</div>
-                    <div className="bs-num" style={{ fontSize:20, fontWeight:700, color:C.green }}>-{pool.savings}</div>
-                    <div style={{ fontSize:11, color:C.muted }}>vs {pool.orig}/kg</div>
-                  </div>
+                  <div style={{ height:58, background:C.bg, borderRadius:10 }} />
+                  <div style={{ height:58, background:C.bg, borderRadius:10 }} />
                 </div>
-                <div style={{ marginBottom:14 }}>
-                  <div style={{ display:"flex", justifyContent:"space-between", marginBottom:5 }}>
-                    <span style={{ fontSize:12, color:C.muted }}>Volume</span>
-                    <span className="bs-num" style={{ fontSize:12, fontWeight:600 }}>{(pool.current/1000).toFixed(1)}t / {pool.target/1000}t</span>
-                  </div>
-                  <div className="bs-progress">
-                    <div className="bs-progress-bar" style={{ background:pct>=80?`linear-gradient(90deg,${C.amber},${C.red})`:`linear-gradient(90deg,${C.blue},#22D3EE)`, width:`${pct}%` }} />
-                  </div>
-                  <div style={{ fontSize:12, color:pct>=80?C.amber:C.muted, marginTop:4, textAlign:"right" }}>{pct}%</div>
-                </div>
-                <button className="bs-pool-btn" onClick={() => { window.location.href = "/pool?id=7191a826-ac9c-404b-8001-8e8fc8f08100"; }}>Visualizza l'asta a ribasso <ArrowRight size={14} /></button>
-                <div style={{ textAlign:"center", fontSize:12, color:C.muted, margin:"8px 0" }}>oppure</div>
-                <button className="bs-pool-btn" onClick={() => { window.location.href = "/catalogo"; }}>Acquista subito</button>
+                <div className="bs-progress" style={{ marginBottom:14 }}><div className="bs-progress-bar" style={{ background:"#E2E8F0", width:"45%" }} /></div>
+                <div style={{ height:40, background:"#F1F5F9", borderRadius:8 }} />
               </div>
-            );
-          })}
-        </div>
+            ))}
+          </div>
+        ) : top3.length === 0 ? (
+          // Nessuna asta attiva in piattaforma
+          <div style={{ border:`1px dashed ${C.border}`, borderRadius:16, padding:"40px 24px", textAlign:"center", color:C.muted }}>
+            <div style={{ fontSize:16, fontWeight:700, color:C.text, marginBottom:6 }}>Nessuna asta attiva in questo momento</div>
+            <div style={{ fontSize:14, marginBottom:16 }}>Apri tu la prossima asta a ribasso dalla pagina di un prodotto del catalogo.</div>
+            <button className="bs-btn" onClick={() => { window.location.href = "/catalogo"; }} style={{ display:"inline-flex" }}>Vai al catalogo <ArrowRight size={16} /></button>
+          </div>
+        ) : (
+          <div className="bs-grid-3" style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:20 }}>
+            {top3.map(pool => {
+              const b = deriveFeatured(pool);
+              const cat = macroLabel(pool);
+              return (
+                <div key={pool.id} className="bs-card">
+                  <div style={{ display:"flex", justifyContent:"space-between", marginBottom:14, flexWrap:"wrap", gap:8 }}>
+                    <div>
+                      <div style={{ display:"flex", gap:6, marginBottom:8, flexWrap:"wrap" }}>
+                        {cat && <span style={{ background:"#EFF6FF", color:"#1D4ED8", borderRadius:4, padding:"2px 8px", fontSize:11, fontWeight:600 }}>{cat}</span>}
+                        {b.almost && <span style={{ background:"#FFF1F2", color:C.red, borderRadius:4, padding:"2px 8px", fontSize:11, fontWeight:600 }}>🔥 Quasi pieno</span>}
+                      </div>
+                      <h3 style={{ fontSize:17, fontWeight:700, marginBottom:2, color:C.text }}>{pool.product_name}</h3>
+                      {/* niente grado/purezza inventati: solo il n° reale di fornitori in gara */}
+                      <p style={{ fontSize:13, color:C.muted }}>{pool.num_bids} {Number(pool.num_bids) === 1 ? "fornitore in gara" : "fornitori in gara"}</p>
+                    </div>
+                    <div style={{ textAlign:"right" }}>
+                      <div style={{ display:"flex", alignItems:"center", gap:4, justifyContent:"flex-end", fontSize:12, color:C.muted }}>
+                        <Clock size={11} /> {b.closeIso ? timeLeft(b.closeIso) : "—"}
+                      </div>
+                      {/* niente bandiere paese inventate: mostro l'E-number solo se esiste */}
+                      {pool.product_enum && <div style={{ fontSize:12, color:C.muted, marginTop:4 }}>{pool.product_enum}</div>}
+                    </div>
+                  </div>
+                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:16 }}>
+                    <div style={{ background:C.bg, borderRadius:10, padding:"12px 14px" }}>
+                      <div style={{ fontSize:11, color:C.muted, marginBottom:2 }}>Prezzo asta</div>
+                      <div className="bs-num" style={{ fontSize:20, fontWeight:700, color:C.blue }}>{eurKg(b.effective)}<span style={{ fontSize:11 }}>/kg</span></div>
+                    </div>
+                    <div style={{ background:C.bg, borderRadius:10, padding:"12px 14px" }}>
+                      <div style={{ fontSize:11, color:C.muted, marginBottom:2 }}>Risparmio</div>
+                      <div className="bs-num" style={{ fontSize:20, fontWeight:700, color:C.green }}>-{b.savingsPct}%</div>
+                      <div style={{ fontSize:11, color:C.muted }}>vs {eurKg(b.quick)}/kg</div>
+                    </div>
+                  </div>
+                  {b.barTarget ? (
+                    <div style={{ marginBottom:14 }}>
+                      <div style={{ display:"flex", justifyContent:"space-between", marginBottom:5 }}>
+                        <span style={{ fontSize:12, color:C.muted }}>Volume</span>
+                        <span className="bs-num" style={{ fontSize:12, fontWeight:600 }}>{kgFmt(b.vol)} / {kgFmt(b.barTarget)} kg</span>
+                      </div>
+                      <div className="bs-progress">
+                        <div className="bs-progress-bar" style={{ background:b.pct>=80?`linear-gradient(90deg,${C.amber},${C.red})`:`linear-gradient(90deg,${C.blue},#22D3EE)`, width:`${b.pct}%` }} />
+                      </div>
+                      <div style={{ fontSize:12, color:b.pct>=80?C.amber:C.muted, marginTop:4, textAlign:"right" }}>{b.pct}%</div>
+                    </div>
+                  ) : (
+                    <div style={{ marginBottom:14, fontSize:12, color:C.blue, fontWeight:600 }}>🎉 Scaglione massimo raggiunto</div>
+                  )}
+                  <button className="bs-pool-btn" onClick={() => { window.location.href = `/pool?id=${pool.id}`; }}>Visualizza l'asta a ribasso <ArrowRight size={14} /></button>
+                  <div style={{ textAlign:"center", fontSize:12, color:C.muted, margin:"8px 0" }}>oppure</div>
+                  <button className="bs-pool-btn" onClick={() => { window.location.href = `/prodotto?id=${pool.product_id}`; }}>Acquista subito</button>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* ── PRICE CHARTS ── */}
