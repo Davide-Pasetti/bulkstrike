@@ -1,7 +1,8 @@
 import { useState, useMemo, useEffect } from "react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { Search, ArrowRight, Check, Clock, ChevronDown, ChevronRight, ChevronUp, Star, Shield, Truck, FileText, Download, Plus, Minus, Beaker, TrendingDown, Users, Gavel, Info, ShoppingCart } from "lucide-react";
-import { getProduct, getOpenPoolForProduct, getPriceReference, getProductBreadcrumb, getSession, openPool, upsertCartItem, poolErrorMessage, searchProducts, getCart, isFollowingProduct } from "@/lib/api";
+import { getProduct, getOpenPoolForProduct, getPriceReference, getProductBreadcrumb, getSession, openPool, upsertCartItem, poolErrorMessage, searchProducts, getCart, isFollowingProduct, getMarketPriceSeries } from "@/lib/api";
+import PriceSourceNote from "@/components/PriceSourceNote";
 import ProductFollowButton from "@/components/BulkStrikeProductFollow";
 import BulkStrikeNav from "@/components/BulkStrikeNav";
 import BulkStrikeChatWidget from "@/components/BulkStrikeChatWidget";
@@ -181,6 +182,7 @@ export default function ProductPage() {
   const [productId, setProductId] = useState(null);
   const [followingProduct, setFollowingProduct] = useState(false);
   const [priceRef, setPriceRef] = useState(null);
+  const [priceSeries, setPriceSeries] = useState(null); // storico prezzi di mercato (ISMEA/CUN) o null
   const [loading, setLoading] = useState(true);
   const [crumb, setCrumb] = useState(null); // { macro, sector } reali del prodotto
   const [busy, setBusy] = useState(false);
@@ -213,6 +215,8 @@ export default function ProductPage() {
     if (!id) { setLoading(false); return; }   // nessun id → resta la demo
     setProductId(id);
     setLoading(true);
+    setPriceSeries(null);
+    getMarketPriceSeries(id).then(setPriceSeries).catch(() => setPriceSeries(null));
     (async () => {
       try {
         const [p, op, ref, bc] = await Promise.all([
@@ -889,21 +893,55 @@ export default function ProductPage() {
             {/* PRICE HISTORY */}
             <div style={{ border:`1px solid ${C.border}`, borderRadius:14, padding:18 }}>
               <div style={{ fontSize:13, fontWeight:700, marginBottom:2 }}>Andamento prezzo</div>
-              <div style={{ display:"flex", alignItems:"baseline", gap:6, marginBottom:10 }}>
-                <span className="bs-num" style={{ fontSize:22, fontWeight:800, color:C.blue }}>€2,42</span>
-                <span style={{ fontSize:12, color:C.green, display:"flex", alignItems:"center", gap:2 }}><TrendingDown size={11}/> -15,6%</span>
-              </div>
-              <ResponsiveContainer width="100%" height={120}>
-                <LineChart data={CHART} margin={{ top:4, right:4, bottom:0, left:-22 }}>
-                  <XAxis dataKey="t" tick={{ fill:C.muted, fontSize:10 }} axisLine={false} tickLine={false}/>
-                  <YAxis tick={{ fill:C.muted, fontSize:10, fontFamily:"JetBrains Mono" }} axisLine={false} tickLine={false} domain={["auto","auto"]} tickFormatter={v=>`€${v.toFixed(1)}`}/>
-                  <Tooltip contentStyle={{ background:"#fff", border:`1px solid ${C.border}`, borderRadius:8, fontSize:12 }} formatter={v=>[`€${v.toFixed(2)}/kg`,"Prezzo"]}/>
-                  <Line type="monotone" dataKey="v" stroke={C.blue} strokeWidth={2.5} dot={false} activeDot={{ r:4 }}/>
-                </LineChart>
-              </ResponsiveContainer>
-              <div style={{ display:"flex", gap:5, marginTop:8 }}>
-                {["1M","3M","6M","1A"].map(t => <button key={t} style={{ flex:1, padding:"5px", fontSize:11, border:`1px solid ${t==="6M"?C.blue:C.border}`, background:t==="6M"?"#EFF6FF":"#fff", color:t==="6M"?C.blue:C.muted, borderRadius:6, cursor:"pointer", fontFamily:"Inter,system-ui" }}>{t}</button>)}
-              </div>
+              {(() => {
+                const hasMarket = priceSeries && Array.isArray(priceSeries.series) && priceSeries.series.length > 0;
+                if (hasMarket) {
+                  // Dati reali di mercato (ISMEA/CUN) con fonte + dicitura obbligatoria.
+                  const series = priceSeries.series.map(pt => { const [, m, d] = String(pt.t).slice(0,10).split("-"); return { t:`${d}/${m}`, v:Number(pt.v) }; });
+                  const last = series[series.length-1].v;
+                  const change = series.length >= 2 ? ((last - series[0].v) / series[0].v) * 100 : null;
+                  return (<>
+                    <div style={{ display:"flex", alignItems:"baseline", gap:6, marginBottom:10 }}>
+                      <span className="bs-num" style={{ fontSize:22, fontWeight:800, color:C.blue }}>{eurKg(last)}<span style={{ fontSize:12, fontWeight:400, color:C.muted }}>/kg</span></span>
+                      {change != null && <span style={{ fontSize:12, color:change<=0?C.green:C.red, display:"flex", alignItems:"center", gap:2 }}>{change<=0 && <TrendingDown size={11}/>} {change>0?"+":""}{change.toFixed(1)}%</span>}
+                    </div>
+                    {series.length >= 2 ? (
+                      <ResponsiveContainer width="100%" height={120}>
+                        <LineChart data={series} margin={{ top:4, right:4, bottom:0, left:-22 }}>
+                          <XAxis dataKey="t" tick={{ fill:C.muted, fontSize:10 }} axisLine={false} tickLine={false}/>
+                          <YAxis tick={{ fill:C.muted, fontSize:10, fontFamily:"JetBrains Mono" }} axisLine={false} tickLine={false} domain={["auto","auto"]} tickFormatter={v=>`€${Number(v).toFixed(1)}`}/>
+                          <Tooltip contentStyle={{ background:"#fff", border:`1px solid ${C.border}`, borderRadius:8, fontSize:12 }} formatter={v=>[`€${Number(v).toFixed(2)}/kg`,"Prezzo"]}/>
+                          <Line type="monotone" dataKey="v" stroke={C.blue} strokeWidth={2.5} dot={{ fill:C.blue, r:3, strokeWidth:0 }} activeDot={{ r:4 }}/>
+                        </LineChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div style={{ height:70, display:"flex", alignItems:"center", justifyContent:"center", fontSize:11.5, color:C.muted, textAlign:"center", lineHeight:1.4 }}>
+                        Storico in raccolta: il grafico si popola a ogni rilevazione settimanale.
+                      </div>
+                    )}
+                    <PriceSourceNote fonte={priceSeries.fonte} fonteUrl={priceSeries.fonte_url} lastDate={priceSeries.last_date} muted={C.muted} border={C.border} />
+                  </>);
+                }
+                // Nessun dato di mercato per questo prodotto: resta il grafico mock
+                // (il collegamento a dati reali degli altri prodotti è un task separato).
+                return (<>
+                  <div style={{ display:"flex", alignItems:"baseline", gap:6, marginBottom:10 }}>
+                    <span className="bs-num" style={{ fontSize:22, fontWeight:800, color:C.blue }}>€2,42</span>
+                    <span style={{ fontSize:12, color:C.green, display:"flex", alignItems:"center", gap:2 }}><TrendingDown size={11}/> -15,6%</span>
+                  </div>
+                  <ResponsiveContainer width="100%" height={120}>
+                    <LineChart data={CHART} margin={{ top:4, right:4, bottom:0, left:-22 }}>
+                      <XAxis dataKey="t" tick={{ fill:C.muted, fontSize:10 }} axisLine={false} tickLine={false}/>
+                      <YAxis tick={{ fill:C.muted, fontSize:10, fontFamily:"JetBrains Mono" }} axisLine={false} tickLine={false} domain={["auto","auto"]} tickFormatter={v=>`€${v.toFixed(1)}`}/>
+                      <Tooltip contentStyle={{ background:"#fff", border:`1px solid ${C.border}`, borderRadius:8, fontSize:12 }} formatter={v=>[`€${v.toFixed(2)}/kg`,"Prezzo"]}/>
+                      <Line type="monotone" dataKey="v" stroke={C.blue} strokeWidth={2.5} dot={false} activeDot={{ r:4 }}/>
+                    </LineChart>
+                  </ResponsiveContainer>
+                  <div style={{ display:"flex", gap:5, marginTop:8 }}>
+                    {["1M","3M","6M","1A"].map(t => <button key={t} style={{ flex:1, padding:"5px", fontSize:11, border:`1px solid ${t==="6M"?C.blue:C.border}`, background:t==="6M"?"#EFF6FF":"#fff", color:t==="6M"?C.blue:C.muted, borderRadius:6, cursor:"pointer", fontFamily:"Inter,system-ui" }}>{t}</button>)}
+                  </div>
+                </>);
+              })()}
             </div>
 
             {/* SAMPLE / SAFETY NOTE */}

@@ -1,9 +1,10 @@
 import { useState, useEffect } from "react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { Bot, ArrowRight, Check, Clock, ChevronRight, TrendingDown, ChevronDown } from "lucide-react";
-import { getMacroAreas, getMacroAreasCached, getSectorProducts, getActivePools, getMyFollowedProducts, getSession } from "@/lib/api";
+import { getMacroAreas, getMacroAreasCached, getSectorProducts, getActivePools, getMyFollowedProducts, getSession, getProductsWithMarketPrices, getMarketPriceSeries } from "@/lib/api";
 import { TIERS, tierIndexFor } from "@/lib/tiers";
 import BulkStrikeNav from "@/components/BulkStrikeNav";
+import PriceSourceNote from "@/components/PriceSourceNote";
 import BulkStrikeChatWidget from "@/components/BulkStrikeChatWidget";
 import { BSIcon } from "@/components/BSLogo";
 
@@ -140,6 +141,11 @@ export default function BulkStrikeLight() {
   // Rimozione del box su schermi stretti: non basta nasconderlo via CSS, va tolto
   // dal render (stesso breakpoint 768px usato nel resto della Home).
   const [isMobile, setIsMobile]     = useState(false);
+  // Grafico "Andamento prezzi": prodotti con storico reale (ISMEA/CUN) affiancati
+  // ai prodotti mock. marketSel = prodotto reale selezionato (null = mock).
+  const [marketProducts, setMarketProducts] = useState([]);   // [{id,name,fonte}]
+  const [marketSel, setMarketSel]           = useState(null);  // {id,name} | null
+  const [marketData, setMarketData]         = useState(null);  // {series,fonte,fonte_url,last_date}
 
   // Stato iniziale dalla cache sincrona: al remount della pagina (swap shell
   // statica → dinamica di cacheComponents) il box categorie non flasha vuoto.
@@ -163,6 +169,16 @@ export default function BulkStrikeLight() {
   }, []);
 
   useEffect(() => { getMacroAreas().then(setMacros).catch(() => {}); }, []);
+
+  // Prodotti con storico prezzi reale, per i tab del grafico Market Intelligence.
+  useEffect(() => { getProductsWithMarketPrices().then(setMarketProducts).catch(() => {}); }, []);
+
+  // Seleziona un prodotto reale nel grafico → carica la sua serie storica.
+  const selectMarketProduct = (p) => {
+    setMarketSel(p); setMarketData(null);
+    getMarketPriceSeries(p.id).then(setMarketData).catch(() => setMarketData(null));
+  };
+  const selectMockChart = (name) => { setMarketSel(null); setActiveChart(name); };
 
   // Carica le aste attive UNA volta. get_active_pools() torna già ordinato per
   // closes_at asc (stessa RPC/ordinamento "Chiusura più vicina" di /pool). I
@@ -239,6 +255,20 @@ export default function BulkStrikeLight() {
     const m = macros.find(x => x.slug === slug);
     return m ? m.name.split(/[,&]/)[0].trim() : null;
   };
+
+  // Grafico prezzi: serie reale (se un prodotto reale è selezionato) o mock.
+  const showingReal = !!marketSel;
+  const realSeries = (marketData?.series || []).map(pt => {
+    const [, m, d] = String(pt.t).slice(0, 10).split("-");
+    return { t: `${d}/${m}`, v: Number(pt.v) };
+  });
+  const chartData = showingReal ? realSeries : CHART_DATA[activeChart];
+  const lastPrice = showingReal
+    ? (realSeries.length ? realSeries[realSeries.length - 1].v : null)
+    : CHART_DATA[activeChart][CHART_DATA[activeChart].length - 1].v;
+  const realChange = (showingReal && realSeries.length >= 2)
+    ? ((realSeries[realSeries.length - 1].v - realSeries[0].v) / realSeries[0].v) * 100
+    : null;
 
   return (
     <div style={{ backgroundColor:"#FFFFFF", color:C.text, fontFamily:"'Inter',system-ui,sans-serif", minHeight:"100vh", overflowX:"hidden", colorScheme:"light" }}>
@@ -626,40 +656,66 @@ export default function BulkStrikeLight() {
               <div className="bs-label">Market Intelligence</div>
               <h2 className="bs-h2" style={{ marginBottom:12 }}>Andamento prezzi in tempo reale</h2>
               <p style={{ fontSize:15, color:C.muted, lineHeight:1.65, marginBottom:24 }}>
-                Ogni transazione su BulkStrike alimenta l'indice prezzi. Un dato proprietario che non trovi da nessuna altra parte.
+                L'andamento dei prezzi delle materie prime, aggiornato di continuo. Per le materie prime agricole i dati provengono dalle fonti ufficiali (ISMEA, CUN Grano Duro).
               </p>
               <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:24 }}>
                 {Object.keys(CHART_DATA).map(name => (
-                  <button key={name} className="bs-chart-tab" onClick={() => setActiveChart(name)}
-                    style={{ background:activeChart===name?C.blue:"#fff", color:activeChart===name?"#fff":C.muted, borderColor:activeChart===name?C.blue:C.border }}>
+                  <button key={name} className="bs-chart-tab" onClick={() => selectMockChart(name)}
+                    style={{ background:(!showingReal && activeChart===name)?C.blue:"#fff", color:(!showingReal && activeChart===name)?"#fff":C.muted, borderColor:(!showingReal && activeChart===name)?C.blue:C.border }}>
                     {name}
+                  </button>
+                ))}
+                {marketProducts.map(p => (
+                  <button key={p.id} className="bs-chart-tab" onClick={() => selectMarketProduct(p)}
+                    style={{ background:marketSel?.id===p.id?C.blue:"#fff", color:marketSel?.id===p.id?"#fff":C.muted, borderColor:marketSel?.id===p.id?C.blue:C.border }}>
+                    {p.name}
                   </button>
                 ))}
               </div>
               <div style={{ display:"flex", alignItems:"baseline", gap:10, flexWrap:"wrap" }}>
                 <span className="bs-num" style={{ fontSize:42, fontWeight:800, color:C.blue }}>
-                  €{CHART_DATA[activeChart][CHART_DATA[activeChart].length-1].v.toFixed(2)}
+                  {lastPrice != null ? `€${lastPrice.toFixed(2)}` : "—"}
                 </span>
-                <span style={{ fontSize:14, color:C.muted }}>/kg · prezzo asta attuale</span>
+                <span style={{ fontSize:14, color:C.muted }}>/kg · {showingReal ? "prezzo di mercato" : "prezzo asta attuale"}</span>
               </div>
-              <div style={{ display:"flex", alignItems:"center", gap:4, fontSize:14, color:C.green, marginTop:4 }}>
-                <TrendingDown size={14} /> -14,7% rispetto a gennaio
-              </div>
+              {showingReal ? (
+                realChange != null && (
+                  <div style={{ display:"flex", alignItems:"center", gap:4, fontSize:14, color:realChange<=0?C.green:C.red, marginTop:4 }}>
+                    {realChange<=0 && <TrendingDown size={14} />} {realChange>0?"+":""}{realChange.toFixed(1)}% nel periodo rilevato
+                  </div>
+                )
+              ) : (
+                <div style={{ display:"flex", alignItems:"center", gap:4, fontSize:14, color:C.green, marginTop:4 }}>
+                  <TrendingDown size={14} /> -14,7% rispetto a gennaio
+                </div>
+              )}
             </div>
             <div>
-              <ResponsiveContainer width="100%" height={220}>
-                <LineChart data={CHART_DATA[activeChart]}>
-                  <XAxis dataKey="t" tick={{ fill:C.muted, fontSize:12 }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fill:C.muted, fontSize:12, fontFamily:"JetBrains Mono" }} axisLine={false} tickLine={false} tickFormatter={v=>`€${v}`} domain={["auto","auto"]} />
-                  <Tooltip contentStyle={{ background:"#fff", border:`1px solid ${C.border}`, borderRadius:10 }} formatter={v=>[`€${v.toFixed(2)}/kg`,"Prezzo"]} />
-                  <Line type="monotone" dataKey="v" stroke={C.blue} strokeWidth={2.5} dot={{ fill:C.blue, r:4, strokeWidth:0 }} activeDot={{ r:6 }} />
-                </LineChart>
-              </ResponsiveContainer>
-              <div style={{ display:"flex", gap:8, marginTop:10, flexWrap:"wrap" }}>
-                {["1M","3M","6M","1A"].map(t => (
-                  <button key={t} style={{ flex:1, minWidth:36, padding:"6px 4px", background:t==="6M"?"#EFF6FF":"transparent", border:`1px solid ${t==="6M"?C.blue:C.border}`, borderRadius:6, fontSize:12, color:t==="6M"?C.blue:C.muted, cursor:"pointer", fontFamily:"Inter,system-ui" }}>{t}</button>
-                ))}
-              </div>
+              {showingReal && realSeries.length === 0 ? (
+                <div style={{ height:220, display:"flex", alignItems:"center", justifyContent:"center", fontSize:13, color:C.muted, border:`1px dashed ${C.border}`, borderRadius:12 }}>
+                  Storico prezzi in raccolta: i dati si popolano a ogni rilevazione settimanale.
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height={220}>
+                  <LineChart data={chartData}>
+                    <XAxis dataKey="t" tick={{ fill:C.muted, fontSize:12 }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fill:C.muted, fontSize:12, fontFamily:"JetBrains Mono" }} axisLine={false} tickLine={false} tickFormatter={v=>`€${v}`} domain={["auto","auto"]} />
+                    <Tooltip contentStyle={{ background:"#fff", border:`1px solid ${C.border}`, borderRadius:10 }} formatter={v=>[`€${Number(v).toFixed(2)}/kg`,"Prezzo"]} />
+                    <Line type="monotone" dataKey="v" stroke={C.blue} strokeWidth={2.5} dot={{ fill:C.blue, r:4, strokeWidth:0 }} activeDot={{ r:6 }} />
+                  </LineChart>
+                </ResponsiveContainer>
+              )}
+              {/* Solo per il grafico mock: selettore periodo decorativo. Per i dati reali
+                  la fonte + dicitura informativa obbligatoria stanno qui sotto. */}
+              {showingReal ? (
+                <PriceSourceNote fonte={marketData?.fonte} fonteUrl={marketData?.fonte_url} lastDate={marketData?.last_date} muted={C.muted} border={C.border} />
+              ) : (
+                <div style={{ display:"flex", gap:8, marginTop:10, flexWrap:"wrap" }}>
+                  {["1M","3M","6M","1A"].map(t => (
+                    <button key={t} style={{ flex:1, minWidth:36, padding:"6px 4px", background:t==="6M"?"#EFF6FF":"transparent", border:`1px solid ${t==="6M"?C.blue:C.border}`, borderRadius:6, fontSize:12, color:t==="6M"?C.blue:C.muted, cursor:"pointer", fontFamily:"Inter,system-ui" }}>{t}</button>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>
