@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { Bot, ArrowRight, Check, Clock, ChevronRight, TrendingDown, ChevronDown } from "lucide-react";
-import { getMacroAreas, getMacroAreasCached, getSectorProducts } from "@/lib/api";
+import { getMacroAreas, getMacroAreasCached, getSectorProducts, getActivePools, getMyFollowedProducts, getSession } from "@/lib/api";
+import { TIERS, tierIndexFor } from "@/lib/tiers";
 import BulkStrikeNav from "@/components/BulkStrikeNav";
 import BulkStrikeChatWidget from "@/components/BulkStrikeChatWidget";
 import { BSIcon } from "@/components/BSLogo";
@@ -28,6 +29,40 @@ const SECTOR_ICONS = {
   "trattamento-acque":          { icon:"💧", bg:"#EFF6FF", border:"#BFDBFE" },
 };
 const SECTOR_FALLBACK = { icon:"📦", bg:"#F1F5F9", border:"#E2E8F0" };
+
+// ─── FORMATTER + LOGICA ASTA IN EVIDENZA ─────────────────────────────────────
+const eurKg = (n) => "€" + Number(n).toLocaleString("it-IT", { minimumFractionDigits:2, maximumFractionDigits:2 });
+const kgFmt = (n) => Number(n || 0).toLocaleString("it-IT");
+
+// Tempo rimanente alla chiusura, forma compatta ("4g 9h", "3h 12m"). Copiata da
+// BulkStrikePoolList per coerenza con la pagina "Aste attive".
+function timeLeft(iso) {
+  if (!iso) return "";
+  const s = Math.floor((new Date(iso) - Date.now()) / 1000);
+  if (s <= 0) return "in chiusura";
+  const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60);
+  if (d > 0) return `${d}g ${h}h`;
+  if (h > 0) return `${h}h ${m}m`;
+  return `${m}m`;
+}
+
+// Deriva i dati del box "asta in evidenza" da una riga di get_active_pools,
+// riusando gli scaglioni globali (@/lib/tiers) come la pagina di dettaglio asta.
+function deriveFeatured(fp) {
+  const vol = Number(fp.total_volume_kg) || 0;
+  const tier = TIERS[tierIndexFor(vol)];
+  const barTarget = tier.max === Infinity ? null : tier.max;                 // soglia prossimo scaglione
+  const pct = barTarget ? Math.min(100, Math.round((vol / barTarget) * 100)) : 100;
+  const toNext = barTarget ? Math.max(0, barTarget - vol) : 0;
+  const ceiling = tier.price;
+  const best = fp.best_price_per_kg != null ? Number(fp.best_price_per_kg) : null;
+  const effective = best != null ? Math.min(best, ceiling) : ceiling;        // "Miglior prezzo attuale" della pagina asta
+  const quick = TIERS[0].price;                                              // Acquisto Rapido = chi compra da solo (scaglione minimo)
+  const savingsPct = Math.max(0, Math.round(((quick - effective) / quick) * 100));
+  const almost = !!barTarget && pct >= 85;                                   // "Quasi completo": ≥85% verso il prossimo scaglione
+  const closeIso = fp.status === "final_phase" && fp.final_phase_ends_at ? fp.final_phase_ends_at : fp.closes_at;
+  return { vol, barTarget, pct, toNext, effective, quick, savingsPct, almost, closeIso };
+}
 
 const TICKER = [
   { name:"Acido Citrico E330", price:"€0,81", change:-2.3 },
@@ -104,6 +139,11 @@ export default function BulkStrikeLight() {
   const [activeChart, setActiveChart] = useState("Acido Citrico");
   const [activeTab, setActiveTab]   = useState("acquirente");
   const [count, setCount]           = useState({ pools:0, materials:0, countries:0, volume:0 });
+  // Asta in evidenza: undefined = in caricamento, null = nessuna asta attiva, oggetto = asta scelta.
+  const [featured, setFeatured]     = useState(undefined);
+  // Rimozione del box su schermi stretti: non basta nasconderlo via CSS, va tolto
+  // dal render (stesso breakpoint 768px usato nel resto della Home).
+  const [isMobile, setIsMobile]     = useState(false);
 
   // Stato iniziale dalla cache sincrona: al remount della pagina (swap shell
   // statica → dinamica di cacheComponents) il box categorie non flasha vuoto.
@@ -128,6 +168,42 @@ export default function BulkStrikeLight() {
 
   useEffect(() => { getMacroAreas().then(setMacros).catch(() => {}); }, []);
 
+  // Seleziona l'asta in evidenza. get_active_pools() torna già ordinato per
+  // closes_at asc (stessa RPC/ordinamento "Chiusura più vicina" di /pool):
+  //  · loggato con preferiti che matchano un'asta aperta → la loro più imminente;
+  //  · altrimenti → l'asta aperta con chiusura più vicina su tutta la piattaforma.
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const pools = await getActivePools();               // già ordinate per chiusura
+        if (!alive) return;
+        if (!pools || pools.length === 0) { setFeatured(null); return; }
+        let pick = null;
+        const session = await getSession().catch(() => null);
+        if (session) {
+          try {
+            const favs = await getMyFollowedProducts();
+            const favIds = new Set((favs || []).map(f => f.product_id));
+            if (favIds.size > 0) pick = pools.find(p => favIds.has(p.product_id)) || null;
+          } catch { /* preferiti non disponibili → fallback a tutta la piattaforma */ }
+        }
+        if (!pick) pick = pools[0];                          // chiusura più imminente in piattaforma
+        if (alive) setFeatured(pick || null);
+      } catch { if (alive) setFeatured(null); }
+    })();
+    return () => { alive = false; };
+  }, []);
+
+  // Traccia il breakpoint mobile (768px) per togliere il box dal DOM su mobile.
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width:768px)");
+    const update = () => setIsMobile(mq.matches);
+    update();
+    mq.addEventListener?.("change", update);
+    return () => mq.removeEventListener?.("change", update);
+  }, []);
+
   const loadSectorProducts = (sec) => {
     setSectorProducts([]); setLoadingProducts(true);
     getSectorProducts(sec.id)
@@ -147,6 +223,10 @@ export default function BulkStrikeLight() {
   };
 
   const C = { blue:"#0EA5E9", dark:"#0284C7", text:"#0F172A", muted:"#64748B", border:"#E2E8F0", bg:"#F8FAFE", green:"#059669", red:"#DC2626", amber:"#D97706" };
+
+  // Asta reale selezionata (oggetto) e relativi dati derivati per il box in evidenza.
+  const fp = (featured && typeof featured === "object") ? featured : null;
+  const box = fp ? deriveFeatured(fp) : null;
 
   return (
     <div style={{ backgroundColor:"#FFFFFF", color:C.text, fontFamily:"'Inter',system-ui,sans-serif", minHeight:"100vh", overflowX:"hidden", colorScheme:"light" }}>
@@ -329,42 +409,86 @@ export default function BulkStrikeLight() {
               ))}
             </div>
           </div>
-          {/* Hero pool card */}
-          <div style={{ background:"#fff", border:`1px solid ${C.border}`, borderRadius:16, padding:24, boxShadow:"0 4px 24px rgba(14,165,233,0.08)", position:"relative" }}>
-            <div style={{ position:"absolute", top:-12, right:16, background:C.red, borderRadius:100, padding:"4px 12px", fontSize:12, fontWeight:700, color:"#fff" }}>🔥 Quasi completo</div>
-            <div style={{ marginBottom:16 }}>
-              <div style={{ fontSize:11, color:C.muted, marginBottom:4 }}>Asta più vicina all'attivazione</div>
-              <div style={{ fontSize:19, fontWeight:800, color:C.text, marginBottom:2 }}>Polipropilene GP H030S</div>
-              <div style={{ fontSize:13, color:C.muted }}>Vergine · 4 fornitori · 🇰🇷 🇩🇪 🇮🇹</div>
-            </div>
-            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:18 }}>
-              <div style={{ background:C.bg, borderRadius:10, padding:"12px 14px" }}>
-                <div style={{ fontSize:11, color:C.muted, marginBottom:3 }}>Prezzo asta all-in</div>
-                <div className="bs-num" style={{ fontSize:24, fontWeight:700, color:C.blue }}>€0,98<span style={{ fontSize:12, fontWeight:400 }}>/kg</span></div>
+          {/* Hero pool card — asta REALE più vicina alla chiusura (preferiti se
+              disponibili). Rimossa dal DOM su mobile: sotto c'è già "Aste attive ora". */}
+          {!isMobile && (
+            featured === undefined ? (
+              // Skeleton di caricamento (evita il flash del contenuto finto)
+              <div style={{ background:"#fff", border:`1px solid ${C.border}`, borderRadius:16, padding:24, boxShadow:"0 4px 24px rgba(14,165,233,0.08)" }}>
+                <div style={{ fontSize:11, color:C.muted, marginBottom:12 }}>Asta più vicina alla chiusura</div>
+                <div style={{ height:20, width:"70%", background:"#F1F5F9", borderRadius:6, marginBottom:10 }} />
+                <div style={{ height:12, width:"50%", background:"#F1F5F9", borderRadius:6, marginBottom:20 }} />
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:18 }}>
+                  <div style={{ height:64, background:C.bg, borderRadius:10 }} />
+                  <div style={{ height:64, background:C.bg, borderRadius:10 }} />
+                </div>
+                <div className="bs-progress" style={{ marginBottom:16 }}><div className="bs-progress-bar" style={{ background:"#E2E8F0", width:"40%" }} /></div>
+                <div style={{ height:46, background:"#F1F5F9", borderRadius:10 }} />
               </div>
-              <div style={{ background:C.bg, borderRadius:10, padding:"12px 14px" }}>
-                <div style={{ fontSize:11, color:C.muted, marginBottom:3 }}>Risparmio</div>
-                <div className="bs-num" style={{ fontSize:24, fontWeight:700, color:C.green }}>-12%</div>
-                <div style={{ fontSize:11, color:C.muted }}>vs €1,12/kg singolo</div>
+            ) : fp ? (
+              // Box con dati reali
+              <div style={{ background:"#fff", border:`1px solid ${C.border}`, borderRadius:16, padding:24, boxShadow:"0 4px 24px rgba(14,165,233,0.08)", position:"relative" }}>
+                {box.almost && (
+                  <div style={{ position:"absolute", top:-12, right:16, background:C.red, borderRadius:100, padding:"4px 12px", fontSize:12, fontWeight:700, color:"#fff" }}>🔥 Quasi completo</div>
+                )}
+                <div style={{ marginBottom:16 }}>
+                  <div style={{ fontSize:11, color:C.muted, marginBottom:4 }}>Asta più vicina alla chiusura</div>
+                  <div style={{ fontSize:19, fontWeight:800, color:C.text, marginBottom:2 }}>{fp.product_name}</div>
+                  <div style={{ fontSize:13, color:C.muted }}>
+                    {[
+                      fp.product_enum,
+                      `${fp.num_bids} ${Number(fp.num_bids) === 1 ? "fornitore" : "fornitori"} in gara`,
+                      box.closeIso ? `chiude tra ${timeLeft(box.closeIso)}` : null,
+                    ].filter(Boolean).join(" · ")}
+                  </div>
+                </div>
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:18 }}>
+                  <div style={{ background:C.bg, borderRadius:10, padding:"12px 14px" }}>
+                    <div style={{ fontSize:11, color:C.muted, marginBottom:3 }}>Prezzo asta all-in</div>
+                    <div className="bs-num" style={{ fontSize:24, fontWeight:700, color:C.blue }}>{eurKg(box.effective)}<span style={{ fontSize:12, fontWeight:400 }}>/kg</span></div>
+                  </div>
+                  <div style={{ background:C.bg, borderRadius:10, padding:"12px 14px" }}>
+                    <div style={{ fontSize:11, color:C.muted, marginBottom:3 }}>Risparmio</div>
+                    <div className="bs-num" style={{ fontSize:24, fontWeight:700, color:C.green }}>-{box.savingsPct}%</div>
+                    <div style={{ fontSize:11, color:C.muted }}>vs {eurKg(box.quick)}/kg singolo</div>
+                  </div>
+                </div>
+                {box.barTarget ? (
+                  <div style={{ marginBottom:16 }}>
+                    <div style={{ display:"flex", justifyContent:"space-between", marginBottom:6 }}>
+                      <span style={{ fontSize:13, color:C.muted }}>Volume raccolto</span>
+                      <span className="bs-num" style={{ fontSize:13, fontWeight:600 }}>{kgFmt(box.vol)} / {kgFmt(box.barTarget)} kg</span>
+                    </div>
+                    <div className="bs-progress">
+                      <div className="bs-progress-bar" style={{ background: box.pct >= 80 ? `linear-gradient(90deg,${C.amber},${C.red})` : `linear-gradient(90deg,${C.blue},#22D3EE)`, width:`${box.pct}%` }} />
+                    </div>
+                    <div style={{ display:"flex", justifyContent:"space-between", marginTop:5 }}>
+                      <span style={{ fontSize:12, color: box.pct >= 80 ? C.amber : C.muted, fontWeight:600 }}>{box.pct}%{box.almost ? " — quasi pieno!" : ""}</span>
+                      <span style={{ fontSize:12, color:C.muted }}>Mancano {kgFmt(box.toNext)} kg</span>
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ marginBottom:16, fontSize:12.5, color:C.blue, fontWeight:600, background:"#EFF6FF", border:`1px solid #BFDBFE`, borderRadius:10, padding:"10px 12px" }}>
+                    🎉 Scaglione massimo raggiunto: miglior tetto già sbloccato.
+                  </div>
+                )}
+                <button className="bs-btn" onClick={() => { window.location.href = `/pool?id=${fp.id}`; }} style={{ width:"100%", justifyContent:"center" }}>Visualizza l'asta a ribasso <ArrowRight size={16} /></button>
+                <div style={{ textAlign:"center", fontSize:12.5, color:C.muted, margin:"10px 0" }}>oppure</div>
+                <button className="bs-btn-out" onClick={() => { window.location.href = `/prodotto?id=${fp.product_id}`; }} style={{ width:"100%", justifyContent:"center" }}>Acquista subito</button>
               </div>
-            </div>
-            <div style={{ marginBottom:16 }}>
-              <div style={{ display:"flex", justifyContent:"space-between", marginBottom:6 }}>
-                <span style={{ fontSize:13, color:C.muted }}>Volume raccolto</span>
-                <span className="bs-num" style={{ fontSize:13, fontWeight:600 }}>9.100 / 10.000 kg</span>
+            ) : (
+              // Fallback: nessuna asta attiva in piattaforma
+              <div style={{ background:"#fff", border:`1px solid ${C.border}`, borderRadius:16, padding:24, boxShadow:"0 4px 24px rgba(14,165,233,0.08)", display:"flex", flexDirection:"column", gap:14 }}>
+                <div>
+                  <div style={{ fontSize:11, color:C.muted, marginBottom:4 }}>Aste a ribasso</div>
+                  <div style={{ fontSize:19, fontWeight:800, color:C.text, marginBottom:6 }}>Nessuna asta attiva in questo momento</div>
+                  <div style={{ fontSize:13.5, color:C.muted, lineHeight:1.6 }}>Apri tu la prossima asta a ribasso dalla pagina di un prodotto, oppure acquista subito al miglior prezzo dal catalogo.</div>
+                </div>
+                <button className="bs-btn" onClick={() => { window.location.href = "/catalogo"; }} style={{ width:"100%", justifyContent:"center" }}>Esplora il catalogo <ArrowRight size={16} /></button>
+                <button className="bs-btn-out" onClick={() => { window.location.href = "/pool"; }} style={{ width:"100%", justifyContent:"center" }}>Vedi tutte le aste</button>
               </div>
-              <div className="bs-progress">
-                <div className="bs-progress-bar" style={{ background:`linear-gradient(90deg,${C.amber},${C.red})`, width:"91%" }} />
-              </div>
-              <div style={{ display:"flex", justifyContent:"space-between", marginTop:5 }}>
-                <span style={{ fontSize:12, color:C.amber, fontWeight:600 }}>91% — quasi pieno!</span>
-                <span style={{ fontSize:12, color:C.muted }}>Mancano 900 kg</span>
-              </div>
-            </div>
-            <button className="bs-btn" onClick={() => { window.location.href = "/pool?id=7191a826-ac9c-404b-8001-8e8fc8f08100"; }} style={{ width:"100%", justifyContent:"center" }}>Visualizza l'asta a ribasso <ArrowRight size={16} /></button>
-            <div style={{ textAlign:"center", fontSize:12.5, color:C.muted, margin:"10px 0" }}>oppure</div>
-            <button className="bs-btn-out" onClick={() => { window.location.href = "/catalogo"; }} style={{ width:"100%", justifyContent:"center" }}>Acquista subito</button>
-          </div>
+            )
+          )}
         </div>
       </div>
 
