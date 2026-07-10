@@ -460,10 +460,22 @@ export default function ProductPage() {
             )}
           </div>
           <div style={{ textAlign:"right" }}>
-            <div style={{ fontSize:12, color:C.muted }}>Prezzo indicativo da</div>
-            <div className="bs-num" style={{ fontSize:28, fontWeight:800, color:C.blue }}>{eurKg(ranked[0].calc.preVatKg)}<span style={{ fontSize:14, fontWeight:400, color:C.muted }}>/kg</span> <IvaChip style={{ verticalAlign: "2px" }} /></div>
-            <div style={{ display:"flex", alignItems:"center", gap:4, justifyContent:"flex-end", fontSize:12, color:C.green }}><TrendingDown size={12}/> -15,6% da gennaio</div>
-            <div style={{ fontSize:10.5, color:C.muted, marginTop:2 }}>Spedizione inclusa</div>
+            {ranked.length ? (
+              <>
+                <div style={{ fontSize:12, color:C.muted }}>Prezzo indicativo da</div>
+                <div className="bs-num" style={{ fontSize:28, fontWeight:800, color:C.blue }}>{eurKg(ranked[0].calc.preVatKg)}<span style={{ fontSize:14, fontWeight:400, color:C.muted }}>/kg</span> <IvaChip style={{ verticalAlign: "2px" }} /></div>
+                <div style={{ display:"flex", alignItems:"center", gap:4, justifyContent:"flex-end", fontSize:12, color:C.green }}><TrendingDown size={12}/> -15,6% da gennaio</div>
+                <div style={{ fontSize:10.5, color:C.muted, marginTop:2 }}>Spedizione inclusa</div>
+              </>
+            ) : (
+              // Prodotto senza fornitori quotati (es. nuove materie prime a catalogo):
+              // niente prezzo istantaneo, si può solo aprire un'asta a ribasso.
+              <>
+                <div style={{ fontSize:12, color:C.muted }}>Prezzo indicativo</div>
+                <div className="bs-num" style={{ fontSize:22, fontWeight:800, color:C.muted }}>n.d.</div>
+                <div style={{ fontSize:10.5, color:C.muted, marginTop:2 }}>Nessun fornitore ancora quotato</div>
+              </>
+            )}
           </div>
         </div>
 
