@@ -94,6 +94,7 @@ Per OGNI riga che corrisponde a uno dei prodotti forniti, restituisci un oggetto
 - raw_label: la stringa Prodotto originale della riga
 Regole:
 - Mappa SOLO i prodotti NAZIONALI ai product_id forniti: IGNORA le righe con "estero"/"Comunitario"/"Extracomunitario" (sono importazioni, non i nostri prodotti nazionali).
+- IGNORA il FRUMENTO DURO / grano duro (ha una fonte dedicata separata, non è tra i prodotti forniti).
 - IGNORA le righe che non corrispondono a nessun prodotto fornito.
 - IGNORA righe senza un prezzo numerico.
 - Usa il punto come separatore decimale.
@@ -149,6 +150,9 @@ Deno.serve(async (req: Request) => {
     const products = (ps || [])
       .map((r: any) => r.products)
       .filter(Boolean)
+      // Il GRANO DURO ha una fonte nazionale unica dedicata (CUN): NON lo prendiamo
+      // da ISMEA (frumento duro) per non mischiare due fonti sullo stesso prodotto.
+      .filter((p: any) => p.canonical_name !== "Grano duro")
       .map((p: any) => ({ id: p.id, name: p.canonical_name, synonyms: (p.product_synonyms || []).map((s: any) => s.synonym) }));
     const validIds = new Set(products.map((p: any) => p.id));
 
