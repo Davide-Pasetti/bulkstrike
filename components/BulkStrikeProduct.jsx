@@ -21,6 +21,10 @@ const SEED_PRODUCT = {
   category: "Acidificanti · Enologia",
   form: "Polvere cristallina bianca",
   purityRange: "99,5% – 99,9%",
+  default_unit: "kg",
+  sacco_kg: 25,
+  pallet_kg: 1000,
+  container_kg: null,
 };
 
 // price tiers €/kg by volume band [maxKg, price]; shipping = base + perKg*qty
@@ -124,7 +128,11 @@ function mapDbProduct(p) {
     form: p.default_unit === "L" ? "Liquido" : "Polvere / granulare",
     purityRange: "—",
     description: p.description || "",
+    default_unit: p.default_unit || "kg",
     pallet_kg: p.pallet_kg || 1000,
+    // Formati di vendita del prodotto impostati da admin (null = non applicabile).
+    sacco_kg: p.sacco_kg ?? null,
+    container_kg: p.container_kg ?? null,
   };
 }
 // da getOpenPoolForProduct() → shape SEED_POOL
@@ -276,7 +284,18 @@ export default function ProductPage() {
   // Il formato dipende dal fornitore in evidenza; qty (kg) resta lo stato reale,
   // unitCount è solo la sua vista in unità per quel formato.
   const massUnit = product.default_unit === "L" ? "L" : "kg"; // solido→kg, liquido→litri
-  const formats = featured?.formats?.length ? featured.formats : [{ label: "sacco", size_kg: 25 }];
+  // Formati di vendita: quelli del fornitore in evidenza se li espone; altrimenti
+  // i formati REALI del prodotto impostati da admin (sacco/pallet/container), non
+  // un sacco da 25 kg inventato. Coerente con la pagina asta. Se il prodotto non
+  // ha nessun formato impostato, si vende a unità libera (kg/L).
+  const productFormats = [
+    ...(product.sacco_kg ? [{ label: "sacco", size_kg: product.sacco_kg }] : []),
+    ...(product.pallet_kg ? [{ label: "pallet", size_kg: product.pallet_kg }] : []),
+    ...(product.container_kg ? [{ label: "container", size_kg: product.container_kg }] : []),
+  ];
+  const formats = featured?.formats?.length
+    ? featured.formats
+    : (productFormats.length ? productFormats : [{ label: massUnit, size_kg: 1 }]);
   const currentFormat = formats[selectedFormatIdx] || formats[0];
   const unitLabel = currentFormat.label;
   const unitSizeKg = currentFormat.size_kg;
