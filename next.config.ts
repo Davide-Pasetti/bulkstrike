@@ -31,13 +31,17 @@ const SUPABASE_WSS = "wss://uufueekpxboygcotqvhu.supabase.co";
 // il vero irrigidimento avverrà nella versione report-only quando la validerai.
 const cspEnforcing = [
   `default-src 'self'`,
-  `script-src 'self' 'unsafe-inline' 'unsafe-eval'`,
+  // js.stripe.com: Stripe.js va caricato dal loro dominio (niente self-host)
+  `script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.stripe.com`,
   `style-src 'self' 'unsafe-inline' https://fonts.googleapis.com`,
   `font-src 'self' https://fonts.gstatic.com data:`,
   // immagini: logo fornitori possono arrivare da Supabase Storage o URL esterni;
   // manteniamo https: generico + data:/blob: per anteprime locali.
   `img-src 'self' data: blob: https:`,
-  `connect-src 'self' ${SUPABASE_HOST} ${SUPABASE_WSS}`,
+  `connect-src 'self' ${SUPABASE_HOST} ${SUPABASE_WSS} https://api.stripe.com https://r.stripe.com https://errors.stripe.com`,
+  // il PaymentElement vive in iframe di Stripe (js.stripe.com / hooks.stripe.com
+  // per il 3DS); senza frame-src ricadrebbe su default-src 'self' e si romperebbe
+  `frame-src https://js.stripe.com https://hooks.stripe.com`,
   `frame-ancestors 'none'`,
   `base-uri 'self'`,
   `form-action 'self'`,
@@ -50,11 +54,12 @@ const cspEnforcing = [
 // Quando i report saranno puliti (o gestiti con nonce), si promuove a enforcing.
 const cspReportOnly = [
   `default-src 'self'`,
-  `script-src 'self'`,
+  `script-src 'self' https://js.stripe.com`,
   `style-src 'self' 'unsafe-inline' https://fonts.googleapis.com`,
   `font-src 'self' https://fonts.gstatic.com data:`,
   `img-src 'self' data: blob: https:`,
-  `connect-src 'self' ${SUPABASE_HOST} ${SUPABASE_WSS}`,
+  `connect-src 'self' ${SUPABASE_HOST} ${SUPABASE_WSS} https://api.stripe.com https://r.stripe.com https://errors.stripe.com`,
+  `frame-src https://js.stripe.com https://hooks.stripe.com`,
   `frame-ancestors 'none'`,
   `base-uri 'self'`,
   `form-action 'self'`,

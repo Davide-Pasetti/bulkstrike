@@ -18,6 +18,7 @@ import { ArrowRight, ArrowLeft, Check, ChevronRight, Package, FileText, AlertTri
 import { getCart, checkoutCart, previewCheckout, getMyCompany, getMyCompanyAddress, getShippingAddresses, addShippingAddress, getSession, poolErrorMessage, getShippingQuotes, stampOrderPaymentMethods } from "@/lib/api";
 import BulkStrikeNav from "@/components/BulkStrikeNav";
 import PaymentMethodSelector from "@/components/checkout/PaymentMethodSelector";
+import EscrowPayinPanel from "@/components/checkout/EscrowPayinPanel";
 import { stripeProcessingFee } from "@/lib/payments/paymentConfig";
 import { TrustBadge, IvaChip } from "@/components/BulkStrikeBadges";
 
@@ -80,6 +81,10 @@ export default function CheckoutPage() {
   const [buyerCompanyId, setBuyerCompanyId] = useState(null);
   const [methodBySupplier, setMethodBySupplier] = useState({});
   const [consolidatedEscrow, setConsolidatedEscrow] = useState(null);
+  // Pay-in Stripe da confermare (da /api/stripe/create-payin) e risultato di
+  // checkout_cart tenuto da parte finché il pagamento non è confermato.
+  const [payins, setPayins] = useState(null);
+  const [pendingDone, setPendingDone] = useState(null);
 
   // Rubrica indirizzi di spedizione salvati dal cliente + la sede legale (sempre
   // disponibile, non richiede salvataggio) + form per aggiungerne uno nuovo.
@@ -317,9 +322,10 @@ export default function CheckoutPage() {
       const map = Object.fromEntries(preview.by_supplier.map(s => [s.supplier_company_id, { method: methodBySupplier[s.supplier_company_id] }]));
       await stampOrderPaymentMethods(map);
 
-      // Consolidamento escrow (solo struttura dati — nessun Stripe): raggruppa i
-      // sub-ordini in garanzia in un unico addebito.
-      // Il pay-in Stripe consolidato è fuori scope: qui prepariamo solo la struttura dati.
+      // Consolidamento escrow: raggruppa i sub-ordini in garanzia in un unico
+      // addebito e crea il pay-in Stripe reale (/api/stripe/create-payin).
+      // Gli ordini escrow restano in pending_payment finché il webhook non
+      // riceve payment_intent.succeeded.
       const escrowSuppliers = preview.by_supplier.filter(s => ["escrow_sepa", "escrow_premium"].includes(methodBySupplier[s.supplier_company_id]));
       if (escrowSuppliers.length > 0) {
         setConsolidatedEscrow({
@@ -329,6 +335,14 @@ export default function CheckoutPage() {
           // fornitore non è nella preview, la stimiamo qui per la sola visualizzazione).
           total: escrowSuppliers.reduce((a, s) => a + subOrderTotal(s) * 1.22, 0),
         });
+        const r = await fetch("/api/stripe/create-payin", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}) });
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok || !data.payins?.length) {
+          throw new Error(data.error || "Creazione del pagamento non riuscita. Riprova dalla pagina I miei ordini.");
+        }
+        setPendingDone(res);
+        setPayins(data.payins); // il done arriva dopo la conferma del pagamento
+        return;
       }
 
       setDone(res);
@@ -446,6 +460,17 @@ export default function CheckoutPage() {
               <button onClick={() => { window.location.href = "/ordini"; }} style={{ background: C.blue, color: "#fff", border: "none", borderRadius: 9, padding: "12px 22px", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "Inter,system-ui" }}>Vai ai miei ordini</button>
               <button onClick={() => { window.location.href = "/catalogo"; }} style={{ background: "transparent", color: C.blue, border: `1.5px solid ${C.blue}`, borderRadius: 9, padding: "12px 22px", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "Inter,system-ui" }}>Continua gli acquisti</button>
             </div>
+          </div>
+        ) : payins ? (
+          <div style={{ maxWidth: 560, margin: "0 auto" }}>
+            <h1 style={{ fontSize: 26, fontWeight: 800, letterSpacing: "-0.02em", marginBottom: 6, textAlign: "center" }}>Completa il pagamento</h1>
+            <p style={{ fontSize: 14, color: C.muted, textAlign: "center", margin: "0 0 20px", lineHeight: 1.6 }}>
+              Gli ordini sono stati creati e restano <b>in attesa del pagamento in garanzia</b>: conferma qui sotto per depositare i fondi in escrow.
+            </p>
+            <EscrowPayinPanel
+              payins={payins}
+              onAllPaid={() => { setPayins(null); setDone(pendingDone || { orders: [] }); }}
+            />
           </div>
         ) : loading ? (
           <div style={{ padding: "50px 0", textAlign: "center", color: C.muted }}>Caricamento…</div>

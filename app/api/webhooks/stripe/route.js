@@ -18,12 +18,10 @@
 // ============================================================
 
 import { NextResponse } from 'next/server';
-import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
-  apiVersion: '2025-06-30',
-});
+// getStripe: istanza lazy condivisa (vedi adapter) — niente new Stripe a
+// livello di modulo (fallirebbe la build senza env) né apiVersion custom.
+import { getStripe } from '@/lib/payments/escrowAdapter';
 
 function supabaseAdmin() {
   // lazy, come richiesto dall'audit precedente: mai istanziare a livello
@@ -41,7 +39,7 @@ export async function POST(request) {
 
   let event;
   try {
-    event = stripe.webhooks.constructEvent(
+    event = getStripe().webhooks.constructEvent(
       body,
       signature,
       process.env.STRIPE_WEBHOOK_SECRET
@@ -59,40 +57,44 @@ export async function POST(request) {
       // Pagamento confermato: i fondi sono arrivati sul balance
       // piattaforma. Segna payments.status='held' e orders.status='paid'.
       //
-      // NOTA: gestisce un solo sub-ordine per PaymentIntent. Il
-      // pagamento consolidato multi-fornitore (deciso in chat, un
-      // solo pay-in per più sub-ordini escrow) non è ancora wired
-      // lato checkout — quando lo sarà, va esteso a iterare su
-      // metadata.sub_order_ids invece di un singolo order_id.
+      // Il pay-in può essere consolidato multi-fornitore: un solo
+      // PaymentIntent copre N sub-ordini (metadata.sub_order_ids, CSV,
+      // scritto da createEscrowPayIn). L'importo registrato per riga è
+      // il grand_total del singolo sub-ordine (la somma è nel PI).
       // ------------------------------------------------------------
       case 'payment_intent.succeeded': {
         const pi = event.data.object;
-        const orderId = pi.metadata?.order_id;
-        if (!orderId) {
-          console.warn('payment_intent.succeeded senza order_id in metadata:', pi.id);
+        const orderIds = (pi.metadata?.sub_order_ids || pi.metadata?.order_id || '')
+          .split(',').map((s) => s.trim()).filter(Boolean);
+        if (orderIds.length === 0) {
+          console.warn('payment_intent.succeeded senza order_id/sub_order_ids in metadata:', pi.id);
           break;
         }
 
-        const { error: payErr } = await supabase
-          .from('payments')
-          .upsert(
-            {
-              order_id: orderId,
-              amount: pi.amount / 100,
-              provider: 'stripe',
-              provider_ref: pi.id,
-              status: 'held',
-              held_at: new Date().toISOString(),
-            },
-            { onConflict: 'order_id' }
-          );
-        if (payErr) throw payErr;
+        for (const orderId of orderIds) {
+          const { data: grand } = await supabase.rpc('get_order_grand_total', { p_order_id: orderId });
+          const { error: payErr } = await supabase
+            .from('payments')
+            .upsert(
+              {
+                order_id: orderId,
+                amount: grand != null ? Number(grand) : pi.amount / 100,
+                provider: 'stripe',
+                provider_ref: pi.id,
+                status: 'held',
+                held_at: new Date().toISOString(),
+              },
+              { onConflict: 'order_id' }
+            );
+          if (payErr) throw payErr;
 
-        const { error: orderErr } = await supabase
-          .from('orders')
-          .update({ status: 'paid', paid_at: new Date().toISOString() })
-          .eq('id', orderId);
-        if (orderErr) throw orderErr;
+          const { error: orderErr } = await supabase
+            .from('orders')
+            .update({ status: 'paid', paid_at: new Date().toISOString() })
+            .eq('id', orderId)
+            .eq('status', 'pending_payment'); // non retrocedere stati logistici successivi
+          if (orderErr) throw orderErr;
+        }
         break;
       }
 
@@ -101,21 +103,23 @@ export async function POST(request) {
       // ------------------------------------------------------------
       case 'payment_intent.payment_failed': {
         const pi = event.data.object;
-        const orderId = pi.metadata?.order_id;
-        if (!orderId) break;
+        const orderIds = (pi.metadata?.sub_order_ids || pi.metadata?.order_id || '')
+          .split(',').map((s) => s.trim()).filter(Boolean);
 
-        await supabase
-          .from('payments')
-          .upsert(
-            {
-              order_id: orderId,
-              amount: pi.amount / 100,
-              provider: 'stripe',
-              provider_ref: pi.id,
-              status: 'failed',
-            },
-            { onConflict: 'order_id' }
-          );
+        for (const orderId of orderIds) {
+          await supabase
+            .from('payments')
+            .upsert(
+              {
+                order_id: orderId,
+                amount: pi.amount / 100,
+                provider: 'stripe',
+                provider_ref: pi.id,
+                status: 'failed',
+              },
+              { onConflict: 'order_id' }
+            );
+        }
         // orders.status resta 'pending_payment': il buyer può riprovare
         break;
       }
