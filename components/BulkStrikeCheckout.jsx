@@ -335,7 +335,11 @@ export default function CheckoutPage() {
           // fornitore non è nella preview, la stimiamo qui per la sola visualizzazione).
           total: escrowSuppliers.reduce((a, s) => a + subOrderTotal(s) * 1.22, 0),
         });
-        const r = await fetch("/api/stripe/create-payin", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}) });
+        // SOLO gli ordini appena creati da questo checkout (res.orders): senza
+        // filtro l'endpoint raccoglierebbe l'intero backlog di ordini escrow
+        // ancora in pending_payment (bug visto in verifica: pay-in da 16.605 €
+        // di ordini storici). held_orders (in attesa di corriere) si pagano poi.
+        const r = await fetch("/api/stripe/create-payin", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ orderIds: res?.orders || [] }) });
         const data = await r.json().catch(() => ({}));
         if (!r.ok || !data.payins?.length) {
           throw new Error(data.error || "Creazione del pagamento non riuscita. Riprova dalla pagina I miei ordini.");

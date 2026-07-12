@@ -26,16 +26,21 @@ export async function POST(request) {
   const body = await request.json().catch(() => ({}));
   const requested = Array.isArray(body.orderIds)
     ? body.orderIds.filter((x) => typeof x === "string")
-    : null;
+    : [];
+  // orderIds è OBBLIGATORIO: senza filtro il pay-in engloberebbe l'intero
+  // backlog di ordini escrow ancora in pending_payment (anche vecchi ordini
+  // rimasti non pagati), non solo quelli del checkout corrente.
+  if (!requested.length) {
+    return NextResponse.json({ error: "orderIds mancanti" }, { status: 400 });
+  }
 
-  let q = supabase
+  const { data: orders, error } = await supabase
     .from("orders")
     .select("id, payment_method, status")
     .eq("buyer_company_id", company.id)
     .eq("status", "pending_payment")
-    .in("payment_method", ["escrow_sepa", "escrow_premium"]);
-  if (requested?.length) q = q.in("id", requested);
-  const { data: orders, error } = await q;
+    .in("payment_method", ["escrow_sepa", "escrow_premium"])
+    .in("id", requested);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   if (!orders?.length) {
     return NextResponse.json({ error: "Nessun ordine escrow in attesa di pagamento" }, { status: 404 });
