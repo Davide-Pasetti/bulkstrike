@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { getPoolDetail, getPoolBids, getPoolParticipants, getPoolTargetJoins, joinPool, joinPoolAtTarget, getMyTargetJoin, cancelTargetJoin, poolErrorMessage, isFollowingProduct } from "@/lib/api";
 import BulkStrikeNav from "@/components/BulkStrikeNav";
+import SupplierName from "@/components/BulkStrikeSupplierName";
 import ProductFollowButton from "@/components/BulkStrikeProductFollow";
 import { TIERS, tierIndexFor, tierFor, tierCeiling } from "@/lib/tiers";
 import BulkStrikeChatWidget from "@/components/BulkStrikeChatWidget";
@@ -377,7 +378,7 @@ export default function PoolAuctionPage() {
                   {!concluded && <span style={{ fontSize:12, color:C.green, display:"flex", alignItems:"center", gap:2 }}><TrendingDown size={12}/> in calo</span>}
                 </div>
                 <div style={{ fontSize:12, color:C.muted, marginTop:2 }}>{concluded
-                  ? (pool.winnerName ? <>aggiudicata a <b style={{ color:C.text }}>{pool.winnerName}</b></> : <>{pool.bids} offerte ricevute</>)
+                  ? (pool.winnerName ? <>aggiudicata a <SupplierName name={pool.winnerName} style={{ color:C.text, fontWeight:700 }}/></> : <>{pool.bids} offerte ricevute</>)
                   : <>offerto da <b style={{ color:C.text }}>{pool.bestSupplier}</b> · {pool.bids} fornitori in gara</>}</div>
               </div>
               <div style={{ borderLeft:`1px solid ${C.border}`, paddingLeft:24 }}>
@@ -421,7 +422,7 @@ export default function PoolAuctionPage() {
               </div>
               {bidders.map((b,i) => (
                 <div key={i} style={{ display:"flex", alignItems:"center", gap:10, padding:"9px 0", borderBottom:i<bidders.length-1?`1px solid #F1F5F9`:"none" }}>
-                  <span style={{ fontSize:13, fontWeight:600, minWidth:96 }}>{concluded && b.won && pool.winnerName ? pool.winnerName : b.tag}</span>
+                  <span style={{ fontSize:13, fontWeight:600, minWidth:96 }}>{concluded && b.won && pool.winnerName ? <SupplierName name={pool.winnerName}/> : b.tag}</span>
                   <span style={{ fontSize:13 }}>{b.flag}</span>
                   <span style={{ fontSize:12, color:C.muted, flex:1 }}>{b.when}</span>
                   {concluded
@@ -454,7 +455,7 @@ export default function PoolAuctionPage() {
                   {pool.winnerName && (
                     <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", gap:10, paddingTop:8, borderTop:`1px solid ${C.border}`, marginTop:8 }}>
                       <span style={{ fontSize:13, color:C.muted, whiteSpace:"nowrap" }}>Fornitore vincitore</span>
-                      <span style={{ fontSize:13, fontWeight:700, color:C.text, textAlign:"right" }}>{pool.winnerName}</span>
+                      <SupplierName name={pool.winnerName} style={{ fontSize:13, fontWeight:700, color:C.text, textAlign:"right" }}/>
                     </div>
                   )}
                   {myQty > 0 && (

@@ -5,6 +5,7 @@ import { getProduct, getOpenPoolForProduct, getPriceReference, getProductBreadcr
 import PriceSourceNote from "@/components/PriceSourceNote";
 import ProductFollowButton from "@/components/BulkStrikeProductFollow";
 import BulkStrikeNav from "@/components/BulkStrikeNav";
+import SupplierName, { SupplierLoginHint } from "@/components/BulkStrikeSupplierName";
 import BulkStrikeChatWidget from "@/components/BulkStrikeChatWidget";
 import { BSIcon } from "@/components/BSLogo";
 import { IvaChip } from "@/components/BulkStrikeBadges";
@@ -625,8 +626,8 @@ export default function ProductPage() {
                     <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:16, flexWrap:"wrap" }}>
                       <span style={{ fontSize:12, color:C.muted }}>Competono:</span>
                       {ranked.map(s => (
-                        <span key={s.id} className={s.company_id ? "bs-suplink" : ""} onClick={() => { if (s.company_id) window.location.href = `/fornitore?id=${s.company_id}`; }} style={{ fontSize:12, color:C.text, display:"flex", alignItems:"center", gap:5, background:"#fff", border:`1px solid ${C.border}`, borderRadius:100, padding:"3px 10px" }}>
-                          <span>{s.flag}</span> {s.name}
+                        <span key={s.id} style={{ fontSize:12, color:C.text, display:"flex", alignItems:"center", gap:5, background:"#fff", border:`1px solid ${C.border}`, borderRadius:100, padding:"3px 10px" }}>
+                          <span>{s.flag}</span> <SupplierName name={s.name} companyId={s.company_id} className="bs-suplink"/>
                         </span>
                       ))}
                     </div>
@@ -677,7 +678,7 @@ export default function ProductPage() {
               <div style={{ display:"flex", justifyContent:"space-between", gap:16, flexWrap:"wrap", marginBottom:18 }}>
                 <div>
                   <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:4 }}>
-                    <span className={featured.company_id ? "bs-suplink" : ""} onClick={() => { if (featured.company_id) window.location.href = `/fornitore?id=${featured.company_id}`; }} style={{ fontSize:20, fontWeight:800 }}>{featured.name}</span>
+                    <SupplierName name={featured.name} companyId={featured.company_id} className="bs-suplink" style={{ fontSize:20, fontWeight:800 }}/>
                     <span style={{ fontSize:18 }}>{featured.flag}</span>
                   </div>
                   <div style={{ display:"flex", alignItems:"center", gap:12, fontSize:13, color:C.muted, flexWrap:"wrap" }}>
@@ -686,6 +687,7 @@ export default function ProductPage() {
                     <span>{featured.type}</span>
                     <span style={{ display:"flex", alignItems:"center", gap:4 }}><Truck size={13}/> {featured.delivery}</span>
                   </div>
+                  <SupplierLoginHint/>
                 </div>
               </div>
 
@@ -750,7 +752,7 @@ export default function ProductPage() {
                 <div key={s.id} className="bs-supplier-row">
                   <div>
                     <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:3 }}>
-                      <span className={s.company_id ? "bs-suplink" : ""} onClick={() => { if (s.company_id) window.location.href = `/fornitore?id=${s.company_id}`; }} style={{ fontSize:15, fontWeight:700 }}>{s.name}</span><span>{s.flag}</span>
+                      <SupplierName name={s.name} companyId={s.company_id} className="bs-suplink" style={{ fontSize:15, fontWeight:700 }}/><span>{s.flag}</span>
                     </div>
                     <div style={{ display:"flex", alignItems:"center", gap:8, fontSize:12, color:C.muted, flexWrap:"wrap" }}>
                       <span style={{ display:"flex", alignItems:"center", gap:3 }}><Star size={11} fill={C.amber} color={C.amber}/> {s.rating.toFixed(1)}</span>
