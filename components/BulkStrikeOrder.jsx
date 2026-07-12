@@ -9,6 +9,7 @@ import { ChevronRight, Check, Truck, CreditCard, PackageCheck, Star, ShieldCheck
 import { getOrderDetail, getSession, markOrderPaidDemo, markOrderShipped, confirmDelivery, raiseDispute, poolErrorMessage, getSupplierIbanForOrder, setOrderLot, fetchOrderQrObjectUrl, getMyCompany, adminListOrderEmails, adminResendOrderEmail } from "@/lib/api";
 import BulkStrikeNav from "@/components/BulkStrikeNav";
 import CopyButton from "@/components/CopyButton";
+import EscrowPayinPanel from "@/components/checkout/EscrowPayinPanel";
 
 const C = { blue:"#0EA5E9", dark:"#0284C7", text:"#0F172A", muted:"#64748B", border:"#E2E8F0", bg:"#F8FAFE", green:"#059669", red:"#DC2626", amber:"#D97706", purple:"#7C3AED" };
 const eur = (n) => n == null ? "—" : "€" + Number(n).toLocaleString("it-IT", { minimumFractionDigits:2, maximumFractionDigits:2 });
@@ -50,6 +51,26 @@ export default function OrderPage() {
   const [disputeReason, setDisputeReason] = useState("");
   const [err, setErr] = useState("");
   const [justDone, setJustDone] = useState("");
+
+  // Pay-in Stripe per riprendere il pagamento di un ordine escrow rimasto in
+  // pending_payment (checkout interrotto, o pagamento SEPA da rifare).
+  const [payins, setPayins] = useState(null);
+  const [payinBusy, setPayinBusy] = useState(false);
+  const [payinDone, setPayinDone] = useState(false);
+
+  async function startEscrowPayment() {
+    setPayinBusy(true); setErr("");
+    try {
+      const r = await fetch("/api/stripe/create-payin", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ orderIds: [order.id] }) });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok || !data.payins?.length) throw new Error(data.error || "Creazione del pagamento non riuscita.");
+      setPayins(data.payins);
+    } catch (e) {
+      setErr(String(e?.message || e));
+    } finally {
+      setPayinBusy(false);
+    }
+  }
 
   // Rivelazione IBAN fornitore (solo ordini con bonifico anticipato).
   const [iban, setIban] = useState(null);
@@ -285,7 +306,30 @@ export default function OrderPage() {
               <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
 
                 {/* AZIONE CORRENTE */}
-                {isBuyer && order.status === "pending_payment" && (
+                {isBuyer && order.status === "pending_payment" && ["escrow_sepa","escrow_premium"].includes(order.payment_method) ? (
+                  <div className="od-card" style={{ borderColor:C.blue, background:"#F0F9FF" }}>
+                    <div style={{ fontSize:14.5, fontWeight:800, marginBottom:6, display:"flex", alignItems:"center", gap:7 }}><CreditCard size={16} color={C.blue}/> Completa il pagamento in escrow</div>
+                    {payinDone ? (
+                      <p style={{ fontSize:13, color:C.green, fontWeight:600, lineHeight:1.6 }}>
+                        <Check size={14} style={{ verticalAlign:"-2px" }}/> Pagamento inviato. {order.payment_method === "escrow_sepa" ? "L'addebito SEPA richiede alcuni giorni di conferma bancaria: " : ""}l'ordine passerà a "Pagato" alla conferma del gestore di pagamento.
+                      </p>
+                    ) : payins ? (
+                      <EscrowPayinPanel payins={payins} onAllPaid={() => { setPayins(null); setPayinDone(true); }} />
+                    ) : (
+                      <>
+                        <p style={{ fontSize:13, color:C.muted, lineHeight:1.6, marginBottom:14 }}>
+                          L'importo di <b className="od-num" style={{ color:C.text }}>{eur(order.grand_total ?? order.goods_subtotal)}</b> (IVA, spedizione e costi di servizio inclusi) viene depositato sul conto escrow di BulkStrike.
+                          Il fornitore lo incassa solo dopo la tua conferma di consegna conforme. Se qualcosa va storto, l'importo torna a te.
+                        </p>
+                        <button onClick={startEscrowPayment} disabled={payinBusy}
+                                style={{ background:C.blue, color:"#fff", border:"none", borderRadius:10, padding:"13px 24px", fontSize:14, fontWeight:700, cursor:payinBusy?"default":"pointer", opacity:payinBusy?0.6:1, display:"inline-flex", alignItems:"center", gap:8, fontFamily:"Inter,system-ui" }}>
+                          {payinBusy ? "Preparazione…" : <>Paga {eur(order.grand_total ?? order.goods_subtotal)} in garanzia <ArrowRight size={15}/></>}
+                        </button>
+                      </>
+                    )}
+                  </div>
+                ) : isBuyer && order.status === "pending_payment" && (
+                  /* fallback demo per ordini senza metodo escrow stampato (storici) */
                   <div className="od-card" style={{ borderColor:C.blue, background:"#F0F9FF" }}>
                     <div style={{ fontSize:14.5, fontWeight:800, marginBottom:6, display:"flex", alignItems:"center", gap:7 }}><CreditCard size={16} color={C.blue}/> Completa il pagamento in escrow</div>
                     <p style={{ fontSize:13, color:C.muted, lineHeight:1.6, marginBottom:14 }}>
