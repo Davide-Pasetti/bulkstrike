@@ -730,7 +730,9 @@ export default function PoolAuctionPage() {
             <div className="bs-card" style={{ background:"#EFF6FF", borderColor:"#BFDBFE", textAlign:"center" }}>
               <div style={{ fontSize:14, fontWeight:700, marginBottom:4 }}>Vuoi scegliere il fornitore?</div>
               <div style={{ fontSize:13, color:C.muted, marginBottom:12 }}>Con l'Acquisto Rapido scegli qualità, origine e tempi — non solo prezzo.</div>
-              <button className="bs-btn bs-btn-blue" style={{ width:"100%", fontSize:14, padding:"11px" }}>Vai all'Acquisto Rapido <ArrowRight size={15}/></button>
+              {/* Stessa azione di "Acquista subito" (Home): la pagina prodotto, dove
+                  vive l'Acquisto Rapido. Sull'asta demo (senza prodotto) → catalogo. */}
+              <button className="bs-btn bs-btn-blue" onClick={() => { window.location.href = productId ? `/prodotto?id=${productId}` : "/catalogo"; }} style={{ width:"100%", fontSize:14, padding:"11px" }}>Acquista subito <ArrowRight size={15}/></button>
             </div>
           </div>
         </div>
