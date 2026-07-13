@@ -520,29 +520,6 @@ export default function ProductPage() {
 
           {/* LEFT COLUMN */}
           <div>
-            {/* POOL NUDGE (compatto) — se l'ordine è ≥ 1 pallet, invito breve ad
-                aprire un'asta a ribasso, in cima alla colonna (all'altezza del box
-                "Andamento prezzo" nella sidebar), non più in fondo dopo la selezione. */}
-            {!pool.exists && canOpenPool && (
-              <div style={{ border:`1.5px solid ${C.purple}44`, background:"linear-gradient(135deg,#FBF7FF,#F3EEFF)", borderRadius:14, padding:"12px 14px", marginBottom:20 }}>
-                <div style={{ display:"flex", gap:10, alignItems:"center", flexWrap:"wrap" }}>
-                  <div style={{ width:34, height:34, borderRadius:9, background:C.purple, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
-                    <Gavel size={17} color="#fff"/>
-                  </div>
-                  <div style={{ flex:1, minWidth:150 }}>
-                    <div style={{ fontSize:14, fontWeight:800, lineHeight:1.25 }}>Apri un'asta a ribasso e potresti pagare meno</div>
-                    <div style={{ fontSize:12, color:C.muted, marginTop:1 }}>Risparmio potenziale <b style={{ color:C.green }}>{poolPotential.pct>0?`fino a -${poolPotential.pct}%`:"prezzo in calo"}</b> · {ranked.length} fornitori in gara</div>
-                  </div>
-                  <button onClick={handleOpenPool} disabled={busy || !openAcceptTerms} style={{ background:C.purple, color:"#fff", border:"none", borderRadius:9, padding:"10px 16px", fontSize:13.5, fontWeight:700, cursor:(busy||!openAcceptTerms)?"default":"pointer", opacity:(busy||!openAcceptTerms)?0.5:1, display:"inline-flex", alignItems:"center", gap:6, fontFamily:"Inter,system-ui", flexShrink:0 }}>
-                    <Gavel size={15}/> Apri asta
-                  </button>
-                </div>
-                <label style={{ display:"flex", gap:8, alignItems:"flex-start", marginTop:9, cursor:"pointer" }}>
-                  <input type="checkbox" checked={openAcceptTerms} onChange={e => setOpenAcceptTerms(e.target.checked)} style={{ marginTop:1, width:15, height:15, accentColor:C.purple, flexShrink:0 }}/>
-                  <span style={{ fontSize:11, color:C.muted, lineHeight:1.4 }}>Accetto che la quantità entri nel volume aggregato e che il fornitore sia scelto tra i certificati al prezzo più basso alla chiusura.</span>
-                </label>
-              </div>
-            )}
             {/* QUANTITA NECESSARIA — due passaggi: 1) formato, 2) numero di unita di quel formato */}
             <div style={{ border:`1px solid ${C.border}`, borderRadius:14, padding:20, marginBottom:20, background:C.bg }}>
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16, flexWrap:"wrap", gap:10 }}>
@@ -584,60 +561,6 @@ export default function ProductPage() {
               </div>
             </div>
 
-
-            {/* Indicatore soglia pallet — sempre visibile quando non c'è già un'asta, cambia stato in base alla quantità */}
-            {!pool.exists && (
-              <div style={{ border:`1px solid ${C.amber}44`, background:"#FFFBEB", borderRadius:12, padding:"12px 16px", marginBottom:20, display:"flex", alignItems:"center", gap:10, opacity: canOpenPool ? 1 : 0.5, transition:"opacity 0.25s ease" }}>
-                <Info size={18} color={C.amber} style={{ flexShrink:0 }}/>
-                <span style={{ fontSize:13, color:"#92400E", fontWeight:600 }}>
-                  {canOpenPool
-                    ? "Hai raggiunto la quantità minima per aprire un'asta a ribasso."
-                    : `Quantità minima di 1 pallet (${palletKg.toLocaleString("it-IT")} kg), necessaria per aprire un'asta a ribasso, non ancora raggiunta.`}
-                </span>
-              </div>
-            )}
-
-            {/* POOL BANNER — an active pool already exists for this product */}
-            {pool.exists && (
-              <div style={{ border:`1.5px solid ${C.purple}`, background:"linear-gradient(135deg,#F5F0FF,#EDE4F7)", borderRadius:14, padding:"18px 20px", marginBottom:24 }}>
-                <div style={{ display:"flex", gap:14, alignItems:"flex-start" }}>
-                  <div style={{ width:42, height:42, borderRadius:11, background:C.purple, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, position:"relative" }}>
-                    <Gavel size={20} color="#fff"/>
-                    <span style={{ position:"absolute", top:-3, right:-3, width:11, height:11, borderRadius:"50%", background:C.red, border:"2px solid #fff" }}/>
-                  </div>
-                  <div style={{ flex:1, minWidth:0 }}>
-                    <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:4, flexWrap:"wrap" }}>
-                      <span style={{ fontSize:16, fontWeight:800 }}>{pool.myQuantityKg > 0 ? "Hai già aderito all'asta a ribasso di questo prodotto" : "C'è già un'asta a ribasso attiva per questo prodotto"}</span>
-                      <span className="bs-chip" style={{ background:"#fff", color:C.purple, border:`1px solid ${C.purple}44` }}><Clock size={11}/> chiude tra {pool.closesIn}</span>
-                    </div>
-                    {pool.myQuantityKg > 0 && (
-                      <div style={{ fontSize:13, color:C.text, marginBottom:10 }}>Hai già <b>{Number(pool.myQuantityKg).toLocaleString("it-IT")} kg</b> in questa asta.</div>
-                    )}
-                    <div style={{ fontSize:14, color:C.muted, lineHeight:1.6, marginBottom:14 }}>
-                      È un'<b style={{ color:C.text }}>asta a ribasso</b>: <b style={{ color:C.text }}>{pool.companies} aziende</b> si sono già aggregate e <b style={{ color:C.text }}>{pool.suppliers} fornitori certificati</b> competono. Unendoti, paghi il prezzo più basso raggiunto — e il prezzo <b style={{ color:C.text }}>può solo scendere</b> fino alla chiusura.
-                    </div>
-                    <div style={{ display:"flex", gap:18, flexWrap:"wrap", marginBottom:14 }}>
-                      <Fact icon={<Gavel size={15} color={C.purple}/>} label="Prezzo asta ora" value={`${eurKg(pool.bestPrice)}/kg`} />
-                      <Fact icon={<TrendingDown size={15} color={C.green}/>} label="Risparmio stimato" value={joinSavings>0?eur(joinSavings):"in calo"} />
-                      <Fact icon={<Users size={15} color={C.purple}/>} label="Già aggregate" value={`${pool.companies} aziende`} />
-                    </div>
-                    {/* disclaimer */}
-                    <div style={{ display:"flex", gap:8, background:"#FFF7ED", border:`1px solid ${C.amber}44`, borderRadius:9, padding:"10px 12px", marginBottom:14 }}>
-                      <Info size={18} color={C.amber} style={{ flexShrink:0 }}/>
-                      <span style={{ fontSize:12, color:"#7C2D12", lineHeight:1.5 }}>
-                        Unendoti accetti il <b>fornitore più economico</b> tra quelli certificati e attendi fino alla <b>chiusura dell'asta</b> — che dipende da quando è stato aperto (qui: tra {pool.closesIn}) e può anche essere imminente. Vuoi scegliere un fornitore o ricevere subito? Continua con l'Acquisto Rapido qui sotto.
-                      </span>
-                    </div>
-                    <div style={{ display:"flex", gap:12, flexWrap:"wrap", alignItems:"center" }}>
-                      <button onClick={goToPool} style={{ background:C.purple, color:"#fff", border:"none", borderRadius:9, padding:"12px 22px", fontSize:14, fontWeight:700, cursor:"pointer", display:"inline-flex", alignItems:"center", gap:7, fontFamily:"Inter,system-ui" }}>
-                        <Users size={16}/> {pool.myQuantityKg > 0 ? "Aggiungi un quantitativo all'asta in corso" : "Unisciti all'asta"} <ArrowRight size={15}/>
-                      </button>
-                      <span style={{ fontSize:12, color:C.muted }}>oppure acquista subito qui sotto</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
 
             {/* FEATURED SUPPLIER */}
             {Object.keys(variantOptions).length > 0 && (
@@ -855,33 +778,34 @@ export default function ProductPage() {
 
           {/* RIGHT COLUMN — sticky cards */}
           <div style={{ position:"sticky", top:80, display:"flex", flexDirection:"column", gap:16 }}>
-            {/* POOL CARD */}
-            {pool.exists && (
-            <div style={{ border:`1px solid ${C.purple}33`, borderRadius:14, padding:18, background:"#FBF7FF" }}>
-              <div style={{ display:"flex", alignItems:"center", gap:7, marginBottom:8 }}>
-                <Gavel size={15} color={C.purple}/>
-                <span style={{ fontSize:13, fontWeight:700, color:C.purple }}>Asta a ribasso attiva</span>
-                <span style={{ marginLeft:"auto", fontSize:12, color:C.muted, display:"flex", alignItems:"center", gap:3 }}><Clock size={11}/> {pool.closesIn}</span>
+            {/* BOX ASTA — sempre visibile, sopra "Andamento prezzo". Router verso la
+                pagina dell'asta: se un pool esiste ci si unisce lì, altrimenti si apre
+                lì una nuova asta (?product). Contenuto minimale: titolo + bottone. Il
+                bottone è disabilitato SOLO nel caso "apri nuova" quando la quantità è
+                sotto il minimo (1 pallet); per aderire a un'asta attiva resta sempre attivo. */}
+            <div style={{ border:`1.5px solid ${C.purple}55`, borderRadius:14, padding:16, background:"#FBF7FF" }}>
+              <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:12 }}>
+                <div style={{ width:32, height:32, borderRadius:9, background:C.purple, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+                  <Gavel size={16} color="#fff"/>
+                </div>
+                <span style={{ fontSize:14, fontWeight:800, color:C.text }}>{pool.exists ? "Asta a ribasso attiva" : "Asta a ribasso disponibile"}</span>
               </div>
-              <div style={{ display:"flex", alignItems:"baseline", gap:8, marginBottom:8 }}>
-                <span className="bs-num" style={{ fontSize:24, fontWeight:800, color:C.purple }}>{eurKg(pool.bestPrice)}</span>
-                <span style={{ fontSize:12, color:C.muted }}>/kg · miglior prezzo ora</span>
-              </div>
-              <p style={{ fontSize:13, color:C.muted, marginBottom:12, lineHeight:1.5 }}>
-                <b style={{ color:C.text }}>{pool.companies} aziende</b> già aggregate · <b style={{ color:C.text }}>{pool.suppliers} fornitori</b> in gara. Il prezzo può solo scendere fino alla chiusura.
-              </p>
-              <div style={{ display:"flex", justifyContent:"space-between", fontSize:12, marginBottom:6 }}>
-                <span style={{ color:C.muted }}>Volume aggregato</span>
-                <span className="bs-num" style={{ fontWeight:600 }}>{(pool.current/1000).toFixed(1)}t</span>
-              </div>
-              <div style={{ height:7, background:"#EDE4F7", borderRadius:100, overflow:"hidden", marginBottom:14 }}>
-                <div style={{ width:`${Math.max(6, Math.min(100, Math.round((pool.current/(palletKg*20))*100)))}%`, height:"100%", background:`linear-gradient(90deg,${C.purple},#A855F7)`, borderRadius:100 }}/>
-              </div>
-              <button onClick={goToPool} style={{ width:"100%", background:C.purple, color:"#fff", border:"none", borderRadius:9, padding:"12px", fontSize:14, fontWeight:700, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:6, fontFamily:"Inter,system-ui" }}>
-                {pool.myQuantityKg > 0 ? "Aggiungi un quantitativo" : "Unisciti all'asta"} <ArrowRight size={15}/>
-              </button>
+              {(() => {
+                const canGo = pool.exists || canOpenPool;
+                const target = pool.exists ? (pool.id ? `/pool?id=${pool.id}` : null) : (productId ? `/pool?product=${productId}` : null);
+                return (<>
+                  <button onClick={() => { if (canGo && target) window.location.href = target; }} disabled={!canGo || !target}
+                    style={{ width:"100%", background:C.purple, color:"#fff", border:"none", borderRadius:9, padding:"12px", fontSize:14, fontWeight:700, cursor:(canGo && target)?"pointer":"default", opacity:(canGo && target)?1:0.45, display:"flex", alignItems:"center", justifyContent:"center", gap:7, fontFamily:"Inter,system-ui" }}>
+                    Vai alla pagina dell'asta <ArrowRight size={15}/>
+                  </button>
+                  {!pool.exists && !canOpenPool && (
+                    <div style={{ fontSize:11.5, color:C.muted, marginTop:8, textAlign:"center" }}>
+                      Quantità minima {(palletKg/1000).toLocaleString("it-IT")}t (1 pallet) non ancora raggiunta.
+                    </div>
+                  )}
+                </>);
+              })()}
             </div>
-            )}
 
             {/* PRICE HISTORY */}
             <div style={{ border:`1px solid ${C.border}`, borderRadius:14, padding:18 }}>

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { getPoolDetail, getPoolBids, getPoolParticipants, getPoolTargetJoins, joinPool, joinPoolAtTarget, getMyTargetJoin, cancelTargetJoin, poolErrorMessage, isFollowingProduct } from "@/lib/api";
+import { getPoolDetail, getPoolBids, getPoolParticipants, getPoolTargetJoins, joinPool, joinPoolAtTarget, getMyTargetJoin, cancelTargetJoin, poolErrorMessage, isFollowingProduct, getOpenPoolForProduct, getProduct, openPool } from "@/lib/api";
 import BulkStrikeNav from "@/components/BulkStrikeNav";
 import SupplierName from "@/components/BulkStrikeSupplierName";
 import ProductFollowButton from "@/components/BulkStrikeProductFollow";
@@ -84,6 +84,9 @@ export default function PoolAuctionPage() {
   const [targetPrice, setTargetPrice] = useState("");
   const [productId, setProductId] = useState(null);       // per il bottone "Segui" prodotto
   const [followingProduct, setFollowingProduct] = useState(false);
+  // Modalità "apri nuova asta" per un prodotto (arrivo con ?product=<id> e nessun
+  // pool ancora aperto): il pannello apre l'asta con openPool() invece di joinPool().
+  const [productMode, setProductMode] = useState(false);
 
   useEffect(() => {
     const t = setInterval(() => setSecs(s => s>0 ? s-1 : 0), 1000);
@@ -91,12 +94,77 @@ export default function PoolAuctionPage() {
   }, []);
 
   useEffect(() => {
-    const id = new URLSearchParams(window.location.search).get("id");
-    if (!id) return;            // nessun id → resta il pool dimostrativo
-    setPoolId(id);
-    loadPool(id);
-    getMyTargetJoin(id).then(setTargetJoin).catch(() => {});
+    const url = new URLSearchParams(window.location.search);
+    const id = url.get("id");
+    const productParam = url.get("product");
+    if (id) {
+      setPoolId(id);
+      loadPool(id);
+      getMyTargetJoin(id).then(setTargetJoin).catch(() => {});
+      return;
+    }
+    if (productParam) {
+      // Se esiste già un'asta aperta per questo prodotto → vai alla sua pagina.
+      // Altrimenti entra in modalità "apri nuova asta" per quel prodotto.
+      getOpenPoolForProduct(productParam)
+        .then((op) => {
+          if (op && op.id) { window.location.href = `/pool?id=${op.id}`; return; }
+          loadProductForOpen(productParam);
+        })
+        .catch(() => loadProductForOpen(productParam));
+      return;
+    }
+    // nessun parametro → resta il pool dimostrativo
   }, []);
+
+  // Modalità "apri nuova asta": carica il prodotto e prepara il pannello con volume 0.
+  async function loadProductForOpen(pid) {
+    try {
+      const p = await getProduct(pid);
+      if (!p) return;
+      setProductMode(true);
+      setProductId(pid);
+      isFollowingProduct(pid).then(setFollowingProduct).catch(() => {});
+      if (p.pallet_kg) setRealPalletKg(Number(p.pallet_kg));
+      if (p.sacco_kg) setRealSaccoKg(Number(p.sacco_kg));
+      if (p.container_kg) setRealContainerKg(Number(p.container_kg));
+      setBidders([]); setParticipants([]); setPendingJoins([]); setMyQty(0);
+      setPool({
+        product: p.canonical_name || "",
+        enum: p.e_number || "",
+        standard: SEED_POOL.standard,
+        current: 0,
+        secondsLeft: 0,
+        bestBid: tierFor(0).price,
+        bestSupplier: "—",
+        bids: 0,
+        status: "open",
+        finalPrice: null, winnerName: null, myOrderId: null, closesAt: null,
+      });
+      setSecs(0);
+    } catch (e) {
+      setJoinMsg(poolErrorMessage(e));
+    }
+  }
+
+  // Apre davvero l'asta per il prodotto (dalla modalità productMode), poi porta
+  // alla pagina del pool appena creato.
+  async function openNewAuction() {
+    if (!productId) return;
+    setJoining(true); setJoinMsg(null);
+    try {
+      const newId = await openPool(productId, userQty, true);
+      window.location.href = `/pool?id=${newId}`;
+    } catch (e) {
+      // se nel frattempo qualcuno l'ha aperta, vai su quella
+      try {
+        const op = await getOpenPoolForProduct(productId);
+        if (op && op.id) { window.location.href = `/pool?id=${op.id}`; return; }
+      } catch (_) { /* ignore */ }
+      setJoinMsg(poolErrorMessage(e));
+      setJoining(false);
+    }
+  }
 
   async function loadPool(id) {
     try {
@@ -137,6 +205,7 @@ export default function PoolAuctionPage() {
   }
 
   async function joinTheAuction() {
+    if (productMode) { return openNewAuction(); }
     if (!poolId) { setJoinMsg("Questa è l'asta dimostrativa: per partecipare apri un'asta a ribasso reale dalla pagina di un prodotto."); return; }
     setJoining(true); setJoinMsg(null);
     try {
@@ -154,6 +223,7 @@ export default function PoolAuctionPage() {
   // Aderisci quando il prezzo raggiunge la soglia scelta. Se il prezzo attuale
   // è già a quel livello o sotto, il server unisce subito (stessa cosa di joinTheAuction).
   async function joinAtTarget() {
+    if (productMode) { return openNewAuction(); }
     if (!poolId) { setJoinMsg("Questa è l'asta dimostrativa: per partecipare apri un'asta a ribasso reale dalla pagina di un prodotto."); return; }
     const price = parseFloat(String(targetPrice).replace(",", "."));
     if (!price || price <= 0) { setJoinMsg("Inserisci un prezzo soglia valido."); return; }
