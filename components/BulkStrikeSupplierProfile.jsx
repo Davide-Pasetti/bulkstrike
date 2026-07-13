@@ -512,13 +512,23 @@ export default function SupplierPage() {
 
           {/* ── COLONNA DESTRA ── */}
           <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
-            {/* CONTATTI */}
+            {/* CONTATTI — telefono/email/referente solo con ordine confermato; il
+                sito web resta sempre pubblico (marketing legittimo). */}
             <div className="sup-card">
               <div style={{ fontSize:13, fontWeight:800, textTransform:"uppercase", letterSpacing:"0.05em", color:C.muted, marginBottom:6 }}>Contatti</div>
-              <Row icon={Mail} label="Assistenza clienti">{profile.support_email ? <a href={`mailto:${profile.support_email}`} style={{ color:C.blue, textDecoration:"none" }}>{profile.support_email}</a> : null}</Row>
-              <Row icon={Phone} label="Telefono">{profile.phone ? <a href={`tel:${profile.phone}`} style={{ color:C.text, textDecoration:"none" }}>{profile.phone}</a> : null}</Row>
               <Row icon={Globe} label="Sito web">{profile.website ? <a href={profile.website.startsWith("http") ? profile.website : `https://${profile.website}`} target="_blank" rel="noopener noreferrer" style={{ color:C.blue, textDecoration:"none", display:"inline-flex", alignItems:"center", gap:4 }}>{profile.website} <ExternalLink size={11}/></a> : null}</Row>
-              <Row icon={User} label="Referente / amministratore">{profile.contact_name}</Row>
+              {profile.contacts_visible ? (
+                <>
+                  <Row icon={Mail} label="Assistenza clienti">{profile.support_email ? <a href={`mailto:${profile.support_email}`} style={{ color:C.blue, textDecoration:"none" }}>{profile.support_email}</a> : null}</Row>
+                  <Row icon={Phone} label="Telefono">{profile.phone ? <a href={`tel:${profile.phone}`} style={{ color:C.text, textDecoration:"none" }}>{profile.phone}</a> : null}</Row>
+                  <Row icon={User} label="Referente / amministratore">{profile.contact_name}</Row>
+                </>
+              ) : (
+                <div style={{ marginTop:10, display:"flex", gap:8, background:"#FFF7ED", border:`1px solid #FDE68A`, borderRadius:10, padding:"10px 12px", fontSize:12.5, color:"#92400E", lineHeight:1.5 }}>
+                  <span style={{ flexShrink:0 }}>📩</span>
+                  <span>I contatti diretti (telefono, email, referente) sono visibili dopo un <b>ordine confermato</b>. Nel frattempo scrivi al fornitore con il pulsante <b>“Contatta il fornitore”</b>: il dialogo resta sulla piattaforma.</span>
+                </div>
+              )}
             </div>
 
             {/* SEDE LEGALE */}
@@ -531,14 +541,6 @@ export default function SupplierPage() {
                   <MapPin size={14}/> Apri in Google Maps <ExternalLink size={11}/>
                 </a>
               )}
-            </div>
-
-            {/* DATI SOCIETARI */}
-            <div className="sup-card">
-              <div style={{ fontSize:13, fontWeight:800, textTransform:"uppercase", letterSpacing:"0.05em", color:C.muted, marginBottom:6 }}>Dati societari</div>
-              <Row icon={FileText} label="Partita IVA">{profile.vat}</Row>
-              <Row icon={Mail} label="PEC">{profile.pec}</Row>
-              <Row icon={FileText} label="Codice SDI">{profile.sdi}</Row>
             </div>
 
             {/* PAESI SERVITI */}
