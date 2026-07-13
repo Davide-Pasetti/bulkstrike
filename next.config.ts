@@ -38,6 +38,8 @@ const cspEnforcing = [
   // immagini: logo fornitori possono arrivare da Supabase Storage o URL esterni;
   // manteniamo https: generico + data:/blob: per anteprime locali.
   `img-src 'self' data: blob: https:`,
+  // video/audio: il video di presentazione è su Supabase Storage; data:/blob: per anteprime locali.
+  `media-src 'self' ${SUPABASE_HOST} data: blob:`,
   `connect-src 'self' ${SUPABASE_HOST} ${SUPABASE_WSS} https://api.stripe.com https://r.stripe.com https://errors.stripe.com`,
   // il PaymentElement vive in iframe di Stripe (js.stripe.com / hooks.stripe.com
   // per il 3DS); senza frame-src ricadrebbe su default-src 'self' e si romperebbe
@@ -58,6 +60,7 @@ const cspReportOnly = [
   `style-src 'self' 'unsafe-inline' https://fonts.googleapis.com`,
   `font-src 'self' https://fonts.gstatic.com data:`,
   `img-src 'self' data: blob: https:`,
+  `media-src 'self' ${SUPABASE_HOST} data: blob:`,
   `connect-src 'self' ${SUPABASE_HOST} ${SUPABASE_WSS} https://api.stripe.com https://r.stripe.com https://errors.stripe.com`,
   `frame-src https://js.stripe.com https://hooks.stripe.com`,
   `frame-ancestors 'none'`,

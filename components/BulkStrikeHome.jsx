@@ -6,6 +6,7 @@ import { ytdChange } from "@/lib/priceTrend";
 import { TIERS, tierIndexFor } from "@/lib/tiers";
 import BulkStrikeNav from "@/components/BulkStrikeNav";
 import PriceSourceNote from "@/components/PriceSourceNote";
+import PresentationVideo from "@/components/PresentationVideo";
 import BulkStrikeChatWidget from "@/components/BulkStrikeChatWidget";
 import { BSIcon } from "@/components/BSLogo";
 
@@ -357,6 +358,7 @@ export default function BulkStrikeLight() {
         @media (max-width:768px) {
           .bs-grid-2 { grid-template-columns:1fr !important; gap:32px !important; }
           .bs-grid-3 { grid-template-columns:1fr !important; }
+          .cf-grid { grid-template-columns:1fr !important; gap:28px !important; }
           .bs-grid-4 { grid-template-columns:repeat(2,1fr) !important; }
           .bs-h2 { font-size:26px; }
           .bs-hero-h1 { font-size:32px !important; }
@@ -761,25 +763,41 @@ export default function BulkStrikeLight() {
       </div>
 
       {/* ── HOW IT WORKS ── */}
-      <div id="come-funziona" className="bs-section" style={{ textAlign:"center" }}>
-        <div className="bs-label" style={{ textAlign:"center" }}>Come funziona</div>
-        <h2 className="bs-h2" style={{ marginBottom:32 }}>Semplice da entrambi i lati</h2>
-        <div style={{ display:"flex", gap:8, justifyContent:"center", marginBottom:40, flexWrap:"wrap" }}>
-          {["acquirente","fornitore"].map(tab => (
-            <button key={tab} className="bs-tab" onClick={() => setActiveTab(tab)}
-              style={{ background:activeTab===tab?C.blue:"transparent", color:activeTab===tab?"#fff":C.muted, borderColor:activeTab===tab?C.blue:C.border }}>
-              {tab==="acquirente"?"Sono un Acquirente":"Sono un Fornitore"}
-            </button>
-          ))}
-        </div>
-        <div className="bs-grid-3" style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:16 }}>
-          {(activeTab==="acquirente"?BUYER_STEPS:SELLER_STEPS).map((step,i) => (
-            <div key={i} className="bs-card" style={{ textAlign:"left" }}>
-              <div className="bs-num" style={{ fontSize:44, fontWeight:900, color:"#E2E8F0", letterSpacing:"-0.03em", marginBottom:14 }}>{step.n}</div>
-              <h3 style={{ fontSize:17, fontWeight:700, marginBottom:8, color:C.text }}>{step.title}</h3>
-              <p style={{ fontSize:14, color:C.muted, lineHeight:1.7 }}>{step.desc}</p>
+      <div id="come-funziona" className="bs-section">
+        {/* Titolo a SINISTRA sopra tab+passaggi (allineato ai box); video grande a
+            DESTRA, alzato fino in cima accanto al titolo. Impilati su mobile
+            (titolo/testo sopra, video sotto). Il testo dei passaggi resta come
+            alternativa accessibile e indicizzabile. */}
+        <div className="cf-grid" style={{ display:"grid", gridTemplateColumns:"1fr minmax(0,500px)", gap:44, alignItems:"start", textAlign:"left" }}>
+          <div>
+            <div className="bs-label">Come funziona</div>
+            <h2 className="bs-h2" style={{ marginBottom:28 }}>Semplice da entrambi i lati</h2>
+            <div style={{ display:"flex", gap:8, marginBottom:24, flexWrap:"wrap" }}>
+              {["acquirente","fornitore"].map(tab => (
+                <button key={tab} className="bs-tab" onClick={() => setActiveTab(tab)}
+                  style={{ background:activeTab===tab?C.blue:"transparent", color:activeTab===tab?"#fff":C.muted, borderColor:activeTab===tab?C.blue:C.border }}>
+                  {tab==="acquirente"?"Sono un Acquirente":"Sono un Fornitore"}
+                </button>
+              ))}
             </div>
-          ))}
+            <div style={{ display:"grid", gridTemplateColumns:"1fr", gap:14 }}>
+              {(activeTab==="acquirente"?BUYER_STEPS:SELLER_STEPS).map((step,i) => (
+                <div key={i} className="bs-card" style={{ textAlign:"left", display:"flex", gap:16, alignItems:"flex-start" }}>
+                  <div className="bs-num" style={{ fontSize:34, fontWeight:900, color:"#E2E8F0", letterSpacing:"-0.03em", flexShrink:0, lineHeight:1 }}>{step.n}</div>
+                  <div>
+                    <h3 style={{ fontSize:16.5, fontWeight:700, marginBottom:6, color:C.text }}>{step.title}</h3>
+                    <p style={{ fontSize:14, color:C.muted, lineHeight:1.65 }}>{step.desc}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <PresentationVideo
+            src="https://uufueekpxboygcotqvhu.supabase.co/storage/v1/object/public/marketing/Spot%20BulkStrike.mp4"
+            poster="/video/spot-bulkstrike-poster.jpg"
+            ariaLabel="Video di presentazione BulkStrike: come funziona il marketplace di materie prime sfuse"
+            style={{ width:"100%", maxWidth:500, aspectRatio:"1080 / 1350", margin:"0 auto" }}
+          />
         </div>
       </div>
 
