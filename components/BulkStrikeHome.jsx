@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { Bot, ArrowRight, Check, Clock, ChevronRight, TrendingDown, ChevronDown } from "lucide-react";
 import { getMacroAreas, getMacroAreasCached, getSectorProducts, getActivePools, getMyFollowedProducts, getSession, getProductsWithMarketPrices, getMarketPriceSeries, getHomepageStats } from "@/lib/api";
@@ -147,6 +147,16 @@ export default function BulkStrikeLight() {
   const [marketProducts, setMarketProducts] = useState([]);   // [{id,name,fonte}]
   const [marketSel, setMarketSel]           = useState(null);  // {id,name} | null
   const [marketData, setMarketData]         = useState(null);  // {series,fonte,fonte_url,last_date}
+  // Box hero AI: il campo di testo è un "innesco" verso l'assistente vero (widget
+  // flottante). Scrivendo e inviando qui, si apre il widget con il messaggio già inviato.
+  const chatWidgetRef = useRef(null);
+  const [heroChat, setHeroChat] = useState("");
+  const sendHeroChat = () => {
+    const t = heroChat.trim();
+    if (!t) return;
+    chatWidgetRef.current?.openWithMessage(t);
+    setHeroChat("");
+  };
 
   // Stato iniziale dalla cache sincrona: al remount della pagina (swap shell
   // statica → dinamica di cacheComponents) il box categorie non flasha vuoto.
@@ -811,8 +821,14 @@ export default function BulkStrikeLight() {
                 ))}
               </div>
               <div style={{ display:"flex", gap:8, padding:"14px 16px", borderTop:`1px solid ${C.border}`, marginTop:14 }}>
-                <input placeholder="Scrivi un messaggio..." style={{ flex:1, border:`1px solid ${C.border}`, borderRadius:8, padding:"9px 12px", fontSize:13, outline:"none", fontFamily:"Inter,system-ui" }} />
-                <button style={{ background:C.blue, border:"none", borderRadius:8, width:36, cursor:"pointer", color:"white", fontWeight:700, flexShrink:0 }}>↑</button>
+                <input
+                  value={heroChat}
+                  onChange={e => setHeroChat(e.target.value)}
+                  onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendHeroChat(); } }}
+                  placeholder="Scrivi un messaggio..."
+                  style={{ flex:1, border:`1px solid ${C.border}`, borderRadius:8, padding:"9px 12px", fontSize:13, outline:"none", fontFamily:"Inter,system-ui" }} />
+                <button onClick={sendHeroChat} disabled={!heroChat.trim()} aria-label="Invia all'assistente"
+                  style={{ background:C.blue, border:"none", borderRadius:8, width:36, cursor:heroChat.trim()?"pointer":"default", opacity:heroChat.trim()?1:0.5, color:"white", fontWeight:700, flexShrink:0 }}>↑</button>
               </div>
             </div>
           </div>
@@ -875,7 +891,7 @@ export default function BulkStrikeLight() {
       </div>
 
       {/* ── CHATBOT FISSO ── */}
-      <BulkStrikeChatWidget />
+      <BulkStrikeChatWidget ref={chatWidgetRef} />
       <CookieBanner />
     </div>
   );

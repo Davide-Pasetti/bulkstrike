@@ -8,14 +8,14 @@
 // tastiera). Wired su mode="support" (funziona anche per utenti anonimi),
 // cronologia effimera lato client. Prop `accent` per il colore del bottone.
 // ============================================================
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, forwardRef, useImperativeHandle } from "react";
 import { Bot, X } from "lucide-react";
 import { streamAiAssistant } from "@/lib/api";
 
 const C = { text: "#0F172A", muted: "#64748B", border: "#E2E8F0", bg: "#F8FAFE" };
 const GREETING = "Ciao! Sono l'assistente virtuale (AI) di BulkStrike — non una persona. Posso aiutarti a trovare materie prime, confrontare fornitori o unirti a un'asta a ribasso. Per parlare con una persona, scrivi a davide@bulkstrike.com. Come posso aiutarti?";
 
-export default function BulkStrikeChatWidget({ accent = "#0EA5E9" }) {
+const BulkStrikeChatWidget = forwardRef(function BulkStrikeChatWidget({ accent = "#0EA5E9" }, ref) {
   const [open, setOpen] = useState(false);
   const [msgs, setMsgs] = useState([{ role: "assistant", content: GREETING }]);
   const [input, setInput] = useState("");
@@ -53,8 +53,10 @@ export default function BulkStrikeChatWidget({ accent = "#0EA5E9" }) {
     };
   }, [open]);
 
-  async function send() {
-    const text = input.trim();
+  async function send(override) {
+    // override (string) permette di inviare un messaggio programmaticamente
+    // (es. dal box hero della home) invece che dal campo di input del widget.
+    const text = (typeof override === "string" ? override : input).trim();
     if (!text || busy) return;
     const history = msgs.map(m => ({ role: m.role, content: m.content }));
     setMsgs(prev => [...prev, { role: "user", content: text }, { role: "assistant", content: "" }]);
@@ -94,6 +96,19 @@ export default function BulkStrikeChatWidget({ accent = "#0EA5E9" }) {
       });
     } finally { setBusy(false); }
   }
+
+  // API imperativa: apri il widget e invia subito un messaggio (usato dal box hero
+  // della home come punto d'ingresso verso l'assistente vero). Nessun array di
+  // dipendenze → l'handle usa sempre l'ultima closure di send/setOpen.
+  useImperativeHandle(ref, () => ({
+    openWithMessage: (text) => {
+      const t = (text || "").trim();
+      if (!t) return;
+      setOpen(true);
+      send(t);
+    },
+    open: () => setOpen(true),
+  }));
 
   return (
     <>
@@ -160,4 +175,6 @@ export default function BulkStrikeChatWidget({ accent = "#0EA5E9" }) {
       </button>
     </>
   );
-}
+});
+
+export default BulkStrikeChatWidget;
