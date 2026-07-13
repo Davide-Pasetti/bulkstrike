@@ -318,6 +318,11 @@ export default function ProductPage() {
   // Divieto d'asta a ribasso per legge (prodotti agricoli/alimentari grezzi):
   // niente apertura né adesione, solo Acquisto Rapido. Rif. D.Lgs. 198/2021.
   const auctionRestricted = !!product.auctionRestricted;
+  // "Acquisto di gruppo" vs "Asta a ribasso": con esattamente 1 fornitore non c'è
+  // competizione, quindi il box rimanda a un acquisto di gruppo (aggregazione
+  // domanda) invece che a un'asta. Con 2+ resta l'asta a ribasso.
+  const supplierCount = new Set(suppliers.map(s => s.company_id).filter(Boolean)).size;
+  const groupBuy = supplierCount === 1;
   // pool nudge: shown when the instant order is >= 1 pallet
   const palletKg = product.pallet_kg || PALLET_KG;
   const canOpenPool = qty >= palletKg;
@@ -639,7 +644,7 @@ export default function ProductPage() {
                   {pool.exists && !auctionRestricted && (
                   <div style={{ marginTop:10, fontSize:13 }}>
                     <span style={{ color:C.muted }}>oppure </span>
-                    <span onClick={goToPool} style={{ color:C.purple, fontWeight:600, cursor:"pointer" }}>c'è un'asta a ribasso attiva: ora {eurKg(pool.bestPrice)}/kg →</span>
+                    <span onClick={goToPool} style={{ color:groupBuy?C.blue:C.purple, fontWeight:600, cursor:"pointer" }}>{groupBuy ? "c'è un acquisto di gruppo attivo" : "c'è un'asta a ribasso attiva"}: ora {eurKg(pool.bestPrice)}/kg →</span>
                   </div>
                   )}
                 </div>
@@ -812,20 +817,22 @@ export default function ProductPage() {
                 </div>
               </div>
             ) : (
-            <div style={{ border:`1.5px solid ${C.purple}55`, borderRadius:14, padding:16, background:"#FBF7FF" }}>
+            <div style={{ border:`1.5px solid ${groupBuy?"#BFDBFE":`${C.purple}55`}`, borderRadius:14, padding:16, background:groupBuy?"#EFF6FF":"#FBF7FF" }}>
               <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:12 }}>
-                <div style={{ width:32, height:32, borderRadius:9, background:C.purple, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
-                  <Gavel size={16} color="#fff"/>
+                <div style={{ width:32, height:32, borderRadius:9, background:groupBuy?C.blue:C.purple, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+                  {groupBuy ? <ShoppingCart size={16} color="#fff"/> : <Gavel size={16} color="#fff"/>}
                 </div>
-                <span style={{ fontSize:14, fontWeight:800, color:C.text }}>{pool.exists ? "Asta a ribasso attiva" : "Asta a ribasso disponibile"}</span>
+                <span style={{ fontSize:14, fontWeight:800, color:C.text }}>{groupBuy
+                  ? (pool.exists ? "Acquisto di gruppo attivo" : "Acquisto di gruppo disponibile")
+                  : (pool.exists ? "Asta a ribasso attiva" : "Asta a ribasso disponibile")}</span>
               </div>
               {(() => {
                 const canGo = pool.exists || canOpenPool;
                 const target = pool.exists ? (pool.id ? `/pool?id=${pool.id}` : null) : (productId ? `/pool?product=${productId}` : null);
                 return (<>
                   <button onClick={() => { if (canGo && target) window.location.href = target; }} disabled={!canGo || !target}
-                    style={{ width:"100%", background:C.purple, color:"#fff", border:"none", borderRadius:9, padding:"12px", fontSize:14, fontWeight:700, cursor:(canGo && target)?"pointer":"default", opacity:(canGo && target)?1:0.45, display:"flex", alignItems:"center", justifyContent:"center", gap:7, fontFamily:"Inter,system-ui" }}>
-                    Vai alla pagina dell'asta <ArrowRight size={15}/>
+                    style={{ width:"100%", background:groupBuy?C.blue:C.purple, color:"#fff", border:"none", borderRadius:9, padding:"12px", fontSize:14, fontWeight:700, cursor:(canGo && target)?"pointer":"default", opacity:(canGo && target)?1:0.45, display:"flex", alignItems:"center", justifyContent:"center", gap:7, fontFamily:"Inter,system-ui" }}>
+                    {groupBuy ? "Vai all'acquisto di gruppo" : "Vai alla pagina dell'asta"} <ArrowRight size={15}/>
                   </button>
                   {!pool.exists && !canOpenPool && (
                     <div style={{ fontSize:11.5, color:C.muted, marginTop:8, textAlign:"center" }}>

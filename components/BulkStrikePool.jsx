@@ -6,7 +6,7 @@ import ProductFollowButton from "@/components/BulkStrikeProductFollow";
 import { TIERS, tierIndexFor, tierFor, tierCeiling } from "@/lib/tiers";
 import BulkStrikeChatWidget from "@/components/BulkStrikeChatWidget";
 import { BSIcon } from "@/components/BSLogo";
-import { Search, ArrowRight, Check, Clock, ChevronRight, Shield, Users, TrendingDown, Plus, Minus, Info, Gavel, Award } from "lucide-react";
+import { Search, ArrowRight, Check, Clock, ChevronRight, Shield, Users, TrendingDown, Plus, Minus, Info, Gavel, Award, ShoppingCart } from "lucide-react";
 
 const C = { blue:"#0EA5E9", dark:"#0284C7", text:"#0F172A", muted:"#64748B", border:"#E2E8F0", bg:"#F8FAFE", green:"#059669", red:"#DC2626", amber:"#D97706", purple:"#7C3AED" };
 
@@ -90,6 +90,10 @@ export default function PoolAuctionPage() {
   // Divieto d'asta a ribasso per legge (agricoli/alimentari grezzi, D.Lgs. 198/2021):
   // il pannello mostra l'avviso legale invece dei controlli di apertura/adesione.
   const [auctionRestricted, setAuctionRestricted] = useState(false);
+  // Numero di fornitori attivi del prodotto: 2+ → asta a ribasso (competizione);
+  // 1 (o 0) → "Acquisto di gruppo" (nessuna competizione, prezzo dell'unico
+  // fornitore, si aggrega solo la domanda per sbloccare gli scaglioni di volume).
+  const [availableSuppliers, setAvailableSuppliers] = useState(null);
 
   useEffect(() => {
     const t = setInterval(() => setSecs(s => s>0 ? s-1 : 0), 1000);
@@ -127,6 +131,7 @@ export default function PoolAuctionPage() {
       if (!p) return;
       setProductMode(true);
       setAuctionRestricted(!!p.auction_restricted_by_law);
+      setAvailableSuppliers(new Set((p.suppliers || []).map(s => s.company_id).filter(Boolean)).size);
       setProductId(pid);
       isFollowingProduct(pid).then(setFollowingProduct).catch(() => {});
       if (p.pallet_kg) setRealPalletKg(Number(p.pallet_kg));
@@ -182,6 +187,7 @@ export default function PoolAuctionPage() {
       setParticipants((parts || []).map(p => ({ who: regionLabel(p.city, p.country), qty: p.quantity_kg, when: "" })));
       setPendingJoins(waiting || []);
       setMyQty(Number(detail.my_quantity_kg) || 0);
+      setAvailableSuppliers(detail.available_suppliers != null ? Number(detail.available_suppliers) : null);
       if (detail.product?.id) { setProductId(detail.product.id); isFollowingProduct(detail.product.id).then(setFollowingProduct).catch(() => {}); }
       if (detail.pallet_kg) setRealPalletKg(Number(detail.pallet_kg));
       if (detail.sacco_kg) setRealSaccoKg(Number(detail.sacco_kg));
@@ -214,7 +220,7 @@ export default function PoolAuctionPage() {
     setJoining(true); setJoinMsg(null);
     try {
       await joinPool(poolId, userQty, true);
-      setJoinMsg("✓ Adesione registrata: sei nell'asta.");
+      setJoinMsg("✓ Adesione registrata: la tua quantità è nel volume aggregato.");
       setJoined(true);
       loadPool(poolId);
     } catch (e) {
@@ -297,6 +303,11 @@ export default function PoolAuctionPage() {
   // sotto-pedana scatta solo mentre si sta aprendo una nuova asta.
   const isExistingAuction = !!poolId || pool.current > 0;
   const mustOpenWithPallet = !isExistingAuction && belowMin;
+  // "Acquisto di gruppo": esattamente un fornitore per il prodotto → niente
+  // competizione al ribasso, si aggrega solo la domanda per sbloccare gli scaglioni
+  // di volume al prezzo dell'unico fornitore. Con 2+ fornitori resta l'asta a ribasso.
+  // Con 0 fornitori si lascia il comportamento storico (caso non modificato).
+  const groupBuy = availableSuppliers === 1;
   // userQty (kg) resta lo stato reale; palletCount è solo la sua vista in
   // pallet per questo prodotto (usata dalla nota nei "Kg personalizzati").
   const palletCount = Math.max(1, Math.round(userQty / palletKg));
@@ -384,7 +395,9 @@ export default function PoolAuctionPage() {
         <div style={{ display:"flex", justifyContent:"space-between", gap:16, flexWrap:"wrap", marginBottom:20 }}>
           <div>
             <div style={{ display:"flex", gap:8, marginBottom:8, flexWrap:"wrap", alignItems:"center" }}>
-              {!auctionRestricted && <span className="bs-chip" style={{ background:"#FBF7FF", color:C.purple }}><Gavel size={12}/> Asta a ribasso · per prodotto</span>}
+              {!auctionRestricted && (groupBuy
+                ? <span className="bs-chip" style={{ background:"#EFF6FF", color:C.blue }}><ShoppingCart size={12}/> Acquisto di gruppo · per prodotto</span>
+                : <span className="bs-chip" style={{ background:"#FBF7FF", color:C.purple }}><Gavel size={12}/> Asta a ribasso · per prodotto</span>)}
               {/* Nessun badge "Live" per i prodotti con asta vietata per legge. */}
               {auctionRestricted
                 ? null
@@ -441,7 +454,19 @@ export default function PoolAuctionPage() {
           </div>
         ) : (
         <>
-        {/* TWO LEVERS */}
+        {/* MECCANISMO: 2+ fornitori = due leve (volume + ribasso); 1 fornitore =
+            solo aggregazione della domanda (nessun ribasso fornitori). */}
+        {groupBuy ? (
+          <div style={{ marginBottom:24 }}>
+            <div style={{ background:"#EFF6FF", border:`1px solid #BFDBFE`, borderRadius:12, padding:"14px 16px", display:"flex", gap:12, alignItems:"flex-start" }}>
+              <div style={{ width:34, height:34, borderRadius:9, background:C.blue, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}><Users size={17} color="#fff"/></div>
+              <div>
+                <div style={{ fontSize:14, fontWeight:700, marginBottom:2 }}>Volume aggregato · sconto quantità</div>
+                <div style={{ fontSize:13, color:C.muted, lineHeight:1.5 }}>Più acquirenti aggregano la domanda, più si sblocca uno scaglione di prezzo più basso per tutti. Il prezzo è quello dell'unico fornitore quotato: non c'è competizione né asta.</div>
+              </div>
+            </div>
+          </div>
+        ) : (
         <div className="bs-two" style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14, marginBottom:24 }}>
           <div style={{ background:"#FBF7FF", border:`1px solid ${C.purple}33`, borderRadius:12, padding:"14px 16px", display:"flex", gap:12, alignItems:"flex-start" }}>
             <div style={{ width:34, height:34, borderRadius:9, background:C.purple, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}><Users size={17} color="#fff"/></div>
@@ -458,6 +483,7 @@ export default function PoolAuctionPage() {
             </div>
           </div>
         </div>
+        )}
 
         {/* HERO: live auction + join */}
         <div className="bs-hero-grid" style={{ display:"grid", gridTemplateColumns:"1.5fr 1fr", gap:24, border:`2px solid ${C.purple}`, borderRadius:18, padding:28, marginBottom:24, background:"#FBF9FF" }}>
@@ -466,15 +492,15 @@ export default function PoolAuctionPage() {
           <div>
             <div style={{ display:"flex", gap:24, flexWrap:"wrap", marginBottom:22 }}>
               <div>
-                <div style={{ fontSize:12, color:C.muted, marginBottom:2 }}>{concluded ? "Prezzo di chiusura" : "Miglior prezzo attuale"}</div>
+                <div style={{ fontSize:12, color:C.muted, marginBottom:2 }}>{concluded ? "Prezzo di chiusura" : (groupBuy ? "Prezzo attuale" : "Miglior prezzo attuale")}</div>
                 <div style={{ display:"flex", alignItems:"baseline", gap:8 }}>
                   <span className="bs-num" style={{ fontSize:38, fontWeight:800, color:C.purple }}>{eurKg(concluded ? finalPrice : effectiveNow)}</span>
                   <span style={{ fontSize:14, color:C.muted }}>/kg</span>
-                  {!concluded && <span style={{ fontSize:12, color:C.green, display:"flex", alignItems:"center", gap:2 }}><TrendingDown size={12}/> in calo</span>}
+                  {!concluded && !groupBuy && <span style={{ fontSize:12, color:C.green, display:"flex", alignItems:"center", gap:2 }}><TrendingDown size={12}/> in calo</span>}
                 </div>
                 <div style={{ fontSize:12, color:C.muted, marginTop:2 }}>{concluded
                   ? (pool.winnerName ? <>aggiudicata a <SupplierName name={pool.winnerName} style={{ color:C.text, fontWeight:700 }}/></> : <>{pool.bids} offerte ricevute</>)
-                  : <>offerto da <b style={{ color:C.text }}>{pool.bestSupplier}</b> · {pool.bids} fornitori in gara</>}</div>
+                  : (groupBuy ? <>prezzo dell'unico fornitore quotato · scaglione di volume attuale</> : <>offerto da <b style={{ color:C.text }}>{pool.bestSupplier}</b> · {pool.bids} fornitori in gara</>)}</div>
               </div>
               <div style={{ borderLeft:`1px solid ${C.border}`, paddingLeft:24 }}>
                 <div style={{ fontSize:12, color:C.muted, marginBottom:2 }}>Volume aggregato</div>
@@ -510,23 +536,32 @@ export default function PoolAuctionPage() {
               </div>
             ))}
 
-            <div style={{ background:"#fff", border:`1px solid ${C.border}`, borderRadius:12, padding:16 }}>
-              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
-                <span style={{ fontSize:13, fontWeight:700, display:"flex", alignItems:"center", gap:6 }}><Gavel size={14} color={C.purple}/> {concluded ? "Offerte dei fornitori · esito finale" : "Offerte dei fornitori (live)"}</span>
-                <span style={{ fontSize:11, color:C.muted }}>{concluded ? "identità del vincitore svelata" : "identità svelata alla chiusura"}</span>
+            {/* "Offerte dei fornitori" solo in asta a ribasso: nell'acquisto di gruppo
+                c'è un solo fornitore, quindi nessuna competizione da mostrare. */}
+            {groupBuy ? (
+              <div style={{ background:"#fff", border:`1px solid ${C.border}`, borderRadius:12, padding:16, fontSize:13, color:C.muted, lineHeight:1.55, display:"flex", gap:10, alignItems:"flex-start" }}>
+                <ShoppingCart size={16} color={C.blue} style={{ flexShrink:0, marginTop:2 }}/>
+                <span>Un solo fornitore quotato per questo prodotto: il prezzo è quello dello scaglione di volume raggiunto, senza asta. Aggregando la domanda con altri acquirenti sblocchi lo scaglione successivo, più conveniente per tutti.</span>
               </div>
-              {bidders.map((b,i) => (
-                <div key={i} style={{ display:"flex", alignItems:"center", gap:10, padding:"9px 0", borderBottom:i<bidders.length-1?`1px solid #F1F5F9`:"none" }}>
-                  <span style={{ fontSize:13, fontWeight:600, minWidth:96 }}>{concluded && b.won && pool.winnerName ? <SupplierName name={pool.winnerName}/> : b.tag}</span>
-                  <span style={{ fontSize:13 }}>{b.flag}</span>
-                  <span style={{ fontSize:12, color:C.muted, flex:1 }}>{b.when}</span>
-                  {concluded
-                    ? (b.won && <span className="bs-chip" style={{ background:"#DCFCE7", color:C.green }}><Award size={12}/> Vincitore</span>)
-                    : (b.leader && <span className="bs-chip" style={{ background:"#DCFCE7", color:C.green }}>★ leader</span>)}
-                  <span className="bs-num" style={{ fontSize:15, fontWeight:700, color:(concluded?b.won:b.leader)?C.green:C.text, minWidth:64, textAlign:"right" }}>{eurKg(b.bid)}</span>
+            ) : (
+              <div style={{ background:"#fff", border:`1px solid ${C.border}`, borderRadius:12, padding:16 }}>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
+                  <span style={{ fontSize:13, fontWeight:700, display:"flex", alignItems:"center", gap:6 }}><Gavel size={14} color={C.purple}/> {concluded ? "Offerte dei fornitori · esito finale" : "Offerte dei fornitori (live)"}</span>
+                  <span style={{ fontSize:11, color:C.muted }}>{concluded ? "identità del vincitore svelata" : "identità svelata alla chiusura"}</span>
                 </div>
-              ))}
-            </div>
+                {bidders.map((b,i) => (
+                  <div key={i} style={{ display:"flex", alignItems:"center", gap:10, padding:"9px 0", borderBottom:i<bidders.length-1?`1px solid #F1F5F9`:"none" }}>
+                    <span style={{ fontSize:13, fontWeight:600, minWidth:96 }}>{concluded && b.won && pool.winnerName ? <SupplierName name={pool.winnerName}/> : b.tag}</span>
+                    <span style={{ fontSize:13 }}>{b.flag}</span>
+                    <span style={{ fontSize:12, color:C.muted, flex:1 }}>{b.when}</span>
+                    {concluded
+                      ? (b.won && <span className="bs-chip" style={{ background:"#DCFCE7", color:C.green }}><Award size={12}/> Vincitore</span>)
+                      : (b.leader && <span className="bs-chip" style={{ background:"#DCFCE7", color:C.green }}>★ leader</span>)}
+                    <span className="bs-num" style={{ fontSize:15, fontWeight:700, color:(concluded?b.won:b.leader)?C.green:C.text, minWidth:64, textAlign:"right" }}>{eurKg(b.bid)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* RIGHT: join */}
@@ -572,10 +607,10 @@ export default function PoolAuctionPage() {
               <>
                 <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:6 }}>
                   <div style={{ width:34, height:34, borderRadius:"50%", background:"#DCFCE7", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}><Check size={18} color={C.green}/></div>
-                  <div style={{ fontSize:15, fontWeight:700 }}>Ti sei unito all'asta a ribasso!</div>
+                  <div style={{ fontSize:15, fontWeight:700 }}>{groupBuy ? "Ti sei unito al gruppo d'acquisto!" : "Ti sei unito all'asta a ribasso!"}</div>
                 </div>
-                <div style={{ fontSize:13, color:C.muted, marginBottom:16, lineHeight:1.5 }}>La tua quantità è entrata nel volume aggregato. Segui l'andamento dell'asta dal tuo profilo.</div>
-                <button onClick={() => { window.location.href = "/dashboard?section=pools"; }} className="bs-btn" style={{ width:"100%" }}>Visualizza le tue aste <ArrowRight size={18}/></button>
+                <div style={{ fontSize:13, color:C.muted, marginBottom:16, lineHeight:1.5 }}>{groupBuy ? "La tua quantità è entrata nel volume aggregato. Segui l'andamento dal tuo profilo." : "La tua quantità è entrata nel volume aggregato. Segui l'andamento dell'asta dal tuo profilo."}</div>
+                <button onClick={() => { window.location.href = "/dashboard?section=pools"; }} className="bs-btn" style={{ width:"100%" }}>{groupBuy ? "Visualizza i tuoi acquisti di gruppo" : "Visualizza le tue aste"} <ArrowRight size={18}/></button>
               </>
             ) : targetJoin ? (
               <>
@@ -604,7 +639,7 @@ export default function PoolAuctionPage() {
               </>
             ) : (
               <>
-                <div style={{ fontSize:15, fontWeight:700, marginBottom:4 }}>{myQty > 0 ? "Aggiungi un quantitativo" : (isExistingAuction ? "Partecipa all'asta" : "Apri un'asta")}</div>
+                <div style={{ fontSize:15, fontWeight:700, marginBottom:4 }}>{myQty > 0 ? "Aggiungi un quantitativo" : (groupBuy ? (isExistingAuction ? "Unisciti al gruppo d'acquisto" : "Avvia l'acquisto di gruppo") : (isExistingAuction ? "Partecipa all'asta" : "Apri un'asta"))}</div>
                 {myQty > 0 ? (
                   <div style={{ fontSize:13, color:C.muted, marginBottom:14, lineHeight:1.5 }}>Hai già aderito con <b style={{color:C.text}}>{kg(myQty)} kg</b>. Il quantitativo qui sotto si aggiunge a quello che hai già.</div>
                 ) : (
@@ -655,9 +690,13 @@ export default function PoolAuctionPage() {
                 {belowMin && (
                   <div style={{ background:"#FFFBEB", border:`1px solid ${C.amber}55`, borderRadius:9, padding:"10px 12px", marginBottom:14, fontSize:12, color:"#92400E", display:"flex", gap:8 }}>
                     <Info size={26} color={C.amber} style={{ flexShrink:0 }}/>
-                    <span>{isExistingAuction
-                      ? <>Meno di 1 pallet (<b>{kg(palletKg)} kg</b> per questo prodotto): puoi comunque <b>aggiungere</b> questo quantitativo all'asta già attiva. Il minimo di 1 pedana vale solo per <b>aprire</b> una nuova asta.</>
-                      : <>Sotto 1 pallet (<b>{kg(palletKg)} kg</b> per questo prodotto) non puoi aprire un'asta, ma puoi aggiungerti a una già attiva oppure fare l'<b>Acquisto Rapido</b>.</>}</span>
+                    <span>{groupBuy
+                      ? (isExistingAuction
+                        ? <>Meno di 1 pallet (<b>{kg(palletKg)} kg</b> per questo prodotto): puoi comunque <b>aggiungere</b> questo quantitativo al gruppo d'acquisto già avviato. Il minimo di 1 pedana vale solo per <b>avviare</b> un nuovo acquisto di gruppo.</>
+                        : <>Sotto 1 pallet (<b>{kg(palletKg)} kg</b> per questo prodotto) non puoi avviare un acquisto di gruppo, ma puoi aggiungerti a uno già avviato oppure fare l'<b>Acquisto Rapido</b>.</>)
+                      : (isExistingAuction
+                        ? <>Meno di 1 pallet (<b>{kg(palletKg)} kg</b> per questo prodotto): puoi comunque <b>aggiungere</b> questo quantitativo all'asta già attiva. Il minimo di 1 pedana vale solo per <b>aprire</b> una nuova asta.</>
+                        : <>Sotto 1 pallet (<b>{kg(palletKg)} kg</b> per questo prodotto) non puoi aprire un'asta, ma puoi aggiungerti a una già attiva oppure fare l'<b>Acquisto Rapido</b>.</>)}</span>
                   </div>
                 )}
 
@@ -677,13 +716,15 @@ export default function PoolAuctionPage() {
                     <span style={{ fontSize:13, color:C.muted }}>Risparmio vs Acquisto Rapido</span>
                     <span className="bs-num" style={{ fontSize:18, fontWeight:800, color:C.green }}>{eur(savings)}</span>
                   </div>
-                  <div style={{ fontSize:11, color:C.muted, marginTop:4 }}>Il prezzo finale può solo scendere fino alla chiusura.</div>
+                  <div style={{ fontSize:11, color:C.muted, marginTop:4 }}>{groupBuy ? "Il prezzo scende solo sbloccando scaglioni di volume più alti — non ci sono ribassi da altri fornitori." : "Il prezzo finale può solo scendere fino alla chiusura."}</div>
                 </div>
 
                 <label style={{ display:"flex", gap:10, alignItems:"flex-start", background:"#FFF7ED", border:`1px solid ${C.amber}44`, borderRadius:9, padding:"11px 12px", marginBottom:14, cursor:"pointer" }}>
                   <input type="checkbox" checked={acceptTerms} onChange={e => setAcceptTerms(e.target.checked)} style={{ marginTop:2, width:16, height:16, accentColor:C.purple, flexShrink:0 }}/>
                   <span style={{ fontSize:12, color:"#7C2D12", lineHeight:1.5 }}>
-                    Partecipando all'asta accetto l'acquisto della specifica materia prima dal fornitore che offrirà il prezzo più basso tra quelli certificati allo standard sopra indicato.
+                    {groupBuy
+                      ? "Partecipando all'acquisto di gruppo accetto l'acquisto della specifica materia prima dall'unico fornitore quotato, al prezzo dello scaglione di volume raggiunto alla chiusura."
+                      : "Partecipando all'asta accetto l'acquisto della specifica materia prima dal fornitore che offrirà il prezzo più basso tra quelli certificati allo standard sopra indicato."}
                   </span>
                 </label>
 
@@ -699,7 +740,11 @@ export default function PoolAuctionPage() {
                   </div>
                 )}
 
-                <button onClick={joinTheAuction} className="bs-btn" style={{ width:"100%", marginBottom:8 }} disabled={!acceptTerms || joining || mustOpenWithPallet}>{joining ? "Adesione in corso…" : <>{myQty > 0 ? "Aggiungi questo quantitativo all'asta in corso" : (isExistingAuction ? "Partecipa all'asta a ribasso all'attuale prezzo" : "Apri un'asta a ribasso all'attuale prezzo")} <ArrowRight size={18}/></>}</button>
+                <button onClick={joinTheAuction} className="bs-btn" style={{ width:"100%", marginBottom:8 }} disabled={!acceptTerms || joining || mustOpenWithPallet}>{joining ? "Adesione in corso…" : <>{myQty > 0 ? (groupBuy ? "Aggiungi questo quantitativo al gruppo" : "Aggiungi questo quantitativo all'asta in corso") : (groupBuy ? (isExistingAuction ? "Unisciti al gruppo d'acquisto" : "Avvia l'acquisto di gruppo") : (isExistingAuction ? "Partecipa all'asta a ribasso all'attuale prezzo" : "Apri un'asta a ribasso all'attuale prezzo"))} <ArrowRight size={18}/></>}</button>
+                {/* Adesione a soglia di prezzo: solo in asta (dipende dal ribasso dei
+                    fornitori). Nell'acquisto di gruppo il prezzo non dipende da offerte,
+                    quindi non ha senso — nascosta. */}
+                {!groupBuy && (
                 <button
                   onClick={() => { if (showTargetInput) joinAtTarget(); else setShowTargetInput(true); }}
                   style={{ width:"100%", background:"transparent", color:C.purple, border:`1.5px solid ${C.purple}`, borderRadius:10, padding:"12px", fontSize:14, fontWeight:700, cursor:(!acceptTerms||joining||mustOpenWithPallet)?"default":"pointer", opacity:(!acceptTerms||joining||mustOpenWithPallet)?0.5:1, fontFamily:"Inter,system-ui", display:"flex", alignItems:"center", justifyContent:"center", gap:6, textAlign:"center" }}
@@ -707,6 +752,7 @@ export default function PoolAuctionPage() {
                 >
                   {joining ? "Attivazione in corso…" : showTargetInput ? "Conferma soglia e attiva adesione" : (myQty > 0 ? "Aggiungi altro quantitativo quando il prezzo raggiunge una cifra stabilita" : (isExistingAuction ? "Partecipa all'asta a ribasso quando il prezzo raggiunge una cifra stabilita" : "Apri un'asta a ribasso quando il prezzo raggiunge una cifra stabilita"))}
                 </button>
+                )}
                 {joinMsg && <div style={{ marginTop:10, fontSize:13, textAlign:"center", color: joinMsg.startsWith("✓") ? C.green : C.red }}>{joinMsg}</div>}
               </>
             )}
@@ -717,8 +763,10 @@ export default function PoolAuctionPage() {
         <div style={{ background:"#07111E", borderRadius:14, padding:"18px 24px", marginBottom:28, display:"flex", gap:14, alignItems:"center", flexWrap:"wrap" }}>
           <Shield size={22} color="#22D3EE" style={{ flexShrink:0 }}/>
           <div style={{ flex:1, minWidth:220 }}>
-            <div style={{ fontSize:14, fontWeight:700, color:"#F0F6FF" }}>L'asta si chiude sempre · a rischio zero</div>
-            <div style={{ fontSize:13, color:"#6B94B8", lineHeight:1.5 }}>Anche se l'asta resta deserta e sei l'unico partecipante, alla scadenza acquisti comunque la tua quantità al prezzo del tuo volume. Non paghi mai più dell'Acquisto Rapido: l'unico costo è l'attesa.</div>
+            <div style={{ fontSize:14, fontWeight:700, color:"#F0F6FF" }}>{groupBuy ? "L'acquisto di gruppo si chiude sempre · a rischio zero" : "L'asta si chiude sempre · a rischio zero"}</div>
+            <div style={{ fontSize:13, color:"#6B94B8", lineHeight:1.5 }}>{groupBuy
+              ? "Anche se sei l'unico partecipante, alla scadenza acquisti comunque la tua quantità al prezzo del tuo scaglione di volume. Non paghi mai più dell'Acquisto Rapido: l'unico costo è l'attesa."
+              : "Anche se l'asta resta deserta e sei l'unico partecipante, alla scadenza acquisti comunque la tua quantità al prezzo del tuo volume. Non paghi mai più dell'Acquisto Rapido: l'unico costo è l'attesa."}</div>
           </div>
         </div>
 
@@ -729,7 +777,7 @@ export default function PoolAuctionPage() {
           <div>
             <div className="bs-card" style={{ marginBottom:20 }}>
               <div style={{ fontSize:16, fontWeight:700, marginBottom:4 }}>Scaglioni di volume (prezzo tetto)</div>
-              <div style={{ fontSize:13, color:C.muted, marginBottom:14 }}>Prezzo massimo automatico garantito per fascia di volume. N.B. I fornitori possono comunque ribassare sotto questi valori in asta.</div>
+              <div style={{ fontSize:13, color:C.muted, marginBottom:14 }}>{groupBuy ? "Prezzo garantito per fascia di volume, fissato dall'unico fornitore quotato. Aggregando la domanda si sblocca lo scaglione successivo." : "Prezzo massimo automatico garantito per fascia di volume. N.B. I fornitori possono comunque ribassare sotto questi valori in asta."}</div>
               <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
                 {TIERS.map((t,i) => {
                   const reached = pool.current >= (i===0?0:TIERS[i-1].max);
@@ -792,13 +840,18 @@ export default function PoolAuctionPage() {
             )}
 
             <div className="bs-card">
-              <div style={{ fontSize:16, fontWeight:700, marginBottom:14 }}>Come funziona l'asta a ribasso</div>
-              {[
+              <div style={{ fontSize:16, fontWeight:700, marginBottom:14 }}>{groupBuy ? "Come funziona l'acquisto di gruppo" : "Come funziona l'asta a ribasso"}</div>
+              {(groupBuy ? [
+                ["Avvia o unisciti",`Avvia un acquisto di gruppo (minimo 1 pallet, ${kg(palletKg)} kg per questo prodotto) o unisciti a uno già avviato. La tua quantità entra subito nel volume aggregato.`],
+                ["Aggrega la domanda","Più acquirenti si uniscono, più sale il volume totale: al superamento di ogni scaglione il prezzo dell'unico fornitore quotato scende per tutti."],
+                ["Prezzo fisso del fornitore","Non c'è competizione né asta: il prezzo è quello dello scaglione di volume raggiunto, fissato dall'unico fornitore quotato."],
+                ["Chiusura garantita","L'acquisto di gruppo chiude sempre. Anche da solo acquisti al prezzo del tuo volume. Pagamento in escrow, spedizione separata per ogni azienda."],
+              ] : [
                 ["Apri o unisciti",`Apri un'asta a ribasso (minimo 1 pallet, ${kg(palletKg)} kg per questo prodotto) o unisciti a una già attiva. La tua quantità entra subito nel volume aggregato.`],
                 ["Doppio ribasso per 7 giorni","Per una settimana il prezzo scende in due modi: i fornitori certificati competono al ribasso e ogni nuova adesione può sbloccare uno scaglione di volume più basso."],
                 ["Vince il più economico","Alla chiusura si aggiudica il fornitore con l'offerta più bassa tra quelli conformi allo standard. La sua identità viene svelata."],
                 ["Chiusura garantita","L'asta chiude sempre. Anche da solo acquisti al prezzo del tuo volume. Pagamento in escrow, spedizione separata per ogni azienda."],
-              ].map(([t,desc],i) => (
+              ]).map(([t,desc],i) => (
                 <div key={i} style={{ display:"flex", gap:12, marginBottom:i<3?14:0 }}>
                   <div style={{ width:24, height:24, borderRadius:"50%", background:C.purple, color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontSize:12, fontWeight:700, flexShrink:0 }}>{i+1}</div>
                   <div>
@@ -812,6 +865,9 @@ export default function PoolAuctionPage() {
 
           {/* RIGHT STICKY */}
           <div style={{ position:"sticky", top:80, display:"flex", flexDirection:"column", gap:16 }}>
+            {/* "Fornitori in gara" solo in asta a ribasso: nell'acquisto di gruppo
+                c'è un solo fornitore, nessuna gara da mostrare. */}
+            {!groupBuy && (
             <div className="bs-card">
               <div style={{ fontSize:14, fontWeight:700, marginBottom:4 }}>Fornitori in gara</div>
               <div style={{ fontSize:12, color:C.muted, marginBottom:12 }}>Tutti certificati allo standard richiesto. Identità svelata alla chiusura.</div>
@@ -824,13 +880,15 @@ export default function PoolAuctionPage() {
                 </div>
               ))}
             </div>
+            )}
 
             <div className="bs-card">
               <div style={{ display:"flex", alignItems:"center", gap:7, marginBottom:14 }}>
                 <span className="bs-live-dot"/><span style={{ fontSize:14, fontWeight:700 }}>Attività recente</span>
               </div>
               <div style={{ display:"flex", flexDirection:"column", gap:11 }}>
-                <Activity icon={<Gavel size={12} color={C.blue}/>} text={<><b>Fornitore #3</b> ha ribassato a <b className="bs-num" style={{color:C.green}}>€2,27/kg</b></>} when="12 min fa"/>
+                {/* Attività di ribasso fornitore solo in asta a ribasso. */}
+                {!groupBuy && <Activity icon={<Gavel size={12} color={C.blue}/>} text={<><b>Fornitore #3</b> ha ribassato a <b className="bs-num" style={{color:C.green}}>€2,27/kg</b></>} when="12 min fa"/>}
                 {participants.slice(0,4).map((p,i) => (
                   <Activity key={i} icon={<Users size={12} color={C.purple}/>} text={<><b>{p.who}</b> ha aggiunto <b className="bs-num" style={{color:C.purple}}>{kg(p.qty)} kg</b></>} when={p.when}/>
                 ))}
