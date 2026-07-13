@@ -94,6 +94,22 @@ const nextConfig: NextConfig = {
       },
     ];
   },
+  // Alias PUBBLICI verso le pagine reali di browsing. Le pagine vere (/catalogo,
+  // /pool) sono già sfogliabili senza account; questi sono URL "standard da
+  // marketplace" che un visitatore/crawler può tentare (/prodotti, /categorie,
+  // /aste): li mandiamo alla pagina pubblica giusta invece di farli sbattere sul
+  // login. 308 (permanent) → canonico per la SEO. I redirect di next.config
+  // vengono valutati PRIMA del middleware, quindi non scattano su /auth/login.
+  async redirects() {
+    return [
+      { source: "/prodotti", destination: "/catalogo", permanent: true },
+      { source: "/prodotti/:path*", destination: "/catalogo", permanent: true },
+      { source: "/categorie", destination: "/catalogo", permanent: true },
+      { source: "/categorie/:path*", destination: "/catalogo", permanent: true },
+      { source: "/aste", destination: "/pool", permanent: true },
+      { source: "/aste/:path*", destination: "/pool", permanent: true },
+    ];
+  },
 };
 
 export default nextConfig;

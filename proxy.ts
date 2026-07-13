@@ -10,6 +10,9 @@ export const config = {
 // NB: le esclusioni sono le rotte raggiungibili SENZA sessione (le pagine
 // gestiscono l'auth lato client). "corrieri" (directory pubblica) e "legale"
 // (termini) erano assenti: gli anonimi venivano rediretti a /auth/login.
-"/((?!_next/static|_next/image|favicon.ico|api|welcome|registrati|pool|prodotto|fornitore|fornitori|dashboard|catalogo|corriere|corrieri|legale|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)"
+// "prodotti|categorie|aste" sono alias pubblici (redirect in next.config verso
+// catalogo/pool): esclusi qui così, se il redirect non scattasse, non finiscono
+// comunque sul login.
+"/((?!_next/static|_next/image|favicon.ico|api|welcome|registrati|pool|prodotto|prodotti|categorie|aste|fornitore|fornitori|dashboard|catalogo|corriere|corrieri|legale|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)"
   ],
 };
