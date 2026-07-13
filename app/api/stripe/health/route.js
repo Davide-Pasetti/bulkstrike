@@ -43,6 +43,10 @@ export async function GET() {
     env: process.env.VERCEL_ENV || "unknown",
     secret_key: { present: !!secret, mode: modeOf(secret) },
     publishable_key: { present: !!publishable, mode: modeOf(publishable) },
+    // Env richieste dal webhook /api/webhooks/stripe: senza di esse gli
+    // eventi succeeded/failed non aggiornano gli ordini. Solo presenza.
+    webhook_secret: { present: !!process.env.STRIPE_WEBHOOK_SECRET },
+    service_role_key: { present: !!process.env.SUPABASE_SERVICE_ROLE_KEY },
     api_call: null,
   };
   if (secret) {
