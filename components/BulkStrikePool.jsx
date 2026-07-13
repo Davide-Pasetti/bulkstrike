@@ -6,6 +6,7 @@ import ProductFollowButton from "@/components/BulkStrikeProductFollow";
 import { TIERS, tierIndexFor, tierFor, tierCeiling } from "@/lib/tiers";
 import BulkStrikeChatWidget from "@/components/BulkStrikeChatWidget";
 import { BSIcon } from "@/components/BSLogo";
+import CountryFlag from "@/components/CountryFlag";
 import { Search, ArrowRight, Check, Clock, ChevronRight, Shield, Users, TrendingDown, Plus, Minus, Info, Gavel, Award, ShoppingCart } from "lucide-react";
 
 const C = { blue:"#0EA5E9", dark:"#0284C7", text:"#0F172A", muted:"#64748B", border:"#E2E8F0", bg:"#F8FAFE", green:"#059669", red:"#DC2626", amber:"#D97706", purple:"#7C3AED" };
@@ -552,7 +553,7 @@ export default function PoolAuctionPage() {
                 {bidders.map((b,i) => (
                   <div key={i} style={{ display:"flex", alignItems:"center", gap:10, padding:"9px 0", borderBottom:i<bidders.length-1?`1px solid #F1F5F9`:"none" }}>
                     <span style={{ fontSize:13, fontWeight:600, minWidth:96 }}>{concluded && b.won && pool.winnerName ? <SupplierName name={pool.winnerName}/> : b.tag}</span>
-                    <span style={{ fontSize:13 }}>{b.flag}</span>
+                    {b.origin ? <CountryFlag country={b.origin} size={12} /> : null}
                     <span style={{ fontSize:12, color:C.muted, flex:1 }}>{b.when}</span>
                     {concluded
                       ? (b.won && <span className="bs-chip" style={{ background:"#DCFCE7", color:C.green }}><Award size={12}/> Vincitore</span>)
@@ -873,7 +874,7 @@ export default function PoolAuctionPage() {
               <div style={{ fontSize:12, color:C.muted, marginBottom:12 }}>Tutti certificati allo standard richiesto. Identità svelata alla chiusura.</div>
               {bidders.map((b,i) => (
                 <div key={i} style={{ display:"flex", alignItems:"center", gap:8, padding:"8px 0", borderBottom:i<bidders.length-1?`1px solid #F1F5F9`:"none" }}>
-                  <span style={{ fontSize:14 }}>{b.flag}</span>
+                  {b.origin ? <CountryFlag country={b.origin} size={12} /> : null}
                   <span style={{ fontSize:13, fontWeight:600, flex:1 }}>{b.tag}</span>
                   <span style={{ fontSize:12, color:C.muted }}>{b.origin}</span>
                   {b.leader && <Award size={14} color={C.green}/>}

@@ -9,11 +9,10 @@ import BulkStrikeNav from "@/components/BulkStrikeNav";
 import LoginGate from "@/components/BulkStrikeLoginGate";
 import { BSIcon } from "@/components/BSLogo";
 import { IvaChip } from "@/components/BulkStrikeBadges";
+import CountryFlag from "@/components/CountryFlag";
 
 const C = { blue:"#0EA5E9", dark:"#0284C7", text:"#0F172A", muted:"#64748B", border:"#E2E8F0", bg:"#F8FAFE", green:"#059669", red:"#DC2626", amber:"#D97706", purple:"#7C3AED" };
 
-const FLAG = { "Italia":"🇮🇹","Cina":"🇨🇳","Argentina":"🇦🇷","Polonia":"🇵🇱","Francia":"🇫🇷","Germania":"🇩🇪","Spagna":"🇪🇸","Paesi Bassi":"🇳🇱","India":"🇮🇳","Stati Uniti":"🇺🇸","Turchia":"🇹🇷","Regno Unito":"🇬🇧","Svizzera":"🇨🇭","Austria":"🇦🇹","Belgio":"🇧🇪","Portogallo":"🇵🇹","Grecia":"🇬🇷","Brasile":"🇧🇷","Corea del Sud":"🇰🇷","Giappone":"🇯🇵","Repubblica Ceca":"🇨🇿","Ungheria":"🇭🇺","Romania":"🇷🇴","Slovenia":"🇸🇮","Croazia":"🇭🇷","Marocco":"🇲🇦","Egitto":"🇪🇬","Vietnam":"🇻🇳","Indonesia":"🇮🇩","Messico":"🇲🇽","Canada":"🇨🇦" };
-const flagFor = (c) => FLAG[c] || "🏳️";
 const TYPE_LABEL = { producer:"Produttore", distributor:"Distributore", trader:"Trader" };
 const eurKg = (n) => n == null ? "—" : "€" + Number(n).toLocaleString("it-IT", { minimumFractionDigits:2, maximumFractionDigits:2 });
 const eur = (n) => n == null ? "—" : "€" + Number(n).toLocaleString("it-IT", { minimumFractionDigits:2, maximumFractionDigits:2 });
@@ -282,7 +281,7 @@ export default function SupplierPage() {
                   <span className="bs-suplink" onClick={() => reviewsRef.current?.scrollIntoView({ behavior:"smooth", block:"start" })} style={{ display:"flex", alignItems:"center", gap:6, cursor:"pointer" }}>
                     <Stars value={profile.rating} /> <b style={{ color:C.text }}>{profile.rating != null ? Number(profile.rating).toFixed(1) : "—"}</b> <span style={{ textDecoration:"underline" }}>({profile.reviews_count ?? 0} recensioni)</span>
                   </span>
-                  <span style={{ display:"flex", alignItems:"center", gap:4 }}>{flagFor(profile.country)} {profile.country}{profile.city ? ` · ${profile.city}` : ""}</span>
+                  <span style={{ display:"flex", alignItems:"center", gap:4 }}><CountryFlag country={profile.country} /> {profile.country}{profile.city ? ` · ${profile.city}` : ""}</span>
                   <span>Su BulkStrike dal {profile.member_since}</span>
                 </div>
               </div>
@@ -493,7 +492,7 @@ export default function SupplierPage() {
                       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:5, flexWrap:"wrap", gap:6 }}>
                         <div style={{ display:"flex", alignItems:"center", gap:8 }}>
                           <span style={{ fontSize:13.5, fontWeight:700 }}>{r.buyer_name}</span>
-                          {r.buyer_country && <span style={{ fontSize:12 }}>{flagFor(r.buyer_country)}</span>}
+                          {r.buyer_country && <CountryFlag country={r.buyer_country} size={12} />}
                           <span style={{ display:"inline-flex", alignItems:"center", gap:4, fontSize:11, fontWeight:700, background:"#ECFDF5", color:C.green, borderRadius:100, padding:"2px 8px" }}><ShieldCheck size={10}/> Acquisto verificato</span>
                         </div>
                         <span style={{ fontSize:11.5, color:C.muted }}>{new Date(r.created_at).toLocaleDateString("it-IT", { year:"numeric", month:"short", day:"numeric" })}</span>
@@ -535,7 +534,7 @@ export default function SupplierPage() {
             <div className="sup-card">
               <div style={{ fontSize:13, fontWeight:800, textTransform:"uppercase", letterSpacing:"0.05em", color:C.muted, marginBottom:6 }}>Sede legale</div>
               <Row icon={Building2} label="Indirizzo">{[profile.address, profile.city].filter(Boolean).join(", ") || null}</Row>
-              <Row icon={MapPin} label="Paese">{profile.country ? `${flagFor(profile.country)} ${profile.country}` : null}</Row>
+              <Row icon={MapPin} label="Paese">{profile.country ? <><CountryFlag country={profile.country} /> {profile.country}</> : null}</Row>
               {mapsUrl && (
                 <a href={mapsUrl} target="_blank" rel="noopener noreferrer" style={{ display:"inline-flex", alignItems:"center", gap:6, marginTop:12, fontSize:13, fontWeight:700, color:C.blue, textDecoration:"none" }}>
                   <MapPin size={14}/> Apri in Google Maps <ExternalLink size={11}/>
@@ -549,11 +548,11 @@ export default function SupplierPage() {
               {(profile.countries_served || []).length > 0 ? (
                 <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
                   {profile.countries_served.map(c => (
-                    <span key={c} style={{ display:"inline-flex", alignItems:"center", gap:5, fontSize:12.5, fontWeight:600, borderRadius:100, padding:"4px 11px", background:C.bg, border:`1px solid ${C.border}` }}>{flagFor(c)} {c}</span>
+                    <span key={c} style={{ display:"inline-flex", alignItems:"center", gap:5, fontSize:12.5, fontWeight:600, borderRadius:100, padding:"4px 11px", background:C.bg, border:`1px solid ${C.border}` }}><CountryFlag country={c} /> {c}</span>
                   ))}
                 </div>
               ) : (
-                <div style={{ fontSize:13, color:C.muted }}>{flagFor(profile.country)} {profile.country || "—"} <span style={{ fontSize:11.5 }}>(paese di origine — copertura non dichiarata)</span></div>
+                <div style={{ fontSize:13, color:C.muted }}><CountryFlag country={profile.country} /> {profile.country || "—"} <span style={{ fontSize:11.5 }}>(paese di origine — copertura non dichiarata)</span></div>
               )}
             </div>
 

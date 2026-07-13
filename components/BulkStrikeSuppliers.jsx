@@ -9,11 +9,10 @@ import { getSuppliersDirectory, getMacroAreas, getSession } from "@/lib/api";
 import BulkStrikeNav from "@/components/BulkStrikeNav";
 import LoginGate from "@/components/BulkStrikeLoginGate";
 import { BSIcon } from "@/components/BSLogo";
+import CountryFlag from "@/components/CountryFlag";
 
 const C = { blue:"#0EA5E9", dark:"#0284C7", text:"#0F172A", muted:"#64748B", border:"#E2E8F0", bg:"#F8FAFE", green:"#059669", red:"#DC2626", amber:"#D97706" };
 
-const FLAG = { "Italia":"🇮🇹","Cina":"🇨🇳","Argentina":"🇦🇷","Polonia":"🇵🇱","Francia":"🇫🇷","Germania":"🇩🇪","Spagna":"🇪🇸","Paesi Bassi":"🇳🇱","India":"🇮🇳","Stati Uniti":"🇺🇸","Turchia":"🇹🇷","Regno Unito":"🇬🇧","Svizzera":"🇨🇭","Austria":"🇦🇹","Belgio":"🇧🇪","Portogallo":"🇵🇹","Grecia":"🇬🇷","Brasile":"🇧🇷","Corea del Sud":"🇰🇷","Giappone":"🇯🇵","Repubblica Ceca":"🇨🇿","Ungheria":"🇭🇺","Romania":"🇷🇴","Slovenia":"🇸🇮","Croazia":"🇭🇷","Marocco":"🇲🇦","Egitto":"🇪🇬","Vietnam":"🇻🇳","Indonesia":"🇮🇩","Messico":"🇲🇽","Canada":"🇨🇦" };
-const flagFor = (c) => FLAG[c] || "🏳️";
 const TYPE_LABEL = { producer:"Produttore", distributor:"Distributore", trader:"Trader" };
 
 function Chip({ label, onClear }) {
@@ -171,7 +170,7 @@ export default function SuppliersDirectory() {
             <FilterTitle>Paese sede</FilterTitle>
             <div style={{ maxHeight:180, overflowY:"auto" }}>
               {countries.map(c => (
-                <Opt key={c} on={country === c} onClick={() => setCountry(country === c ? null : c)}>{flagFor(c)} {c}</Opt>
+                <Opt key={c} on={country === c} onClick={() => setCountry(country === c ? null : c)}><CountryFlag country={c} /> {c}</Opt>
               ))}
             </div>
 
@@ -222,7 +221,7 @@ export default function SuppliersDirectory() {
           <main>
             {activeCount > 0 && (
               <div style={{ display:"flex", flexWrap:"wrap", gap:8, marginBottom:14 }}>
-                {country && <Chip label={`${flagFor(country)} ${country}`} onClear={() => setCountry(null)}/>}
+                {country && <Chip label={<><CountryFlag country={country} /> {country}</>} onClear={() => setCountry(null)}/>}
                 {type && <Chip label={TYPE_LABEL[type]} onClear={() => setType(null)}/>}
                 {minRating && <Chip label={`≥ ${minRating} ★`} onClear={() => setMinRating(null)}/>}
                 {certSel.map(c => <Chip key={c} label={c} onClear={() => toggleCert(c)}/>)}
@@ -259,7 +258,7 @@ export default function SuppliersDirectory() {
                             {f.status === "verified" && <ShieldCheck size={14} color={C.green}/>}
                           </div>
                           <div style={{ fontSize:12.5, color:C.muted, marginTop:2 }}>
-                            {TYPE_LABEL[f.supplier_type] || f.supplier_type} · {flagFor(f.country)} {f.country}{f.city ? ` · ${f.city}` : ""}
+                            {TYPE_LABEL[f.supplier_type] || f.supplier_type} · <CountryFlag country={f.country} /> {f.country}{f.city ? ` · ${f.city}` : ""}
                           </div>
                         </div>
                       </div>

@@ -1,8 +1,9 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { Search, ArrowRight, Check, Clock, ChevronDown, ChevronRight, ChevronUp, Star, Shield, Truck, FileText, Download, Plus, Minus, Beaker, TrendingDown, Users, Gavel, Info, ShoppingCart } from "lucide-react";
-import { getProduct, getOpenPoolForProduct, getPriceReference, getProductBreadcrumb, getSession, openPool, upsertCartItem, poolErrorMessage, searchProducts, getCart, isFollowingProduct, getMarketPriceSeries } from "@/lib/api";
+import { getProduct, getOpenPoolForProduct, getPriceReference, getProductBreadcrumb, getSession, openPool, upsertCartItem, poolErrorMessage, searchProducts, getCart, isFollowingProduct, getMarketPriceSeries, getMarketIndexSeries } from "@/lib/api";
 import PriceSourceNote from "@/components/PriceSourceNote";
+import CountryFlag from "@/components/CountryFlag";
 import ProductFollowButton from "@/components/BulkStrikeProductFollow";
 import BulkStrikeNav from "@/components/BulkStrikeNav";
 import SupplierName, { SupplierLoginHint } from "@/components/BulkStrikeSupplierName";
@@ -188,6 +189,7 @@ export default function ProductPage() {
   const [followingProduct, setFollowingProduct] = useState(false);
   const [priceRef, setPriceRef] = useState(null);
   const [priceSeries, setPriceSeries] = useState(null); // storico prezzi di mercato (ISMEA/CUN) o null
+  const [indexSeries, setIndexSeries] = useState(null); // indice di tendenza settoriale Eurostat o null
   const [loading, setLoading] = useState(true);
   const [crumb, setCrumb] = useState(null); // { macro, sector } reali del prodotto
   const [busy, setBusy] = useState(false);
@@ -221,7 +223,9 @@ export default function ProductPage() {
     setProductId(id);
     setLoading(true);
     setPriceSeries(null);
+    setIndexSeries(null);
     getMarketPriceSeries(id).then(setPriceSeries).catch(() => setPriceSeries(null));
+    getMarketIndexSeries(id).then(setIndexSeries).catch(() => setIndexSeries(null));
     (async () => {
       try {
         const [p, op, ref, bc] = await Promise.all([
@@ -604,7 +608,7 @@ export default function ProductPage() {
                 <div>
                   <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:4 }}>
                     <SupplierName name={featured.name} companyId={featured.company_id} className="bs-suplink" style={{ fontSize:20, fontWeight:800 }}/>
-                    <span style={{ fontSize:18 }}>{featured.flag}</span>
+                    <CountryFlag country={featured.origin} size={16} />
                   </div>
                   <div style={{ display:"flex", alignItems:"center", gap:12, fontSize:13, color:C.muted, flexWrap:"wrap" }}>
                     <span style={{ display:"flex", alignItems:"center", gap:4 }}><Star size={13} fill={C.amber} color={C.amber}/> <b style={{ color:C.text }}>{featured.rating.toFixed(1)}</b> ({featured.reviews})</span>
@@ -677,7 +681,7 @@ export default function ProductPage() {
                 <div key={s.id} className="bs-supplier-row">
                   <div>
                     <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:3 }}>
-                      <SupplierName name={s.name} companyId={s.company_id} className="bs-suplink" style={{ fontSize:15, fontWeight:700 }}/><span>{s.flag}</span>
+                      <SupplierName name={s.name} companyId={s.company_id} className="bs-suplink" style={{ fontSize:15, fontWeight:700 }}/><CountryFlag country={s.origin} size={13} />
                     </div>
                     <div style={{ display:"flex", alignItems:"center", gap:8, fontSize:12, color:C.muted, flexWrap:"wrap" }}>
                       <span style={{ display:"flex", alignItems:"center", gap:3 }}><Star size={11} fill={C.amber} color={C.amber}/> {s.rating.toFixed(1)}</span>
@@ -876,8 +880,39 @@ export default function ProductPage() {
                     <PriceSourceNote fonte={priceSeries.fonte} fonteUrl={priceSeries.fonte_url} lastDate={priceSeries.last_date} muted={C.muted} border={C.border} />
                   </>);
                 }
-                // Nessun dato di mercato per questo prodotto: resta il grafico mock
-                // (il collegamento a dati reali degli altri prodotti è un task separato).
+                // INDICE settoriale Eurostat (tendenza): NON un prezzo €/kg. Mostra
+                // l'andamento dell'indice + la var. % YoY, con dicitura chiara che è
+                // un indice di settore, non il prezzo del singolo prodotto.
+                const idxPts = indexSeries && Array.isArray(indexSeries.series)
+                  ? indexSeries.series.filter(pt => pt.index != null).map(pt => { const [y, m] = String(pt.t).slice(0,10).split("-"); return { t:`${m}/${y.slice(2)}`, v:Number(pt.index), pct: pt.pct != null ? Number(pt.pct) : null }; })
+                  : [];
+                if (idxPts.length >= 2) {
+                  const lastPct = [...idxPts].reverse().find(p => p.pct != null)?.pct ?? null;
+                  const lastMonth = indexSeries.last_month ? (() => { const [y,m] = String(indexSeries.last_month).slice(0,10).split("-"); return `${m}/${y}`; })() : null;
+                  return (<>
+                    <div style={{ display:"flex", alignItems:"baseline", gap:6, marginBottom:2, flexWrap:"wrap" }}>
+                      <span className="bs-num" style={{ fontSize:22, fontWeight:800, color:C.text }}>Indice {idxPts[idxPts.length-1].v.toFixed(1)}</span>
+                      {lastPct != null && <span style={{ fontSize:12, color:lastPct<=0?C.green:C.red, display:"flex", alignItems:"center", gap:2 }}>{lastPct<=0 && <TrendingDown size={11}/>} {lastPct>0?"+":""}{lastPct.toFixed(1)}% <span style={{ color:C.muted }}>su base annua</span></span>}
+                    </div>
+                    <div style={{ fontSize:10.5, color:C.muted, marginBottom:10 }}>Indice settoriale (base 2021=100){lastMonth ? ` · ${lastMonth}` : ""}</div>
+                    <ResponsiveContainer width="100%" height={120}>
+                      <LineChart data={idxPts} margin={{ top:4, right:4, bottom:0, left:-22 }}>
+                        <XAxis dataKey="t" tick={{ fill:C.muted, fontSize:10 }} axisLine={false} tickLine={false} interval={Math.max(0, Math.floor(idxPts.length/6)-0)}/>
+                        <YAxis tick={{ fill:C.muted, fontSize:10, fontFamily:"JetBrains Mono" }} axisLine={false} tickLine={false} domain={["auto","auto"]} tickFormatter={v=>Number(v).toFixed(0)}/>
+                        <Tooltip contentStyle={{ background:"#fff", border:`1px solid ${C.border}`, borderRadius:8, fontSize:12 }} formatter={v=>[Number(v).toFixed(1),"Indice"]}/>
+                        <Line type="monotone" dataKey="v" stroke={C.blue} strokeWidth={2.5} dot={false} activeDot={{ r:4 }}/>
+                      </LineChart>
+                    </ResponsiveContainer>
+                    <div style={{ fontSize:10.5, color:C.muted, opacity:0.9, lineHeight:1.5, marginTop:10, paddingTop:10, borderTop:`1px solid ${C.border}` }}>
+                      Indice di <b>tendenza settoriale</b>, non il prezzo €/kg di questo specifico prodotto: {indexSeries.nace_label || "prezzi alla produzione dell'industria"}.{" "}
+                      {indexSeries.fonte_url
+                        ? <>Fonte: <a href={indexSeries.fonte_url} target="_blank" rel="noopener noreferrer" style={{ color:C.blue }}>Eurostat</a>.</>
+                        : "Fonte: Eurostat."}
+                    </div>
+                  </>);
+                }
+                // Nessun dato di mercato né indice per questo prodotto: resta il grafico
+                // mock (collegamento a dati reali degli altri prodotti = task separato).
                 return (<>
                   <div style={{ display:"flex", alignItems:"baseline", gap:6, marginBottom:10 }}>
                     <span className="bs-num" style={{ fontSize:22, fontWeight:800, color:C.blue }}>€2,42</span>

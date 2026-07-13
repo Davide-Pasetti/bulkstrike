@@ -7,11 +7,11 @@ import { useState, useEffect } from "react";
 import { Star, ShieldCheck, Package, Layers, Award, ArrowRight, ChevronRight, X } from "lucide-react";
 import { getSession, poolErrorMessage, getMyFollowedSuppliers, unfollowSupplier } from "@/lib/api";
 import BulkStrikeNav from "@/components/BulkStrikeNav";
+import CountryFlag from "@/components/CountryFlag";
 
 const C = { blue: "#0EA5E9", text: "#0F172A", muted: "#64748B", border: "#E2E8F0", bg: "#F8FAFE", green: "#059669", amber: "#D97706", red: "#DC2626" };
 
 const TYPE_LABEL = { producer: "Produttore", distributor: "Distributore" };
-const flagFor = (country) => ({ Italia: "🇮🇹", Germania: "🇩🇪", Francia: "🇫🇷", Spagna: "🇪🇸", "Paesi Bassi": "🇳🇱", Belgio: "🇧🇪", Austria: "🇦🇹", Polonia: "🇵🇱" }[country] || "🌍");
 
 export default function FollowedSuppliersPage({ inShell = false }) {
   const [loading, setLoading] = useState(true);
@@ -110,7 +110,7 @@ export default function FollowedSuppliersPage({ inShell = false }) {
                         {f.status === "verified" && <ShieldCheck size={14} color={C.green} />}
                       </div>
                       <div style={{ fontSize: 12.5, color: C.muted, marginTop: 2 }}>
-                        {TYPE_LABEL[f.supplier_type] || f.supplier_type} · {flagFor(f.country)} {f.country}{f.city ? ` · ${f.city}` : ""}
+                        {TYPE_LABEL[f.supplier_type] || f.supplier_type} · <CountryFlag country={f.country} /> {f.country}{f.city ? ` · ${f.city}` : ""}
                       </div>
                     </div>
                   </div>
