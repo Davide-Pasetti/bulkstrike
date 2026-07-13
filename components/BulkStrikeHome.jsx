@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from "react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { Bot, ArrowRight, Check, Clock, ChevronRight, TrendingDown, ChevronDown } from "lucide-react";
-import { getMacroAreas, getMacroAreasCached, getSectorProducts, getActivePools, getMyFollowedProducts, getSession, getProductsWithMarketPrices, getMarketPriceSeries, getHomepageStats } from "@/lib/api";
+import { getMacroAreas, getMacroAreasCached, getSectorProducts, getActivePools, getMyFollowedProducts, getSession, getProductsWithMarketPrices, getMarketPriceSeries, getMarketIndexSectors, getHomepageStats } from "@/lib/api";
+import { ytdChange } from "@/lib/priceTrend";
 import { TIERS, tierIndexFor } from "@/lib/tiers";
 import BulkStrikeNav from "@/components/BulkStrikeNav";
 import PriceSourceNote from "@/components/PriceSourceNote";
@@ -78,12 +79,6 @@ const TICKER = [
   { name:"Cloruro di Sodio",   price:"€0,18", change:+0.5 },
 ];
 
-const CHART_DATA = {
-  "Acido Citrico":  [{t:"Gen",v:0.95},{t:"Feb",v:0.92},{t:"Mar",v:0.89},{t:"Apr",v:0.91},{t:"Mag",v:0.87},{t:"Giu",v:0.85},{t:"Lug",v:0.83},{t:"Ago",v:0.81}],
-  "Polipropilene":  [{t:"Gen",v:1.18},{t:"Feb",v:1.15},{t:"Mar",v:1.14},{t:"Apr",v:1.16},{t:"Mag",v:1.13},{t:"Giu",v:1.11},{t:"Lug",v:1.09},{t:"Ago",v:1.12}],
-  "Carbonato Ca.":  [{t:"Gen",v:0.36},{t:"Feb",v:0.35},{t:"Mar",v:0.34},{t:"Apr",v:0.35},{t:"Mag",v:0.33},{t:"Giu",v:0.32},{t:"Lug",v:0.31},{t:"Ago",v:0.29}],
-};
-
 const BUYER_STEPS  = [
   { n:"01", title:"Cerca la materia prima",  desc:"Digita il prodotto o descrivi cosa cerchi. L'AI trova il prodotto esatto nella tassonomia BulkStrike." },
   { n:"02", title:"Scegli: Rapido o Asta a ribasso",   desc:"Acquista subito al prezzo più basso, oppure unisciti a un'asta a ribasso per sbloccare lo scaglione successivo." },
@@ -131,7 +126,6 @@ function CookieBanner() {
 
 export default function BulkStrikeLight() {
   const [sectorsExpanded, setSectorsExpanded] = useState(false); // solo mobile: mostra tutte le icone settore
-  const [activeChart, setActiveChart] = useState("Acido Citrico");
   const [activeTab, setActiveTab]   = useState("acquirente");
   const [count, setCount]           = useState({ pools:0, materials:0, countries:0, suppliers:0 });
   const [stats, setStats]           = useState(null); // contatori reali (get_homepage_stats)
@@ -144,9 +138,12 @@ export default function BulkStrikeLight() {
   const [isMobile, setIsMobile]     = useState(false);
   // Grafico "Andamento prezzi": prodotti con storico reale (ISMEA/CUN) affiancati
   // ai prodotti mock. marketSel = prodotto reale selezionato (null = mock).
-  const [marketProducts, setMarketProducts] = useState([]);   // [{id,name,fonte}]
-  const [marketSel, setMarketSel]           = useState(null);  // {id,name} | null
+  const [marketProducts, setMarketProducts] = useState([]);   // [{id,name,fonte}] agri €/kg reali
+  const [marketSel, setMarketSel]           = useState(null);  // {id,name} | null (agri selezionato)
   const [marketData, setMarketData]         = useState(null);  // {series,fonte,fonte_url,last_date}
+  // Indici settoriali Eurostat (metalli/plastica/chimica): tendenza, non €/kg.
+  const [indexSectors, setIndexSectors]     = useState([]);    // [{nace_code,nace_label,series,...}]
+  const [indexSel, setIndexSel]             = useState(null);  // sector selezionato | null
   // Box hero AI: il campo di testo è un "innesco" verso l'assistente vero (widget
   // flottante). Scrivendo e inviando qui, si apre il widget con il messaggio già inviato.
   const chatWidgetRef = useRef(null);
@@ -196,15 +193,26 @@ export default function BulkStrikeLight() {
 
   useEffect(() => { getMacroAreas().then(setMacros).catch(() => {}); }, []);
 
-  // Prodotti con storico prezzi reale, per i tab del grafico Market Intelligence.
+  // Prodotti con storico prezzi reale (agri €/kg) + indici settoriali Eurostat
+  // (metalli/plastica/chimica): i tab del grafico Market Intelligence, tutti reali.
   useEffect(() => { getProductsWithMarketPrices().then(setMarketProducts).catch(() => {}); }, []);
+  useEffect(() => { getMarketIndexSectors().then(setIndexSectors).catch(() => {}); }, []);
 
-  // Seleziona un prodotto reale nel grafico → carica la sua serie storica.
+  // Seleziona un prodotto agri reale → carica la sua serie €/kg.
   const selectMarketProduct = (p) => {
+    setIndexSel(null);
     setMarketSel(p); setMarketData(null);
     getMarketPriceSeries(p.id).then(setMarketData).catch(() => setMarketData(null));
   };
-  const selectMockChart = (name) => { setMarketSel(null); setActiveChart(name); };
+  // Seleziona un settore indice (serie già inclusa nel payload).
+  const selectIndexSector = (sec) => { setMarketSel(null); setMarketData(null); setIndexSel(sec); };
+
+  // Default: primo agri reale se disponibile, altrimenti primo settore indice.
+  useEffect(() => {
+    if (marketSel || indexSel) return;
+    if (marketProducts.length) selectMarketProduct(marketProducts[0]);
+    else if (indexSectors.length) selectIndexSector(indexSectors[0]);
+  }, [marketProducts, indexSectors]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Carica le aste attive UNA volta. get_active_pools() torna già ordinato per
   // closes_at asc (stessa RPC/ordinamento "Chiusura più vicina" di /pool). I
@@ -282,19 +290,29 @@ export default function BulkStrikeLight() {
     return m ? m.name.split(/[,&]/)[0].trim() : null;
   };
 
-  // Grafico prezzi: serie reale (se un prodotto reale è selezionato) o mock.
-  const showingReal = !!marketSel;
+  // Grafico prezzi: agri reale (€/kg) OPPURE indice settoriale Eurostat.
+  const showingReal = !!marketSel;    // agri €/kg
+  const showingIndex = !!indexSel;    // indice settoriale (tendenza)
   const realSeries = (marketData?.series || []).map(pt => {
     const [, m, d] = String(pt.t).slice(0, 10).split("-");
     return { t: `${d}/${m}`, v: Number(pt.v) };
   });
-  const chartData = showingReal ? realSeries : CHART_DATA[activeChart];
-  const lastPrice = showingReal
-    ? (realSeries.length ? realSeries[realSeries.length - 1].v : null)
-    : CHART_DATA[activeChart][CHART_DATA[activeChart].length - 1].v;
-  const realChange = (showingReal && realSeries.length >= 2)
-    ? ((realSeries[realSeries.length - 1].v - realSeries[0].v) / realSeries[0].v) * 100
-    : null;
+  const indexPts = showingIndex
+    ? (indexSel.series || []).filter(pt => pt.index != null).map(pt => {
+        const [y, m] = String(pt.t).slice(0, 10).split("-");
+        return { t: `${m}/${y.slice(2)}`, v: Number(pt.index) };
+      })
+    : [];
+  const chartData = showingIndex ? indexPts : realSeries;
+  const lastPrice = showingIndex
+    ? (indexPts.length ? indexPts[indexPts.length - 1].v : null)
+    : (showingReal ? (realSeries.length ? realSeries[realSeries.length - 1].v : null) : null);
+  // Variazione "da gennaio" (da inizio anno) sul dato REALE, coerente ovunque.
+  const marketYtd = showingIndex
+    ? ytdChange(indexSel.series || [], "index")
+    : (showingReal ? ytdChange(marketData?.series || [], "v") : null);
+  // Etichette brevi per i tab dei settori indice.
+  const NACE_SHORT = { C241: "Siderurgici", C244: "Metalli non ferrosi", C2016: "Plastiche", C20: "Chimica" };
 
   return (
     <div style={{ backgroundColor:"#FFFFFF", color:C.text, fontFamily:"'Inter',system-ui,sans-serif", minHeight:"100vh", overflowX:"hidden", colorScheme:"light" }}>
@@ -689,62 +707,53 @@ export default function BulkStrikeLight() {
                 L'andamento dei prezzi delle materie prime, aggiornato di continuo. Per le materie prime agricole i dati provengono dalle fonti ufficiali (ISMEA, CUN Grano Duro).
               </p>
               <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:24 }}>
-                {Object.keys(CHART_DATA).map(name => (
-                  <button key={name} className="bs-chart-tab" onClick={() => selectMockChart(name)}
-                    style={{ background:(!showingReal && activeChart===name)?C.blue:"#fff", color:(!showingReal && activeChart===name)?"#fff":C.muted, borderColor:(!showingReal && activeChart===name)?C.blue:C.border }}>
-                    {name}
-                  </button>
-                ))}
                 {marketProducts.map(p => (
                   <button key={p.id} className="bs-chart-tab" onClick={() => selectMarketProduct(p)}
                     style={{ background:marketSel?.id===p.id?C.blue:"#fff", color:marketSel?.id===p.id?"#fff":C.muted, borderColor:marketSel?.id===p.id?C.blue:C.border }}>
                     {p.name}
                   </button>
                 ))}
+                {indexSectors.map(sec => (
+                  <button key={sec.nace_code} className="bs-chart-tab" onClick={() => selectIndexSector(sec)}
+                    style={{ background:indexSel?.nace_code===sec.nace_code?C.blue:"#fff", color:indexSel?.nace_code===sec.nace_code?"#fff":C.muted, borderColor:indexSel?.nace_code===sec.nace_code?C.blue:C.border }}>
+                    {NACE_SHORT[sec.nace_code] || sec.nace_code}
+                  </button>
+                ))}
               </div>
               <div style={{ display:"flex", alignItems:"baseline", gap:10, flexWrap:"wrap" }}>
                 <span className="bs-num" style={{ fontSize:42, fontWeight:800, color:C.blue }}>
-                  {lastPrice != null ? `€${lastPrice.toFixed(2)}` : "—"}
+                  {lastPrice != null ? (showingIndex ? `Indice ${lastPrice.toFixed(1)}` : `€${lastPrice.toFixed(2)}`) : "—"}
                 </span>
-                <span style={{ fontSize:14, color:C.muted }}>/kg · {showingReal ? "prezzo di mercato" : "prezzo asta attuale"}</span>
+                <span style={{ fontSize:14, color:C.muted }}>{showingIndex ? "indice di settore · base 2021=100" : "/kg · prezzo di mercato"}</span>
               </div>
-              {showingReal ? (
-                realChange != null && (
-                  <div style={{ display:"flex", alignItems:"center", gap:4, fontSize:14, color:realChange<=0?C.green:C.red, marginTop:4 }}>
-                    {realChange<=0 && <TrendingDown size={14} />} {realChange>0?"+":""}{realChange.toFixed(1)}% nel periodo rilevato
-                  </div>
-                )
-              ) : (
-                <div style={{ display:"flex", alignItems:"center", gap:4, fontSize:14, color:C.green, marginTop:4 }}>
-                  <TrendingDown size={14} /> -14,7% rispetto a gennaio
+              {marketYtd != null && (
+                <div style={{ display:"flex", alignItems:"center", gap:4, fontSize:14, color:marketYtd<=0?C.green:C.red, marginTop:4 }}>
+                  {marketYtd<=0 && <TrendingDown size={14} />} {marketYtd>0?"+":""}{marketYtd.toFixed(1)}% da gennaio
                 </div>
               )}
             </div>
             <div>
               {showingReal && realSeries.length === 0 ? (
-                <div style={{ height:220, display:"flex", alignItems:"center", justifyContent:"center", fontSize:13, color:C.muted, border:`1px dashed ${C.border}`, borderRadius:12 }}>
-                  Storico prezzi in raccolta: i dati si popolano a ogni rilevazione settimanale.
+                <div style={{ height:220, display:"flex", alignItems:"center", justifyContent:"center", fontSize:13, color:C.muted, border:`1px dashed ${C.border}`, borderRadius:12, textAlign:"center", padding:"0 16px" }}>
+                  Storico prezzi in raccolta: i dati si popolano a ogni rilevazione.
                 </div>
               ) : (
                 <ResponsiveContainer width="100%" height={220}>
                   <LineChart data={chartData}>
                     <XAxis dataKey="t" tick={{ fill:C.muted, fontSize:12 }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fill:C.muted, fontSize:12, fontFamily:"JetBrains Mono" }} axisLine={false} tickLine={false} tickFormatter={v=>`€${v}`} domain={["auto","auto"]} />
-                    <Tooltip contentStyle={{ background:"#fff", border:`1px solid ${C.border}`, borderRadius:10 }} formatter={v=>[`€${Number(v).toFixed(2)}/kg`,"Prezzo"]} />
-                    <Line type="monotone" dataKey="v" stroke={C.blue} strokeWidth={2.5} dot={{ fill:C.blue, r:4, strokeWidth:0 }} activeDot={{ r:6 }} />
+                    <YAxis tick={{ fill:C.muted, fontSize:12, fontFamily:"JetBrains Mono" }} axisLine={false} tickLine={false} tickFormatter={v=> showingIndex ? Number(v).toFixed(0) : `€${v}`} domain={["auto","auto"]} />
+                    <Tooltip contentStyle={{ background:"#fff", border:`1px solid ${C.border}`, borderRadius:10 }} formatter={v=> showingIndex ? [Number(v).toFixed(1),"Indice"] : [`€${Number(v).toFixed(2)}/kg`,"Prezzo"]} />
+                    <Line type="monotone" dataKey="v" stroke={C.blue} strokeWidth={2.5} dot={showingIndex ? false : { fill:C.blue, r:4, strokeWidth:0 }} activeDot={{ r:6 }} />
                   </LineChart>
                 </ResponsiveContainer>
               )}
-              {/* Solo per il grafico mock: selettore periodo decorativo. Per i dati reali
-                  la fonte + dicitura informativa obbligatoria stanno qui sotto. */}
-              {showingReal ? (
-                <PriceSourceNote fonte={marketData?.fonte} fonteUrl={marketData?.fonte_url} lastDate={marketData?.last_date} muted={C.muted} border={C.border} />
-              ) : (
-                <div style={{ display:"flex", gap:8, marginTop:10, flexWrap:"wrap" }}>
-                  {["1M","3M","6M","1A"].map(t => (
-                    <button key={t} style={{ flex:1, minWidth:36, padding:"6px 4px", background:t==="6M"?"#EFF6FF":"transparent", border:`1px solid ${t==="6M"?C.blue:C.border}`, borderRadius:6, fontSize:12, color:t==="6M"?C.blue:C.muted, cursor:"pointer", fontFamily:"Inter,system-ui" }}>{t}</button>
-                  ))}
+              {/* Fonte + dicitura obbligatoria: prezzo reale (agri) o indice settoriale. */}
+              {showingIndex ? (
+                <div style={{ fontSize:11, color:C.muted, lineHeight:1.5, marginTop:12, paddingTop:12, borderTop:`1px solid ${C.border}` }}>
+                  Indice di <b>tendenza settoriale</b>, non il prezzo diretto del prodotto: {indexSel.nace_label}. Fonte: {indexSel.fonte_url ? <a href={indexSel.fonte_url} target="_blank" rel="noopener noreferrer" style={{ color:C.blue }}>Eurostat</a> : "Eurostat"}{indexSel.last_month ? ` · ultimo mese ${(() => { const [y,m]=String(indexSel.last_month).slice(0,10).split("-"); return `${m}/${y}`; })()}` : ""}.
                 </div>
+              ) : (
+                <PriceSourceNote fonte={marketData?.fonte} fonteUrl={marketData?.fonte_url} lastDate={marketData?.last_date} muted={C.muted} border={C.border} />
               )}
             </div>
           </div>

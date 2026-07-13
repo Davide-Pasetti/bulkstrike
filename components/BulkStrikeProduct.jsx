@@ -4,6 +4,7 @@ import { Search, ArrowRight, Check, Clock, ChevronDown, ChevronRight, ChevronUp,
 import { getProduct, getOpenPoolForProduct, getPriceReference, getProductBreadcrumb, getSession, openPool, upsertCartItem, poolErrorMessage, searchProducts, getCart, isFollowingProduct, getMarketPriceSeries, getMarketIndexSeries } from "@/lib/api";
 import PriceSourceNote from "@/components/PriceSourceNote";
 import CountryFlag from "@/components/CountryFlag";
+import { ytdChange } from "@/lib/priceTrend";
 import ProductFollowButton from "@/components/BulkStrikeProductFollow";
 import BulkStrikeNav from "@/components/BulkStrikeNav";
 import SupplierName, { SupplierLoginHint } from "@/components/BulkStrikeSupplierName";
@@ -327,6 +328,11 @@ export default function ProductPage() {
   // domanda) invece che a un'asta. Con 2+ resta l'asta a ribasso.
   const supplierCount = new Set(suppliers.map(s => s.company_id).filter(Boolean)).size;
   const groupBuy = supplierCount === 1;
+  // Variazione "da gennaio" (da inizio anno) sul dato REALE: €/kg per gli agri
+  // (ISMEA/CUN), indice settoriale per metalli/plastica/chimica (Eurostat). Se
+  // non c'è nessun dato reale → null → l'header nasconde la percentuale.
+  const headerTrend = (priceSeries?.series?.length ? ytdChange(priceSeries.series, "v") : null)
+    ?? (indexSeries?.series?.length ? ytdChange(indexSeries.series, "index") : null);
   // pool nudge: shown when the instant order is >= 1 pallet
   const palletKg = product.pallet_kg || PALLET_KG;
   const canOpenPool = qty >= palletKg;
@@ -515,7 +521,9 @@ export default function ProductPage() {
               <>
                 <div style={{ fontSize:12, color:C.muted }}>Prezzo indicativo da</div>
                 <div className="bs-num" style={{ fontSize:28, fontWeight:800, color:C.blue }}>{eurKg(ranked[0].calc.preVatKg)}<span style={{ fontSize:14, fontWeight:400, color:C.muted }}>/kg</span> <IvaChip style={{ verticalAlign: "2px" }} /></div>
-                <div style={{ display:"flex", alignItems:"center", gap:4, justifyContent:"flex-end", fontSize:12, color:C.green }}><TrendingDown size={12}/> -15,6% da gennaio</div>
+                {headerTrend != null && (
+                  <div style={{ display:"flex", alignItems:"center", gap:4, justifyContent:"flex-end", fontSize:12, color:headerTrend<=0?C.green:C.red }}>{headerTrend<=0 && <TrendingDown size={12}/>} {headerTrend>0?"+":""}{headerTrend.toFixed(1)}% da gennaio</div>
+                )}
                 <div style={{ fontSize:10.5, color:C.muted, marginTop:2 }}>Spedizione inclusa</div>
               </>
             ) : (
