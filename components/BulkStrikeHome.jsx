@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { Bot, ArrowRight, Check, Clock, ChevronRight, TrendingDown, ChevronDown } from "lucide-react";
-import { getMacroAreas, getMacroAreasCached, getSectorProducts, getActivePools, getMyFollowedProducts, getSession, getProductsWithMarketPrices, getMarketPriceSeries } from "@/lib/api";
+import { getMacroAreas, getMacroAreasCached, getSectorProducts, getActivePools, getMyFollowedProducts, getSession, getProductsWithMarketPrices, getMarketPriceSeries, getHomepageStats } from "@/lib/api";
 import { TIERS, tierIndexFor } from "@/lib/tiers";
 import BulkStrikeNav from "@/components/BulkStrikeNav";
 import PriceSourceNote from "@/components/PriceSourceNote";
@@ -133,7 +133,8 @@ export default function BulkStrikeLight() {
   const [sectorsExpanded, setSectorsExpanded] = useState(false); // solo mobile: mostra tutte le icone settore
   const [activeChart, setActiveChart] = useState("Acido Citrico");
   const [activeTab, setActiveTab]   = useState("acquirente");
-  const [count, setCount]           = useState({ pools:0, materials:0, countries:0, volume:0 });
+  const [count, setCount]           = useState({ pools:0, materials:0, countries:0, suppliers:0 });
+  const [stats, setStats]           = useState(null); // contatori reali (get_homepage_stats)
   // Aste attive: undefined = in caricamento, [] = nessuna, array = aste ordinate.
   // Un'unica fetch alimenta sia il box "in evidenza" sia la griglia "Aste attive ora".
   const [pools, setPools]           = useState(undefined);
@@ -157,15 +158,30 @@ export default function BulkStrikeLight() {
   const setActiveMacro  = (m) => { _discoverySel.macro = m; setActiveMacroState(m); };
   const setActiveSector = (s) => { _discoverySel.sector = s; setActiveSectorState(s); };
 
+  // Statistiche REALI (niente più numeri finti): conta-su animato verso i valori
+  // veri restituiti da get_homepage_stats.
   useEffect(() => {
-    const targets = { pools:142, materials:2400, countries:38, volume:12 };
-    let step = 0;
-    const t = setInterval(() => {
-      step++; const e = 1 - Math.pow(1 - step/60, 3);
-      setCount({ pools:Math.round(targets.pools*e), materials:Math.round(targets.materials*e), countries:Math.round(targets.countries*e), volume:Math.round(targets.volume*e) });
-      if (step >= 60) clearInterval(t);
-    }, 1800/60);
-    return () => clearInterval(t);
+    let timer;
+    getHomepageStats().then((s) => {
+      if (!s) return;
+      setStats(s);
+      const targets = {
+        pools: Number(s.active_pools) || 0,
+        materials: Number(s.products) || 0,
+        suppliers: Number(s.suppliers) || 0,
+        countries: Number(s.countries) || 0,
+      };
+      let step = 0;
+      timer = setInterval(() => {
+        step++; const e = 1 - Math.pow(1 - step/60, 3);
+        setCount({
+          pools: Math.round(targets.pools*e), materials: Math.round(targets.materials*e),
+          suppliers: Math.round(targets.suppliers*e), countries: Math.round(targets.countries*e),
+        });
+        if (step >= 60) { clearInterval(timer); setCount(targets); }
+      }, 1800/60);
+    }).catch(() => {});
+    return () => { if (timer) clearInterval(timer); };
   }, []);
 
   useEffect(() => { getMacroAreas().then(setMacros).catch(() => {}); }, []);
@@ -431,7 +447,11 @@ export default function BulkStrikeLight() {
           <div>
             <div style={{ display:"inline-flex", alignItems:"center", gap:8, background:"#EFF6FF", border:"1px solid #BFDBFE", borderRadius:100, padding:"6px 14px", marginBottom:20 }}>
               <div style={{ width:8, height:8, borderRadius:"50%", background:C.green, boxShadow:`0 0 6px ${C.green}` }} />
-              <span style={{ fontSize:13, color:"#1D4ED8", fontWeight:600 }}>142 aste attive in questo momento</span>
+              <span style={{ fontSize:13, color:"#1D4ED8", fontWeight:600 }}>
+                {stats && stats.active_pools > 0
+                  ? `${count.pools} ${count.pools === 1 ? "asta attiva" : "aste attive"} in questo momento`
+                  : "Aste a ribasso in tempo reale"}
+              </span>
             </div>
             <h1 className="bs-hero-h1" style={{ fontSize:52, fontWeight:900, lineHeight:1.06, letterSpacing:"-0.03em", marginBottom:18 }}>
               Il mercato delle{" "}
@@ -539,10 +559,10 @@ export default function BulkStrikeLight() {
         <div style={{ maxWidth:1280, margin:"0 auto", padding:"36px 24px" }}>
           <div className="bs-grid-4" style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:24 }}>
             {[
-              { label:"Aste attive ora",    val:count.pools,     suffix:"",   color:"#0EA5E9" },
-              { label:"Materie prime",      val:count.materials, suffix:"+",  color:"#0284C7" },
-              { label:"Paesi coperti",      val:count.countries, suffix:"",   color:C.green },
-              { label:"Mln € / mese",       val:count.volume,    suffix:"M€", color:C.amber },
+              { label:"Aste attive ora",    val:count.pools,     suffix:"",  color:"#0EA5E9" },
+              { label:"Materie prime",      val:count.materials, suffix:"",  color:"#0284C7" },
+              { label:"Fornitori",          val:count.suppliers, suffix:"",  color:C.amber },
+              { label:"Paesi coperti",      val:count.countries, suffix:"",  color:C.green },
             ].map(({ label, val, suffix, color }) => (
               <div key={label} style={{ textAlign:"center" }}>
                 <div className="bs-num" style={{ fontSize:40, fontWeight:800, color, letterSpacing:"-0.02em" }}>{val.toLocaleString("it-IT")}{suffix}</div>
@@ -806,7 +826,7 @@ export default function BulkStrikeLight() {
             Pronto a comprare al <span style={{ background:"linear-gradient(90deg,#0EA5E9,#22D3EE)", WebkitBackgroundClip:"text", backgroundClip:"text", color:"transparent" }}>prezzo giusto?</span>
           </h2>
           <p style={{ fontSize:16, color:"#6B94B8", marginBottom:36, maxWidth:480, margin:"0 auto 36px" }}>
-            Registrazione gratuita. Nessun abbonamento. Unisciti a 2.400+ aziende che già comprano e vendono su BulkStrike.
+            Registrazione gratuita. Nessun abbonamento. Unisciti alle {stats?.companies ?? 197} aziende già registrate su BulkStrike.
           </p>
           <div className="bs-cta-btns" style={{ display:"flex", gap:12, justifyContent:"center", flexWrap:"wrap" }}>
             <button className="bs-btn" onClick={() => { window.location.href = "/registrati"; }} style={{ fontSize:17, padding:"15px 32px" }}>Crea account gratis <ArrowRight size={20} /></button>
@@ -820,15 +840,16 @@ export default function BulkStrikeLight() {
         <div style={{ maxWidth:820, margin:"0 auto", textAlign:"center" }}>
           <div style={{ display:"inline-flex", alignItems:"center", gap:8, background:"#fff", border:"1px solid #BAE6FD", borderRadius:100, padding:"6px 14px", fontSize:12, fontWeight:700, color:"#0369A1", marginBottom:18, letterSpacing:"0.03em" }}>
             <Bot size={14} /> INTEGRAZIONE GESTIONALE
+            <span style={{ background:"#0369A1", color:"#fff", borderRadius:100, padding:"1px 8px", fontSize:11, letterSpacing:"0.02em" }}>IN ARRIVO</span>
           </div>
           <h2 style={{ fontSize:28, fontWeight:800, letterSpacing:"-0.02em", color:"#0F172A", marginBottom:14, lineHeight:1.25 }}>
             Collega il tuo gestionale a BulkStrike
           </h2>
           <p style={{ fontSize:16, lineHeight:1.6, color:"#475569", marginBottom:26, maxWidth:640, marginLeft:"auto", marginRight:"auto" }}>
-            Ordini generati in automatico in base alle tue scadenze e necessità di produzione. Contattaci per scoprire se il tuo gestionale supporta questa funzione.
+            Ordini generati in automatico in base alle tue scadenze e necessità di produzione. È una funzione <b>in arrivo</b>: richiedi l'accesso anticipato per essere tra i primi quando sarà disponibile.
           </p>
-          <a href="mailto:info@bulkstrike.com?subject=Integrazione%20gestionale%20BulkStrike" style={{ display:"inline-flex", alignItems:"center", gap:8, background:"#0EA5E9", color:"#fff", fontSize:16, fontWeight:700, padding:"14px 28px", borderRadius:10, textDecoration:"none" }}>
-            Contattaci <ArrowRight size={18} />
+          <a href="mailto:info@bulkstrike.com?subject=Accesso%20anticipato%20integrazione%20gestionale%20BulkStrike" style={{ display:"inline-flex", alignItems:"center", gap:8, background:"#0EA5E9", color:"#fff", fontSize:16, fontWeight:700, padding:"14px 28px", borderRadius:10, textDecoration:"none" }}>
+            Richiedi accesso anticipato <ArrowRight size={18} />
           </a>
         </div>
       </div>
