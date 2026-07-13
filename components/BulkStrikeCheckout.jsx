@@ -19,6 +19,7 @@ import { getCart, checkoutCart, previewCheckout, getMyCompany, getMyCompanyAddre
 import BulkStrikeNav from "@/components/BulkStrikeNav";
 import PaymentMethodSelector from "@/components/checkout/PaymentMethodSelector";
 import EscrowPayinPanel from "@/components/checkout/EscrowPayinPanel";
+import { countryToIso } from "@/components/CountryFlag";
 import { stripeProcessingFee } from "@/lib/payments/paymentConfig";
 import { TrustBadge, IvaChip } from "@/components/BulkStrikeBadges";
 
@@ -90,6 +91,7 @@ export default function CheckoutPage() {
   // disponibile, non richiede salvataggio) + form per aggiungerne uno nuovo.
   const [addresses, setAddresses] = useState([]);
   const [companyAddress, setCompanyAddress] = useState(null); // testo sede legale, o null se non impostata
+  const [companyAddrObj, setCompanyAddrObj] = useState(null); // sede legale strutturata (per precompilare la fatturazione Stripe)
   const [companyName, setCompanyName] = useState(null); // ragione sociale azienda loggata (per la riga Fatturazione)
   const [selectedAddressId, setSelectedAddressId] = useState(""); // "__legal__" | id salvato
   const [billingAddressId, setBillingAddressId] = useState(""); // "__legal__" | id salvato — indipendente dalla consegna
@@ -125,6 +127,7 @@ export default function CheckoutPage() {
         setBuyerCompanyId(company?.id || null);
         const legalText = companyAddr ? [companyAddr.address, companyAddr.city, companyAddr.country].filter(Boolean).join(", ") : null;
         setCompanyAddress(legalText);
+        setCompanyAddrObj(companyAddr || null);
 
         const def = (savedAddrs || []).find(a => a.is_default);
         // Fatturazione: di default la sede legale (corretto per l'emissione fattura),
@@ -250,6 +253,23 @@ export default function CheckoutPage() {
   const subtotal = useMemo(() => items.reduce((a, it) => a + (it.unit_price != null ? Number(it.unit_price) * Number(it.quantity_kg) : 0), 0), [items]);
   const hasIssues = useMemo(() => items.some(it => !it.offer_active || it.unit_price == null || (it.min_order_kg != null && Number(it.quantity_kg) < Number(it.min_order_kg))), [items]);
   const billingAddressText = billingAddressId === "__legal__" ? (companyAddress || "") : (addresses.find(a => a.id === billingAddressId)?.address || companyAddress || "");
+
+  // Precompilazione dei dati di fatturazione per il PaymentElement (Stripe) dalla
+  // sede legale già nota: nome, email e indirizzo non vanno reinseriti ogni volta.
+  // Il paese va convertito in ISO alpha-2 (Stripe lo richiede così).
+  const billingPrefill = useMemo(() => {
+    const bd = {};
+    if (companyName) bd.name = companyName;
+    if (buyerEmail) bd.email = buyerEmail;
+    const addr = {};
+    if (companyAddrObj?.address) addr.line1 = companyAddrObj.address;
+    if (companyAddrObj?.city) addr.city = companyAddrObj.city;
+    if (companyAddrObj?.postal_code) addr.postal_code = companyAddrObj.postal_code;
+    const iso = countryToIso(companyAddrObj?.country);
+    if (iso) addr.country = iso;
+    if (Object.keys(addr).length) bd.address = addr;
+    return Object.keys(bd).length ? bd : null;
+  }, [companyName, buyerEmail, companyAddrObj]);
 
   // pronti a pagare solo quando: i preventivi sono tutti arrivati, e ogni fornitore CHE HA
   // corrieri disponibili ha una selezione fatta (i fornitori senza corrieri vanno in attesa da soli).
@@ -472,6 +492,7 @@ export default function CheckoutPage() {
               Gli ordini sono stati creati e restano <b>in attesa del pagamento in garanzia</b>: conferma qui sotto per depositare i fondi in escrow.
             </p>
             <EscrowPayinPanel
+              billing={billingPrefill}
               payins={payins}
               onAllPaid={() => { setPayins(null); setDone(pendingDone || { orders: [] }); }}
             />

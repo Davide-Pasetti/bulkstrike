@@ -26,7 +26,7 @@ function getStripePromise() {
 
 const eurCents = (cents) => (cents / 100).toLocaleString("it-IT", { style: "currency", currency: "EUR" });
 
-function PayinForm({ payin, index, count, onPaid }) {
+function PayinForm({ payin, index, count, onPaid, billing }) {
   const stripe = useStripe();
   const elements = useElements();
   const [busy, setBusy] = useState(false);
@@ -57,7 +57,10 @@ function PayinForm({ payin, index, count, onPaid }) {
         </span>
         <span className="co-num" style={{ fontSize: 18, fontWeight: 800 }}>{eurCents(payin.amountCents)}</span>
       </div>
-      <PaymentElement options={{ layout: "tabs" }} />
+      {/* Precompila nome/email/indirizzo di fatturazione dalla sede legale
+          dell'azienda (dati già noti), così non vanno reinseriti ogni volta.
+          L'IBAN resta da inserire finché non salveremo il metodo (parte 2). */}
+      <PaymentElement options={{ layout: "tabs", ...(billing ? { defaultValues: { billingDetails: billing } } : {}) }} />
       {msg && <div style={{ marginTop: 10, fontSize: 13, color: C.red }}>{msg}</div>}
       <button
         onClick={pay}
@@ -73,7 +76,7 @@ function PayinForm({ payin, index, count, onPaid }) {
   );
 }
 
-export default function EscrowPayinPanel({ payins, onAllPaid }) {
+export default function EscrowPayinPanel({ payins, onAllPaid, billing }) {
   const [idx, setIdx] = useState(0);
   const [results, setResults] = useState([]);
   const current = payins[idx];
@@ -94,7 +97,7 @@ export default function EscrowPayinPanel({ payins, onAllPaid }) {
         stripe={getStripePromise()}
         options={{ clientSecret: current.clientSecret, locale: "it", appearance: { variables: { colorPrimary: C.blue, fontFamily: "Inter, system-ui, sans-serif" } } }}
       >
-        <PayinForm payin={current} index={idx} count={payins.length} onPaid={handlePaid} />
+        <PayinForm payin={current} index={idx} count={payins.length} onPaid={handlePaid} billing={billing} />
       </Elements>
     </div>
   );
