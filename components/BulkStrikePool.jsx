@@ -87,6 +87,9 @@ export default function PoolAuctionPage() {
   // Modalità "apri nuova asta" per un prodotto (arrivo con ?product=<id> e nessun
   // pool ancora aperto): il pannello apre l'asta con openPool() invece di joinPool().
   const [productMode, setProductMode] = useState(false);
+  // Divieto d'asta a ribasso per legge (agricoli/alimentari grezzi, D.Lgs. 198/2021):
+  // il pannello mostra l'avviso legale invece dei controlli di apertura/adesione.
+  const [auctionRestricted, setAuctionRestricted] = useState(false);
 
   useEffect(() => {
     const t = setInterval(() => setSecs(s => s>0 ? s-1 : 0), 1000);
@@ -123,6 +126,7 @@ export default function PoolAuctionPage() {
       const p = await getProduct(pid);
       if (!p) return;
       setProductMode(true);
+      setAuctionRestricted(!!p.auction_restricted_by_law);
       setProductId(pid);
       isFollowingProduct(pid).then(setFollowingProduct).catch(() => {});
       if (p.pallet_kg) setRealPalletKg(Number(p.pallet_kg));
@@ -380,8 +384,11 @@ export default function PoolAuctionPage() {
         <div style={{ display:"flex", justifyContent:"space-between", gap:16, flexWrap:"wrap", marginBottom:20 }}>
           <div>
             <div style={{ display:"flex", gap:8, marginBottom:8, flexWrap:"wrap", alignItems:"center" }}>
-              <span className="bs-chip" style={{ background:"#FBF7FF", color:C.purple }}><Gavel size={12}/> Asta a ribasso · per prodotto</span>
-              {concluded
+              {!auctionRestricted && <span className="bs-chip" style={{ background:"#FBF7FF", color:C.purple }}><Gavel size={12}/> Asta a ribasso · per prodotto</span>}
+              {/* Nessun badge "Live" per i prodotti con asta vietata per legge. */}
+              {auctionRestricted
+                ? null
+                : concluded
                 ? <span className="bs-chip" style={{ background:"#F1F5F9", color:C.muted }}><Check size={12}/> Asta terminata</span>
                 : <span className="bs-chip" style={{ background:"#FEF2F2", color:C.red }}><span className="bs-live-dot"/> Live</span>}
               <span className="bs-chip" style={{ background:"#EFF6FF", color:"#1D4ED8" }}>{pool.enum}</span>
@@ -396,7 +403,7 @@ export default function PoolAuctionPage() {
               </div>
             )}
           </div>
-          {concluded ? (
+          {auctionRestricted ? null : concluded ? (
             <div style={{ textAlign:"center", background:C.bg, border:`1px solid ${C.border}`, borderRadius:12, padding:"12px 18px" }}>
               <div style={{ fontSize:11, color:C.muted, marginBottom:6, display:"flex", alignItems:"center", gap:4, justifyContent:"center" }}><Check size={12}/> Asta conclusa</div>
               <div className="bs-num" style={{ fontSize:20, fontWeight:800, color:C.text }}>{closedDate || "—"}</div>
@@ -416,6 +423,24 @@ export default function PoolAuctionPage() {
           )}
         </div>
 
+        {auctionRestricted ? (
+          /* Prodotto con asta vietata per legge: pagina minimale, solo l'avviso.
+             Nessuno scheletro d'asta (leve, contatori, offerte, banner). */
+          <div style={{ border:`1px solid ${C.border}`, borderRadius:14, padding:20, marginBottom:28, maxWidth:640, background:C.bg }}>
+            <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:8 }}>
+              <div style={{ width:34, height:34, borderRadius:"50%", background:"#F1F5F9", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}><Info size={18} color={C.muted}/></div>
+              <div style={{ fontSize:16, fontWeight:700 }}>Asta a ribasso non disponibile</div>
+            </div>
+            <div style={{ fontSize:13.5, color:C.muted, lineHeight:1.6 }}>
+              La normativa italiana vieta l'acquisto di prodotti agricoli e alimentari tramite aste elettroniche a doppio ribasso. Questo prodotto è disponibile solo con Acquisto Rapido.
+            </div>
+            <div style={{ fontSize:11.5, color:C.muted, opacity:0.85, lineHeight:1.5, marginTop:12, paddingTop:12, borderTop:`1px solid ${C.border}` }}>
+              Rif. normativo: Direttiva (UE) 2019/633 del 17 aprile 2019 sulle pratiche commerciali sleali nella filiera agroalimentare; Decreto Legislativo 8 novembre 2021, n. 198, art. 5, comma 1, lett. a) (in vigore dal 15 dicembre 2021).
+            </div>
+            <button onClick={() => { window.location.href = productId ? `/prodotto?id=${productId}` : "/catalogo"; }} className="bs-btn bs-btn-blue" style={{ marginTop:16, fontSize:14, padding:"11px 18px" }}>Vai all'Acquisto Rapido <ArrowRight size={15}/></button>
+          </div>
+        ) : (
+        <>
         {/* TWO LEVERS */}
         <div className="bs-two" style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14, marginBottom:24 }}>
           <div style={{ background:"#FBF7FF", border:`1px solid ${C.purple}33`, borderRadius:12, padding:"14px 16px", display:"flex", gap:12, alignItems:"flex-start" }}>
@@ -562,6 +587,20 @@ export default function PoolAuctionPage() {
                   Ti aggiungeremo automaticamente con <b style={{color:C.text}}>{kg(targetJoin.quantity_kg)} kg</b> non appena un fornitore scende a <b style={{color:C.text}}>{eurKg(targetJoin.target_price_per_kg)}/kg</b> o sotto. Nessuna azione richiesta da parte tua.
                 </div>
                 <button onClick={cancelTarget} style={{ width:"100%", background:"transparent", color:C.muted, border:`1.5px solid ${C.border}`, borderRadius:10, padding:"12px", fontSize:14, fontWeight:600, cursor:"pointer", fontFamily:"Inter,system-ui" }}>Annulla adesione in attesa</button>
+              </>
+            ) : auctionRestricted ? (
+              /* DIVIETO DI LEGGE — agricoli/alimentari grezzi, D.Lgs. 198/2021. */
+              <>
+                <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:8 }}>
+                  <div style={{ width:34, height:34, borderRadius:"50%", background:"#F1F5F9", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}><Info size={18} color={C.muted}/></div>
+                  <div style={{ fontSize:15, fontWeight:700 }}>Asta a ribasso non disponibile</div>
+                </div>
+                <div style={{ fontSize:13, color:C.muted, lineHeight:1.55 }}>
+                  La normativa italiana vieta l'acquisto di prodotti agricoli e alimentari tramite aste elettroniche a doppio ribasso. Questo prodotto è disponibile solo con Acquisto Rapido.
+                </div>
+                <div style={{ fontSize:11, color:C.muted, opacity:0.85, lineHeight:1.5, marginTop:12, paddingTop:12, borderTop:`1px solid ${C.border}` }}>
+                  Rif. normativo: Direttiva (UE) 2019/633 del 17 aprile 2019 sulle pratiche commerciali sleali nella filiera agroalimentare; Decreto Legislativo 8 novembre 2021, n. 198, art. 5, comma 1, lett. a) (in vigore dal 15 dicembre 2021).
+                </div>
               </>
             ) : (
               <>
@@ -807,6 +846,8 @@ export default function PoolAuctionPage() {
             </div>
           </div>
         </div>
+        </>
+        )}
       </div>
 
       {/* FOOTER */}

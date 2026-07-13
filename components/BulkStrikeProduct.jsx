@@ -27,6 +27,7 @@ const SEED_PRODUCT = {
   sacco_kg: 25,
   pallet_kg: 1000,
   container_kg: null,
+  auctionRestricted: false,
 };
 
 // price tiers €/kg by volume band [maxKg, price]; shipping = base + perKg*qty
@@ -135,6 +136,8 @@ function mapDbProduct(p) {
     // Formati di vendita del prodotto impostati da admin (null = non applicabile).
     sacco_kg: p.sacco_kg ?? null,
     container_kg: p.container_kg ?? null,
+    // Divieto d'asta a ribasso per legge (agricoli/alimentari grezzi, D.Lgs. 198/2021).
+    auctionRestricted: !!p.auction_restricted_by_law,
   };
 }
 // da getOpenPoolForProduct() → shape SEED_POOL
@@ -312,6 +315,9 @@ export default function ProductPage() {
   const setUnitCount = (n) => setQtySafe(Math.max(minUnits, n) * unitSizeKg);
   const selectFormat = (idx) => { setSelectedFormatIdx(idx); setQtySafe(Math.max(minUnits, unitCount) * formats[idx].size_kg); };
 
+  // Divieto d'asta a ribasso per legge (prodotti agricoli/alimentari grezzi):
+  // niente apertura né adesione, solo Acquisto Rapido. Rif. D.Lgs. 198/2021.
+  const auctionRestricted = !!product.auctionRestricted;
   // pool nudge: shown when the instant order is >= 1 pallet
   const palletKg = product.pallet_kg || PALLET_KG;
   const canOpenPool = qty >= palletKg;
@@ -630,7 +636,7 @@ export default function ProductPage() {
                   <button onClick={handleAddToCart} disabled={busy || !featured} style={{ width:"100%", marginTop:8, background:"transparent", color:C.blue, border:`1.5px solid ${C.blue}`, borderRadius:10, padding:"12px", fontSize:14.5, fontWeight:700, cursor:(busy||!featured)?"default":"pointer", opacity:(busy||!featured)?0.6:1, display:"flex", alignItems:"center", justifyContent:"center", gap:8, fontFamily:"Inter,system-ui" }}><ShoppingCart size={16}/> Aggiungi al carrello</button>
                   {cartOk && <div style={{ marginTop:8, fontSize:12.5, color:C.green, fontWeight:700, display:"flex", alignItems:"center", gap:5 }}><Check size={13}/> Aggiunto! <span onClick={() => { window.location.href = "/carrello"; }} style={{ cursor:"pointer", textDecoration:"underline" }}>Vai al carrello</span></div>}
                   {actionMsg && <div style={{ marginTop:8, fontSize:12, color:C.red, fontWeight:600 }}>{actionMsg}</div>}
-                  {pool.exists && (
+                  {pool.exists && !auctionRestricted && (
                   <div style={{ marginTop:10, fontSize:13 }}>
                     <span style={{ color:C.muted }}>oppure </span>
                     <span onClick={goToPool} style={{ color:C.purple, fontWeight:600, cursor:"pointer" }}>c'è un'asta a ribasso attiva: ora {eurKg(pool.bestPrice)}/kg →</span>
@@ -698,6 +704,11 @@ export default function ProductPage() {
               <div style={{ border:`1px dashed ${C.border}`, borderRadius:14, padding:"28px 24px", marginBottom:28, textAlign:"center", color:C.muted }}>
                 <Beaker size={26} color={C.muted} style={{ marginBottom:8 }} />
                 <div style={{ fontSize:15, fontWeight:700, color:C.text, marginBottom:4 }}>Nessun fornitore quotato per questo prodotto</div>
+                {auctionRestricted ? (
+                  <div style={{ fontSize:13, marginTop:6, lineHeight:1.55 }}>
+                    La normativa italiana vieta l'acquisto di prodotti agricoli e alimentari tramite aste elettroniche a doppio ribasso, quindi non è possibile aprire un'asta a ribasso su questo prodotto. Resta disponibile solo con Acquisto Rapido, quando un fornitore è quotato.
+                  </div>
+                ) : (<>
                 <div style={{ fontSize:13, marginBottom:14 }}>Puoi comunque aprire un'asta a ribasso: aggreghi la domanda e i fornitori certificati competono al ribasso.</div>
                 {canOpenPool && (
                   <label style={{ display:"flex", gap:9, alignItems:"flex-start", background:"#fff", border:`1px solid ${C.border}`, borderRadius:9, padding:"10px 12px", marginBottom:14, cursor:"pointer", textAlign:"left" }}>
@@ -711,6 +722,7 @@ export default function ProductPage() {
                   ? <button onClick={handleOpenPool} disabled={busy || !openAcceptTerms} style={{ background:C.purple, color:"#fff", border:"none", borderRadius:9, padding:"12px 22px", fontSize:14, fontWeight:700, cursor:(busy||!openAcceptTerms)?"default":"pointer", opacity:(busy||!openAcceptTerms)?0.5:1, display:"inline-flex", alignItems:"center", gap:7, fontFamily:"Inter,system-ui" }}><Gavel size={16}/> Apri un'asta a ribasso con {(qty/1000).toLocaleString("it-IT")}t</button>
                   : <div style={{ fontSize:12 }}>Imposta almeno {(palletKg/1000).toLocaleString("it-IT")}t (1 pallet) per aprire un'asta a ribasso.</div>}
                 {actionMsg && <div style={{ marginTop:8, fontSize:12, color:C.red, fontWeight:600 }}>{actionMsg}</div>}
+                </>)}
               </div>
             )}
 
@@ -783,6 +795,23 @@ export default function ProductPage() {
                 lì una nuova asta (?product). Contenuto minimale: titolo + bottone. Il
                 bottone è disabilitato SOLO nel caso "apri nuova" quando la quantità è
                 sotto il minimo (1 pallet); per aderire a un'asta attiva resta sempre attivo. */}
+            {auctionRestricted ? (
+              /* DIVIETO DI LEGGE — sostituisce il box asta per agricoli/alimentari grezzi. */
+              <div style={{ border:`1px solid ${C.border}`, borderRadius:14, padding:16, background:C.bg }}>
+                <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:8 }}>
+                  <div style={{ width:32, height:32, borderRadius:9, background:"#F1F5F9", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+                    <Info size={16} color={C.muted}/>
+                  </div>
+                  <span style={{ fontSize:14, fontWeight:800, color:C.text }}>Asta a ribasso non disponibile</span>
+                </div>
+                <div style={{ fontSize:13, color:C.muted, lineHeight:1.55 }}>
+                  La normativa italiana vieta l'acquisto di prodotti agricoli e alimentari tramite aste elettroniche a doppio ribasso. Questo prodotto è disponibile solo con Acquisto Rapido.
+                </div>
+                <div style={{ fontSize:11, color:C.muted, opacity:0.85, lineHeight:1.5, marginTop:10, paddingTop:10, borderTop:`1px solid ${C.border}` }}>
+                  Rif. normativo: Direttiva (UE) 2019/633 del 17 aprile 2019 sulle pratiche commerciali sleali nella filiera agroalimentare; Decreto Legislativo 8 novembre 2021, n. 198, art. 5, comma 1, lett. a) (in vigore dal 15 dicembre 2021).
+                </div>
+              </div>
+            ) : (
             <div style={{ border:`1.5px solid ${C.purple}55`, borderRadius:14, padding:16, background:"#FBF7FF" }}>
               <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:12 }}>
                 <div style={{ width:32, height:32, borderRadius:9, background:C.purple, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
@@ -806,6 +835,7 @@ export default function ProductPage() {
                 </>);
               })()}
             </div>
+            )}
 
             {/* PRICE HISTORY */}
             <div style={{ border:`1px solid ${C.border}`, borderRadius:14, padding:18 }}>
