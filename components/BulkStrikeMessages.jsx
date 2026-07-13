@@ -34,6 +34,7 @@ export default function MessagesPage({ inShell = false }) {
   const [threads, setThreads] = useState([]);
   const [activeId, setActiveId] = useState(null);
   const [messages, setMessages] = useState(null); // null = caricamento
+  const [contactsMasked, setContactsMasked] = useState(false); // contatti nascosti (nessun ordine confermato)
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const bottomRef = useRef(null);
@@ -74,9 +75,10 @@ export default function MessagesPage({ inShell = false }) {
     setMessages(null);
     (async () => {
       try {
-        const msgs = await getThreadMessages(activeId);
+        const { messages: msgs, contacts_masked } = await getThreadMessages(activeId);
         if (cancelled) return;
         setMessages(msgs);
+        setContactsMasked(contacts_masked);
         await markThreadRead(activeId).catch(() => {});
         setThreads((prev) => prev.map((t) => (t.id === activeId ? { ...t, unread: 0 } : t)));
       } catch (e) { if (!cancelled) setErr(poolErrorMessage(e)); }
@@ -89,7 +91,8 @@ export default function MessagesPage({ inShell = false }) {
     if (!activeId) return;
     const iv = setInterval(async () => {
       try {
-        const msgs = await getThreadMessages(activeId);
+        const { messages: msgs, contacts_masked } = await getThreadMessages(activeId);
+        setContactsMasked(contacts_masked);
         setMessages((prev) => (prev && msgs.length !== prev.length ? msgs : prev ?? msgs));
         if (msgs.some((m) => !m.mine && !m.read_at)) await markThreadRead(activeId).catch(() => {});
       } catch { /* transiente */ }
@@ -106,7 +109,9 @@ export default function MessagesPage({ inShell = false }) {
     try {
       await sendThreadMessage(activeId, body);
       setDraft("");
-      setMessages(await getThreadMessages(activeId));
+      const { messages: msgs, contacts_masked } = await getThreadMessages(activeId);
+      setMessages(msgs);
+      setContactsMasked(contacts_masked);
       await loadThreads();
     } catch (e) { setErr(poolErrorMessage(e)); }
     finally { setSending(false); }
@@ -222,6 +227,13 @@ export default function MessagesPage({ inShell = false }) {
                       </a>
                     )}
                   </div>
+
+                  {contactsMasked && messages !== null && (
+                    <div style={{ display: "flex", alignItems: "flex-start", gap: 8, padding: "9px 14px", background: "#FFF7ED", borderBottom: `1px solid #FDE68A`, fontSize: 12, color: "#92400E", lineHeight: 1.45 }}>
+                      <span style={{ flexShrink: 0 }}>🔒</span>
+                      <span>Per sicurezza i contatti diretti (email e telefono) restano <b>nascosti</b> finché non c&apos;è un <b>ordine confermato</b> tra le due aziende: diventano visibili automaticamente dopo il primo ordine.</span>
+                    </div>
+                  )}
 
                   <div style={{ flex: 1, overflowY: "auto", padding: "16px 16px 8px", display: "flex", flexDirection: "column", gap: 8, background: "#fff" }}>
                     {messages === null ? (
