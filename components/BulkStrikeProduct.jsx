@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { Search, ArrowRight, Check, Clock, ChevronDown, ChevronRight, ChevronUp, Star, Shield, Truck, FileText, Download, Plus, Minus, Beaker, TrendingDown, Users, Gavel, Info, ShoppingCart } from "lucide-react";
 import { getProduct, getOpenPoolForProduct, getPriceReference, getProductBreadcrumb, getSession, openPool, upsertCartItem, poolErrorMessage, searchProducts, getCart, isFollowingProduct, getMarketPriceSeries } from "@/lib/api";
@@ -163,7 +163,8 @@ function untilLabel(iso) {
 
 // ─── MAIN ─────────────────────────────────────────────────────────────────────
 export default function ProductPage() {
-  const [qty, setQty] = useState(8000);
+  const [qty, setQty] = useState(0); // inizializzata all'ordine minimo appena caricato il prodotto (vedi effect sotto)
+  const qtyInitRef = useRef(null);   // traccia per quale prodotto la quantità è già stata inizializzata
   const [selectedId, setSelectedId] = useState(null);   // null = auto best (prezzo netto piu basso)
   const [variantFilters, setVariantFilters] = useState({}); // { granulometria: "fine", ... } — un fornitore senza questa esatta variante non compare
   const [selectedFormatIdx, setSelectedFormatIdx] = useState(0); // indice del formato scelto tra quelli del fornitore in evidenza
@@ -334,6 +335,17 @@ export default function ProductPage() {
   })();
 
   const setQtySafe = (v) => setQty(Math.max(minUnits * unitSizeKg, Math.min(200000, v)));
+
+  // Quantità di DEFAULT = ordine minimo del formato di default (non un valore alto
+  // arbitrario). Si (re)imposta una sola volta per prodotto, appena i dati sono
+  // caricati; dopo, le scelte dell'utente (stepper/formato) non vengono sovrascritte.
+  useEffect(() => {
+    if (loading) return;
+    const key = productId || "demo";
+    if (qtyInitRef.current === key) return;
+    qtyInitRef.current = key;
+    setQty(minUnits * unitSizeKg);
+  }, [loading, productId, minUnits, unitSizeKg]);
 
   // ── azioni reali (openPool / upsertCartItem richiedono login → altrimenti /registrati)
   async function requireAuth() {
@@ -508,6 +520,29 @@ export default function ProductPage() {
 
           {/* LEFT COLUMN */}
           <div>
+            {/* POOL NUDGE (compatto) — se l'ordine è ≥ 1 pallet, invito breve ad
+                aprire un'asta a ribasso, in cima alla colonna (all'altezza del box
+                "Andamento prezzo" nella sidebar), non più in fondo dopo la selezione. */}
+            {!pool.exists && canOpenPool && (
+              <div style={{ border:`1.5px solid ${C.purple}44`, background:"linear-gradient(135deg,#FBF7FF,#F3EEFF)", borderRadius:14, padding:"12px 14px", marginBottom:20 }}>
+                <div style={{ display:"flex", gap:10, alignItems:"center", flexWrap:"wrap" }}>
+                  <div style={{ width:34, height:34, borderRadius:9, background:C.purple, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+                    <Gavel size={17} color="#fff"/>
+                  </div>
+                  <div style={{ flex:1, minWidth:150 }}>
+                    <div style={{ fontSize:14, fontWeight:800, lineHeight:1.25 }}>Apri un'asta a ribasso e potresti pagare meno</div>
+                    <div style={{ fontSize:12, color:C.muted, marginTop:1 }}>Risparmio potenziale <b style={{ color:C.green }}>{poolPotential.pct>0?`fino a -${poolPotential.pct}%`:"prezzo in calo"}</b> · {ranked.length} fornitori in gara</div>
+                  </div>
+                  <button onClick={handleOpenPool} disabled={busy || !openAcceptTerms} style={{ background:C.purple, color:"#fff", border:"none", borderRadius:9, padding:"10px 16px", fontSize:13.5, fontWeight:700, cursor:(busy||!openAcceptTerms)?"default":"pointer", opacity:(busy||!openAcceptTerms)?0.5:1, display:"inline-flex", alignItems:"center", gap:6, fontFamily:"Inter,system-ui", flexShrink:0 }}>
+                    <Gavel size={15}/> Apri asta
+                  </button>
+                </div>
+                <label style={{ display:"flex", gap:8, alignItems:"flex-start", marginTop:9, cursor:"pointer" }}>
+                  <input type="checkbox" checked={openAcceptTerms} onChange={e => setOpenAcceptTerms(e.target.checked)} style={{ marginTop:1, width:15, height:15, accentColor:C.purple, flexShrink:0 }}/>
+                  <span style={{ fontSize:11, color:C.muted, lineHeight:1.4 }}>Accetto che la quantità entri nel volume aggregato e che il fornitore sia scelto tra i certificati al prezzo più basso alla chiusura.</span>
+                </label>
+              </div>
+            )}
             {/* QUANTITA NECESSARIA — due passaggi: 1) formato, 2) numero di unita di quel formato */}
             <div style={{ border:`1px solid ${C.border}`, borderRadius:14, padding:20, marginBottom:20, background:C.bg }}>
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16, flexWrap:"wrap", gap:10 }}>
@@ -596,50 +631,6 @@ export default function ProductPage() {
                     <div style={{ display:"flex", gap:12, flexWrap:"wrap", alignItems:"center" }}>
                       <button onClick={goToPool} style={{ background:C.purple, color:"#fff", border:"none", borderRadius:9, padding:"12px 22px", fontSize:14, fontWeight:700, cursor:"pointer", display:"inline-flex", alignItems:"center", gap:7, fontFamily:"Inter,system-ui" }}>
                         <Users size={16}/> {pool.myQuantityKg > 0 ? "Aggiungi un quantitativo all'asta in corso" : "Unisciti all'asta"} <ArrowRight size={15}/>
-                      </button>
-                      <span style={{ fontSize:12, color:C.muted }}>oppure acquista subito qui sotto</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* POOL NUDGE — no active pool yet, but order is large enough to open one */}
-            {!pool.exists && canOpenPool && (
-              <div style={{ border:`1.5px solid ${C.purple}44`, background:"linear-gradient(135deg,#FBF7FF,#F3EEFF)", borderRadius:14, padding:"18px 20px", marginBottom:24 }}>
-                <div style={{ display:"flex", gap:14, alignItems:"flex-start" }}>
-                  <div style={{ width:42, height:42, borderRadius:11, background:C.purple, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
-                    <Gavel size={20} color="#fff"/>
-                  </div>
-                  <div style={{ flex:1, minWidth:0 }}>
-                    <div style={{ fontSize:16, fontWeight:800, marginBottom:4 }}>
-                      Stai acquistando {(qty/1000).toLocaleString("it-IT")}t — apri un'asta a ribasso e potresti pagare meno
-                    </div>
-                    <div style={{ fontSize:14, color:C.muted, lineHeight:1.6, marginBottom:14 }}>
-                      Trasforma il tuo acquisto in un'<b style={{ color:C.text }}>asta a ribasso</b>: altre aziende possono aggregarsi alla tua richiesta e il prezzo <b style={{ color:C.text }}>può solo scendere</b>. {ranked.length} fornitori certificati competono. In cambio, l'ordine si concretizza in <b style={{ color:C.text }}>7 giorni</b> anziché subito.
-                    </div>
-                    <div style={{ display:"flex", gap:18, flexWrap:"wrap", marginBottom:14 }}>
-                      <Fact icon={<TrendingDown size={15} color={C.green}/>} label="Risparmio potenziale" value={poolPotential.pct>0?`fino a -${poolPotential.pct}%`:"prezzo in calo"} />
-                      <Fact icon={<Users size={15} color={C.purple}/>} label="Fornitori in gara" value={`${ranked.length} certificati`} />
-                      <Fact icon={<Clock size={15} color={C.amber}/>} label="Tempi" value="entro 7 giorni" />
-                    </div>
-                    <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:16, flexWrap:"wrap" }}>
-                      <span style={{ fontSize:12, color:C.muted }}>Competono:</span>
-                      {ranked.map(s => (
-                        <span key={s.id} style={{ fontSize:12, color:C.text, display:"flex", alignItems:"center", gap:5, background:"#fff", border:`1px solid ${C.border}`, borderRadius:100, padding:"3px 10px" }}>
-                          <span>{s.flag}</span> <SupplierName name={s.name} companyId={s.company_id} className="bs-suplink"/>
-                        </span>
-                      ))}
-                    </div>
-                    <label style={{ display:"flex", gap:9, alignItems:"flex-start", background:"#fff", border:`1px solid ${C.purple}33`, borderRadius:9, padding:"10px 12px", marginBottom:14, cursor:"pointer" }}>
-                      <input type="checkbox" checked={openAcceptTerms} onChange={e => setOpenAcceptTerms(e.target.checked)} style={{ marginTop:2, width:16, height:16, accentColor:C.purple, flexShrink:0 }}/>
-                      <span style={{ fontSize:12, color:C.muted, lineHeight:1.5 }}>
-                        Aprendo l'asta accetto che la mia quantità entri nel volume aggregato e che il fornitore verrà scelto tra quelli certificati in base al prezzo più basso raggiunto alla chiusura.
-                      </span>
-                    </label>
-                    <div style={{ display:"flex", gap:12, flexWrap:"wrap", alignItems:"center" }}>
-                      <button onClick={handleOpenPool} disabled={busy || !openAcceptTerms} style={{ background:C.purple, color:"#fff", border:"none", borderRadius:9, padding:"12px 22px", fontSize:14, fontWeight:700, cursor:(busy||!openAcceptTerms)?"default":"pointer", opacity:(busy||!openAcceptTerms)?0.5:1, display:"inline-flex", alignItems:"center", gap:7, fontFamily:"Inter,system-ui" }}>
-                        <Gavel size={16}/> Apri un'asta a ribasso con {(qty/1000).toLocaleString("it-IT")}t <ArrowRight size={15}/>
                       </button>
                       <span style={{ fontSize:12, color:C.muted }}>oppure acquista subito qui sotto</span>
                     </div>
