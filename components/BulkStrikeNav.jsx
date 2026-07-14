@@ -20,6 +20,7 @@ const C = { border: "#E2E8F0", text: "#0F172A", muted: "#64748B" };
 const LINKS = [
   ["Aste attive", "/pool"],
   ["Prodotti", "/catalogo"],
+  ["Andamento prezzi", "/andamento-prezzi"],
   ["Fornitori", "/fornitori"],
   ["Corrieri", "/corrieri"],
 ];
