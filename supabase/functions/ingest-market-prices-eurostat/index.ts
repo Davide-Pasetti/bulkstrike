@@ -19,6 +19,10 @@ const NACE: { code: string; label: string }[] = [
   { code: "C244",  label: "Metalli di base preziosi e altri non ferrosi — PPI mercato domestico Italia (Eurostat)" },
   { code: "C2016", label: "Materie plastiche in forme primarie — PPI mercato domestico Italia (Eurostat)" },
   { code: "C20",   label: "Prodotti chimici — PPI mercato domestico Italia (Eurostat)" },
+  { code: "C10",   label: "Industria alimentare — PPI mercato domestico Italia (Eurostat)" },
+  { code: "C19",   label: "Coke e prodotti petroliferi raffinati (lubrificanti/combustibili) — PPI mercato domestico Italia (Eurostat)" },
+  { code: "C21",   label: "Prodotti farmaceutici di base e preparati farmaceutici — PPI mercato domestico Italia (Eurostat)" },
+  { code: "C23",   label: "Altri prodotti della lavorazione di minerali non metalliferi (vetro/ceramica/cemento) — PPI mercato domestico Italia (Eurostat)" },
 ];
 
 const json = (body: unknown, status = 200) =>
