@@ -23,6 +23,7 @@ const NACE: { code: string; label: string }[] = [
   { code: "C19",   label: "Coke e prodotti petroliferi raffinati (lubrificanti/combustibili) — PPI mercato domestico Italia (Eurostat)" },
   { code: "C21",   label: "Prodotti farmaceutici di base e preparati farmaceutici — PPI mercato domestico Italia (Eurostat)" },
   { code: "C23",   label: "Altri prodotti della lavorazione di minerali non metalliferi (vetro/ceramica/cemento) — PPI mercato domestico Italia (Eurostat)" },
+  { code: "C17",   label: "Fabbricazione di carta e prodotti di carta — PPI mercato domestico Italia (Eurostat)" },
 ];
 
 const json = (body: unknown, status = 200) =>
