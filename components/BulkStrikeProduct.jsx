@@ -30,6 +30,8 @@ const SEED_PRODUCT = {
   pallet_kg: 1000,
   container_kg: null,
   auctionRestricted: false,
+  sdsUrl: null,
+  tdsUrl: null,
 };
 
 // price tiers €/kg by volume band [maxKg, price]; shipping = base + perKg*qty
@@ -140,6 +142,9 @@ function mapDbProduct(p) {
     container_kg: p.container_kg ?? null,
     // Divieto d'asta a ribasso per legge (agricoli/alimentari grezzi, D.Lgs. 198/2021).
     auctionRestricted: !!p.auction_restricted_by_law,
+    // Schede documentali (URL pubblici, popolati per CAS). null se non disponibili.
+    sdsUrl: p.scheda_sicurezza_url || null,
+    tdsUrl: p.scheda_tecnica_url || null,
   };
 }
 // da getOpenPoolForProduct() → shape SEED_POOL
@@ -759,6 +764,20 @@ export default function ProductPage() {
                     </div>
                   ))}
                 </div>
+                {/* Schede documentali reali (SDS/TDS): URL pubblici popolati per CAS.
+                    Sempre visibili nella card; disabilitati se il prodotto non ne ha. */}
+                <div style={{ display:"flex", gap:10, marginTop:16, flexWrap:"wrap" }}>
+                  {product.sdsUrl ? (
+                    <a href={product.sdsUrl} target="_blank" rel="noopener noreferrer" className="bs-btn-ghost" style={{ textDecoration:"none" }}><Download size={14}/> Scheda di sicurezza (SDS)</a>
+                  ) : (
+                    <button className="bs-btn-ghost" disabled title="Scheda di sicurezza non disponibile per questo prodotto" style={{ opacity:0.5, cursor:"not-allowed" }}><Download size={14}/> Scheda di sicurezza (SDS)</button>
+                  )}
+                  {product.tdsUrl ? (
+                    <a href={product.tdsUrl} target="_blank" rel="noopener noreferrer" className="bs-btn-ghost" style={{ textDecoration:"none" }}><Download size={14}/> Scheda tecnica (TDS)</a>
+                  ) : (
+                    <button className="bs-btn-ghost" disabled title="Scheda tecnica non disponibile per questo prodotto" style={{ opacity:0.5, cursor:"not-allowed" }}><Download size={14}/> Scheda tecnica (TDS)</button>
+                  )}
+                </div>
               </div>
               {showSpecs && (
                 <div style={{ padding:"4px 20px 8px" }}>
@@ -776,11 +795,8 @@ export default function ProductPage() {
                   ].map(([k,v]) => (
                     <div key={k} className="bs-spec-row"><span style={{ color:C.muted }}>{k}</span><span style={{ fontWeight:600, textAlign:"right" }}>{v}</span></div>
                   ))}
-                  <div style={{ display:"flex", gap:10, marginTop:16, flexWrap:"wrap" }}>
-                    <button className="bs-btn-ghost"><Download size={14}/> Scheda di Sicurezza (SDS)</button>
-                    <button className="bs-btn-ghost"><Download size={14}/> Certificato di Analisi (CoA)</button>
-                    <button className="bs-btn-ghost"><Download size={14}/> Scheda tecnica PDF</button>
-                  </div>
+                  {/* I pulsanti SDS/TDS reali sono ora sempre visibili nella card sopra,
+                      non più qui come placeholder inattivi. */}
                 </div>
               )}
               <button onClick={() => setShowSpecs(!showSpecs)} style={{ width:"100%", padding:"12px", background:"#fff", border:"none", borderTop:`1px solid ${C.border}`, color:C.blue, fontSize:14, fontWeight:600, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:6, fontFamily:"Inter,system-ui" }}>
