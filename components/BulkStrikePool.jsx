@@ -309,6 +309,10 @@ export default function PoolAuctionPage() {
   // di volume al prezzo dell'unico fornitore. Con 2+ fornitori resta l'asta a ribasso.
   // Con 0 fornitori si lascia il comportamento storico (caso non modificato).
   const groupBuy = availableSuppliers === 1;
+  // Il divieto (D.Lgs 198/2021) vieta l'ASTA A RIBASSO, non la domanda aggregata:
+  // mostro l'avviso legale (invece del box pool) SOLO se sarebbe un'asta competitiva
+  // (2+ fornitori). Con 1 fornitore resta l'Acquisto di gruppo, consentito.
+  const auctionBlocked = auctionRestricted && !groupBuy;
   // userQty (kg) resta lo stato reale; palletCount è solo la sua vista in
   // pallet per questo prodotto (usata dalla nota nei "Kg personalizzati").
   const palletCount = Math.max(1, Math.round(userQty / palletKg));
@@ -396,11 +400,11 @@ export default function PoolAuctionPage() {
         <div style={{ display:"flex", justifyContent:"space-between", gap:16, flexWrap:"wrap", marginBottom:20 }}>
           <div>
             <div style={{ display:"flex", gap:8, marginBottom:8, flexWrap:"wrap", alignItems:"center" }}>
-              {!auctionRestricted && (groupBuy
+              {!auctionBlocked && (groupBuy
                 ? <span className="bs-chip" style={{ background:"#EFF6FF", color:C.blue }}><ShoppingCart size={12}/> Acquisto di gruppo · per prodotto</span>
                 : <span className="bs-chip" style={{ background:"#FBF7FF", color:C.purple }}><Gavel size={12}/> Asta a ribasso · per prodotto</span>)}
               {/* Nessun badge "Live" per i prodotti con asta vietata per legge. */}
-              {auctionRestricted
+              {auctionBlocked
                 ? null
                 : concluded
                 ? <span className="bs-chip" style={{ background:"#F1F5F9", color:C.muted }}><Check size={12}/> Asta terminata</span>
@@ -417,7 +421,7 @@ export default function PoolAuctionPage() {
               </div>
             )}
           </div>
-          {auctionRestricted ? null : concluded ? (
+          {auctionBlocked ? null : concluded ? (
             <div style={{ textAlign:"center", background:C.bg, border:`1px solid ${C.border}`, borderRadius:12, padding:"12px 18px" }}>
               <div style={{ fontSize:11, color:C.muted, marginBottom:6, display:"flex", alignItems:"center", gap:4, justifyContent:"center" }}><Check size={12}/> Asta conclusa</div>
               <div className="bs-num" style={{ fontSize:20, fontWeight:800, color:C.text }}>{closedDate || "—"}</div>
@@ -437,9 +441,10 @@ export default function PoolAuctionPage() {
           )}
         </div>
 
-        {auctionRestricted ? (
-          /* Prodotto con asta vietata per legge: pagina minimale, solo l'avviso.
-             Nessuno scheletro d'asta (leve, contatori, offerte, banner). */
+        {auctionBlocked ? (
+          /* Asta competitiva (2+ fornitori) su prodotto ristretto: pagina minimale,
+             solo l'avviso legale. Con 1 fornitore si mostra invece l'Acquisto di
+             gruppo (ramo else), che il divieto non vieta. */
           <div style={{ border:`1px solid ${C.border}`, borderRadius:14, padding:20, marginBottom:28, maxWidth:640, background:C.bg }}>
             <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:8 }}>
               <div style={{ width:34, height:34, borderRadius:"50%", background:"#F1F5F9", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}><Info size={18} color={C.muted}/></div>
@@ -624,8 +629,8 @@ export default function PoolAuctionPage() {
                 </div>
                 <button onClick={cancelTarget} style={{ width:"100%", background:"transparent", color:C.muted, border:`1.5px solid ${C.border}`, borderRadius:10, padding:"12px", fontSize:14, fontWeight:600, cursor:"pointer", fontFamily:"Inter,system-ui" }}>Annulla adesione in attesa</button>
               </>
-            ) : auctionRestricted ? (
-              /* DIVIETO DI LEGGE — agricoli/alimentari grezzi, D.Lgs. 198/2021. */
+            ) : auctionBlocked ? (
+              /* DIVIETO DI LEGGE (asta competitiva 2+ fornitori) — D.Lgs. 198/2021. */
               <>
                 <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:8 }}>
                   <div style={{ width:34, height:34, borderRadius:"50%", background:"#F1F5F9", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}><Info size={18} color={C.muted}/></div>

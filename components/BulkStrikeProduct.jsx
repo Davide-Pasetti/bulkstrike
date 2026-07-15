@@ -333,6 +333,10 @@ export default function ProductPage() {
   // domanda) invece che a un'asta. Con 2+ resta l'asta a ribasso.
   const supplierCount = new Set(suppliers.map(s => s.company_id).filter(Boolean)).size;
   const groupBuy = supplierCount === 1;
+  // Il divieto (D.Lgs 198/2021) vieta l'ASTA A RIBASSO, non la domanda aggregata:
+  // blocca il box pool SOLO quando sarebbe un'asta competitiva (2+ fornitori). Con
+  // 1 fornitore resta l'Acquisto di gruppo (aggregazione a prezzo fisso), consentito.
+  const auctionBlocked = auctionRestricted && !groupBuy;
   // Variazione "da gennaio" (da inizio anno) sul dato REALE: €/kg per gli agri
   // (ISMEA/CUN), indice settoriale per metalli/plastica/chimica (Eurostat). Se
   // non c'è nessun dato reale → null → l'header nasconde la percentuale.
@@ -658,7 +662,7 @@ export default function ProductPage() {
                   <button onClick={handleAddToCart} disabled={busy || !featured} style={{ width:"100%", marginTop:8, background:"transparent", color:C.blue, border:`1.5px solid ${C.blue}`, borderRadius:10, padding:"12px", fontSize:14.5, fontWeight:700, cursor:(busy||!featured)?"default":"pointer", opacity:(busy||!featured)?0.6:1, display:"flex", alignItems:"center", justifyContent:"center", gap:8, fontFamily:"Inter,system-ui" }}><ShoppingCart size={16}/> Aggiungi al carrello</button>
                   {cartOk && <div style={{ marginTop:8, fontSize:12.5, color:C.green, fontWeight:700, display:"flex", alignItems:"center", gap:5 }}><Check size={13}/> Aggiunto! <span onClick={() => { window.location.href = "/carrello"; }} style={{ cursor:"pointer", textDecoration:"underline" }}>Vai al carrello</span></div>}
                   {actionMsg && <div style={{ marginTop:8, fontSize:12, color:C.red, fontWeight:600 }}>{actionMsg}</div>}
-                  {pool.exists && !auctionRestricted && (
+                  {pool.exists && !auctionBlocked && (
                   <div style={{ marginTop:10, fontSize:13 }}>
                     <span style={{ color:C.muted }}>oppure </span>
                     <span onClick={goToPool} style={{ color:groupBuy?C.blue:C.purple, fontWeight:600, cursor:"pointer" }}>{groupBuy ? "c'è un acquisto di gruppo attivo" : "c'è un'asta a ribasso attiva"}: ora {eurKg(pool.bestPrice)}/kg →</span>
@@ -828,8 +832,10 @@ export default function ProductPage() {
                 lì una nuova asta (?product). Contenuto minimale: titolo + bottone. Il
                 bottone è disabilitato SOLO nel caso "apri nuova" quando la quantità è
                 sotto il minimo (1 pallet); per aderire a un'asta attiva resta sempre attivo. */}
-            {auctionRestricted ? (
-              /* DIVIETO DI LEGGE — sostituisce il box asta per agricoli/alimentari grezzi. */
+            {auctionBlocked ? (
+              /* DIVIETO DI LEGGE — sostituisce il box asta per agricoli/alimentari grezzi
+                 SOLO in asta competitiva (2+ fornitori). Con 1 fornitore mostra il box
+                 "Acquisto di gruppo" (ramo else), che il divieto non vieta. */
               <div style={{ border:`1px solid ${C.border}`, borderRadius:14, padding:16, background:C.bg }}>
                 <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:8 }}>
                   <div style={{ width:32, height:32, borderRadius:9, background:"#F1F5F9", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
