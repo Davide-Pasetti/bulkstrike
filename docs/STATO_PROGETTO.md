@@ -1,6 +1,6 @@
 BULKSTRIKE — STATO DEL PROGETTO
 
-Ultimo aggiornamento: 14 luglio 2026 (versione precedente: 13 luglio 2026)
+Ultimo aggiornamento: 15 luglio 2026 (versione precedente: 14 luglio 2026)
 
 Documento di continuità: riassume tutto il progetto per poterlo riprendere
 anche se la chat viene troncata o accorciata. Copia di lavoro nel repo
@@ -81,11 +81,16 @@ prospettiva, da AI/ERP (server MCP e API OpenAPI restano obiettivi futuri).
     per sbloccare gli scaglioni di volume al prezzo fisso dell'unico fornitore
     (niente competizione né "offerte live"/"vince il più economico"). La UI
     cambia in base a get_pool_detail.available_suppliers.
-- DIVIETO DI LEGGE SUGLI AGRICOLI GREZZI (dal 13-14/7): i 5 cereali grezzi
-  (Grano tenero/duro, Granoturco, Orzo, Risone) NON possono essere oggetto di
-  asta a doppio ribasso (Dir. UE 2019/633; D.Lgs. 198/2021 art. 5 c.1 lett. a):
-  flag products.auction_restricted_by_law, blocco lato server su open_pool/
-  join_pool/join_pool_at_target, avviso legale in UI, resta solo Acquisto Rapido.
+- DIVIETO DI LEGGE SUGLI AGRICOLI GREZZI (dal 13-14/7, RAFFINATO il 15/7): i
+  cereali grezzi (Grano tenero/duro, Granoturco, Orzo, Risone) + dal 15/7 anche
+  Semi di soia e Farina di estrazione di soia NON possono essere oggetto di ASTA
+  A RIBASSO (Dir. UE 2019/633; D.Lgs. 198/2021 art. 5 c.1 lett. a): flag
+  products.auction_restricted_by_law. NB (15/7): il divieto NON riguarda la
+  domanda aggregata — l'ACQUISTO DI GRUPPO (aggregazione su UN solo fornitore a
+  prezzo fisso) è legittimo. open_pool/join_pool/join_pool_at_target bloccano ora
+  SOLO se il prodotto ristretto ha 2+ fornitori distinti (asta competitiva); con
+  1 fornitore l'acquisto di gruppo passa. UI: auctionBlocked = auctionRestricted
+  && !groupBuy. Da validare con l'avvocato (modello + Farina soia derivato/mangime).
 - ALERT: pilastro del prodotto (asta / prezzo / nuovo fornitore / in chiusura /
   richiesta / superato). Alert-asta ON di default.
 - Niente finanza/factoring; nessun interesse sul float (vincoli PSD2).
@@ -102,12 +107,20 @@ prospettiva, da AI/ERP (server MCP e API OpenAPI restano obiettivi futuri).
 - Scheduling: pg_cron nel DB. Job attivi: tick aste ogni minuto (bs_close_pools,
   bs_closing_soon, bs_finalize_pools, bs_target_joins_closing_soon), auto-release
   consegne alle 3:00; ingest prezzi ISMEA (gio 19:00 UTC), CUN (lun 18:00 UTC)
-  e indici Eurostat (giorno 8 del mese, 06:00 UTC) via net.http_post con
-  x-cron-secret.
+  e indici Eurostat (giorno 8 del mese, 06:00 UTC); watchdog freschezza pipeline
+  (ven 08:00 UTC, dal 15/7) via net.http_post con x-cron-secret.
 - Edge functions Supabase: ai-assistant (assistente AI con azioni + chat di
-  supporto, Claude API), ingest-market-prices-ismea, ingest-market-prices-cun,
-  ingest-market-prices-eurostat (indici PPI, JSON-stat, mensile), order-qr,
-  send-delivery-confirmation (email).
+  supporto, Claude API), ingest-market-prices-ismea (dal 15/7 anche semi oleosi:
+  soia origine IDPagina/924 + farina soia ingrosso IDPagina/1199), ingest-market-
+  prices-cun, ingest-market-prices-eurostat (indici PPI, JSON-stat, mensile, 9
+  NACE dal 14-15/7), order-qr, send-delivery-confirmation (email), ingest-watchdog
+  (dal 15/7: controlla la freschezza di ISMEA/CUN/Eurostat, email di allarme a
+  davide@bulkstrike.com via Resend SOLO se una fonte è in ritardo — ISMEA/CUN >8
+  gg, Eurostat >35 gg; ?test=1 forza l'invio).
+- SECRET EMAIL (15/7): RESEND_API_KEY impostata come secret Edge Function (prima
+  mancava → l'invio email non partiva). FROM_EMAIL non è secret: le function usano
+  il fallback "BulkStrike <ordini@updates.bulkstrike.com>". Ora funzionano sia il
+  watchdog sia la conferma di consegna. RESEND_API_KEY è un PREREQUISITO OPERATIVO.
 - Supabase Storage: bucket pubblico "marketing" (video di presentazione della
   home). CSP estesa con media-src per il dominio Supabase.
 - EMAIL: provider = RESEND. Oggi l'unico invio reale è la conferma di consegna
@@ -130,20 +143,35 @@ prospettiva, da AI/ERP (server MCP e API OpenAPI restano obiettivi futuri).
   get_taxonomy e usato ovunque (menu, catalogo, filtri).
 - Prodotto canonico con attributo "grado" (tecnico/alimentare/farma).
 - SCHEDE SDS/TDS: campi products.scheda_sicurezza_url / scheda_tecnica_url.
-  Import del 14/7 dal CSV BulkStrike (match per CAS): 358 prodotti coperti,
-  357 con SDS e 294 con TDS (i campi vuoti nel CSV lasciati null). Migrazioni
-  import_sds_tds_batch_1..5.
-- MATERIE PRIME AGRICOLE — prezzi €/kg reali per prodotto: market_price_history
-  (147 righe: ISMEA su 4 prodotti + CUN Grano Duro; 5 prodotti agricoli).
-  Ingest settimanale via pg_cron + edge functions; CUN estratto dal PDF di
-  listinicun.it via AI.
-- INDICI DI TENDENZA SETTORIALE (dal 13-14/7) — Eurostat PPI mercato domestico
-  Italia, per settore NACE: market_index_history (212 righe, 4 serie: C241
-  siderurgici, C244 metalli non ferrosi, C2016 plastiche/resine grezze, C20
-  chimica). Mappatura via flag products.market_index_nace (119 prodotti).
-  Sono INDICI di tendenza (base 2021=100), NON prezzi €/kg per prodotto: vanno
-  sempre etichettati come "indice di settore — fonte Eurostat" con la dicitura
-  informativa. Ingest mensile via edge function ingest-market-prices-eurostat.
+  Import iniziale 14/7 per CAS; RI-SYNC del 15/7 dal CSV BulkStrike (match per
+  NOME canonical_name, più affidabile: il CAS ha duplicati/refusi): 357 con SDS,
+  294 con TDS. Il match-per-nome ha corretto i prodotti con CAS condiviso ma
+  distinti (es. Carbone GAC/enologico/vegetale, Carbonato di calcio x3) che prima
+  avevano link identici. Migrazione resync_sds_tds_by_name (mai azzerato un URL
+  esistente). I pulsanti SDS/TDS in pagina prodotto sono LIVE.
+- SPECIFICHE TECNICHE (dal 15/7): tabella product_specs (formato long: id,
+  product_id FK, campo, valore, ordine; RLS lettura pubblica). 2931 righe importate
+  dal CSV BulkStrike_Specifiche (match per nome), 332 prodotti; 26 prodotti
+  "Nessun dato" lasciati senza specifiche (mostrano messaggio dedicato). Import in
+  forma BASE64 byte-fedele (guard MD5) per preservare l'Unicode (micro sign U+00B5
+  vs mu greca U+03BC, en-dash, apici, ≥/≤). Il pannello "scheda tecnica completa"
+  in pagina prodotto ora renderizza le righe reali (non più campi finti hardcoded);
+  empty-state "Scheda tecnica dettagliata non disponibile" se 0 righe. Migrazioni
+  create_product_specs + import_product_specs_batch1..4.
+- MATERIE PRIME AGRICOLE — prezzi €/kg reali per prodotto: market_price_history.
+  ISMEA su cereali + CUN Grano Duro; dal 15/7 aggiunti i SEMI OLEOSI (Semi di
+  soia 0,44-0,45 €/kg; Farina di estrazione di soia 0,37-0,40 €/kg) dalle pagine
+  ISMEA semi oleosi. Ora 7 prodotti con prezzo diretto. Sorgo NON quotato ISMEA
+  (resta senza prezzo diretto). Ingest settimanale; CUN estratto dal PDF via AI.
+- INDICI DI TENDENZA SETTORIALE (13-15/7) — Eurostat PPI mercato domestico Italia:
+  market_index_history, ora 9 serie NACE (C241 siderurgici, C244 non ferrosi,
+  C2016 plastiche, C20 chimica, + dal 14-15/7 C10 alimentare, C19 coke/petroliferi,
+  C21 farmaceutico, C23 minerali non metalliferi, C17 carta). Mappatura via
+  products.market_index_nace (Tranche 1-3 del 14-15/7). COPERTURA TOTALE:
+  617/618 prodotti tracciati (99,8%) = 7 con prezzo diretto €/kg + 610 con indice
+  Eurostat; 1 solo scoperto (Sorgo, non quotato ISMEA). Sono INDICI (base
+  2021=100), NON prezzi €/kg: sempre etichettati "indice di settore — fonte
+  Eurostat". Ingest mensile.
 - Formati di vendita per prodotto (sacco/pallet/container kg + minimo pool)
   editabili dal pannello admin prodotti.
 
@@ -291,15 +319,16 @@ prospettiva, da AI/ERP (server MCP e API OpenAPI restano obiettivi futuri).
 12. STATO ATTUALE E PROSSIMI PASSI
 ================================================================
 
-FATTO (fino al 14/7): piattaforma live su bulkstrike.com; catalogo 618
-prodotti/13 macro-aree (riordinate) con schede SDS/TDS importate; motore aste
-completo con formati e minimo configurabile; distinzione Asta a ribasso /
-Acquisto di gruppo; divieto asta agricoli (DB+UI+server); pipeline prezzi
-ISMEA/CUN (€/kg agri) + indici settoriali Eurostat (metalli/plastica/chimica);
-pagina Andamento prezzi (screener + grafico a due linee); home con dati reali,
-Market Intelligence e video di presentazione; mascheramento contatti in
-messaggistica e profilo fornitore; bandiere paese SVG; Stripe Fase 1 (pay-in
-escrow on-session) funzionante in test mode + precompilazione fatturazione.
+FATTO (fino al 15/7): piattaforma live su bulkstrike.com; catalogo 618
+prodotti/13 macro-aree con SDS/TDS (ri-sync per nome) e pulsanti SDS/TDS live;
+SPECIFICHE TECNICHE per prodotto (product_specs, 2931 righe, pannello dinamico);
+motore aste completo; distinzione Asta a ribasso / Acquisto di gruppo; divieto
+asta agricoli RAFFINATO (consente l'acquisto di gruppo con 1 fornitore); pipeline
+prezzi ISMEA/CUN €/kg (cereali + semi oleosi/soia) + indici Eurostat su 9 NACE
+(copertura 617/618 = 99,8%); pagina Andamento prezzi; home con dati reali; Market
+Intelligence; mascheramento contatti; bandiere paese SVG; WATCHDOG freschezza
+pipeline con email di allarme (Resend, ven 08:00); RESEND_API_KEY configurata;
+Stripe Fase 1 (pay-in escrow on-session) in test mode + precompilazione fatturazione.
 
 PROSSIMI PASSI (in ordine):
 1) Stripe: verificare in test il ciclo pending_payment→paid sull'ordine-cavia
@@ -309,11 +338,20 @@ PROSSIMI PASSI (in ordine):
    off_session alla chiusura; onboarding Connect fornitori/corrieri; cron
    releaseFunds.
 3) Drainer automatico di emails_outbox via Resend (oggi le email transazionali
-   si accodano ma non partono, salvo conferma consegna manuale).
-4) Pipeline prezzi: estendere copertura (altre fonti CUN, semi oleosi;
-   ampliare la mappatura NACE oltre i 119 prodotti attuali).
+   si accodano ma non partono, salvo conferma consegna manuale). NB: RESEND_API_KEY
+   ora è impostata, quindi il drainer potrà spedire davvero.
+4) Pipeline prezzi (copertura quasi completa): resta scoperto solo il Sorgo;
+   valutare fonte prezzo per gli altri semi oleosi (girasole) e altri agricoli;
+   Fase C (NACE più specifici es. C204 cosmetica/detergenza se Eurostat li espone).
 5) CSP: script-src enforcing con nonce; migrazione eslint-config-next 15→16.
 6) Versionare il DDL WhatsApp; collegare il billing abbonamenti a Stripe.
 7) Correggere la pagina /legale (Railway → stack reale + sub-responsabili).
-8) Validazione avvocato + commercialista PRIMA del lancio commerciale (incluso
-   il modello commissioni 5% e la conformità D.Lgs. 198/2021).
+8) Validazione avvocato + commercialista PRIMA del lancio commerciale (modello
+   commissioni 5%; conformità D.Lgs. 198/2021 incluso il modello "acquisto di
+   gruppo consentito" e la Farina di estrazione soia come derivato/mangime).
+9) Fuori scope segnalato: il campo "Forma" nell'intestazione scheda prodotto mostra
+   "Polvere / granulare" anche per i gas (default del mapper su default_unit) — da
+   sistemare a parte.
+10) Documenti Google Drive: esistono versioni aggiornate (_v2/_v3/_v1.3 create il
+   14/7); le vecchie versioni superate vanno cancellate a mano da Davide, e le ~25
+   copie di codice sparse su Drive sono obsolete (fonte di verità = repo).
