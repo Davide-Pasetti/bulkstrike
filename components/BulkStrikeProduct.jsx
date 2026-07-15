@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { Search, ArrowRight, Check, Clock, ChevronDown, ChevronRight, ChevronUp, Star, Shield, Truck, FileText, Download, Plus, Minus, Beaker, TrendingDown, Users, Gavel, Info, ShoppingCart } from "lucide-react";
-import { getProduct, getOpenPoolForProduct, getPriceReference, getProductBreadcrumb, getSession, openPool, upsertCartItem, poolErrorMessage, searchProducts, getCart, isFollowingProduct, getMarketPriceSeries, getMarketIndexSeries } from "@/lib/api";
+import { getProduct, getOpenPoolForProduct, getPriceReference, getProductBreadcrumb, getSession, openPool, upsertCartItem, poolErrorMessage, searchProducts, getCart, isFollowingProduct, getMarketPriceSeries, getMarketIndexSeries, getProductSpecs } from "@/lib/api";
 import PriceSourceNote from "@/components/PriceSourceNote";
 import CountryFlag from "@/components/CountryFlag";
 import { ytdChange } from "@/lib/priceTrend";
@@ -188,6 +188,7 @@ export default function ProductPage() {
   // loader, il demo non viene mai dipinto; l'effect spegne subito il loader
   // se l'URL non ha alcun id.
   const [product, setProduct] = useState(SEED_PRODUCT);
+  const [specs, setSpecs] = useState([]); // specifiche tecniche reali (product_specs)
   const [suppliers, setSuppliers] = useState(SEED_SUPPLIERS);
   const [pool, setPool] = useState(SEED_POOL);
   const [qa, setQa] = useState(SEED_QA);
@@ -234,14 +235,16 @@ export default function ProductPage() {
     getMarketIndexSeries(id).then(setIndexSeries).catch(() => setIndexSeries(null));
     (async () => {
       try {
-        const [p, op, ref, bc] = await Promise.all([
+        const [p, op, ref, bc, sp] = await Promise.all([
           getProduct(id),
           getOpenPoolForProduct(id).catch(() => null),
           getPriceReference(id).catch(() => null),
           getProductBreadcrumb(id).catch(() => null),
+          getProductSpecs(id).catch(() => []),
         ]);
         if (p) {
           setProduct(mapDbProduct(p));
+          setSpecs(sp || []);
           setSuppliers((p.suppliers || []).map(mapDbSupplier));
           setPriceRef(ref != null ? Number(ref) : null);
           setPool(mapDbPool(op));
@@ -785,22 +788,18 @@ export default function ProductPage() {
               </div>
               {showSpecs && (
                 <div style={{ padding:"4px 20px 8px" }}>
-                  {[
-                    ["Formula molecolare", product.formula],
-                    ["Peso molecolare", product.mw],
-                    ["Rotazione ottica", "+12,0° a +13,0° (soluzione 20%)"],
-                    ["Perdita all'essiccamento", "≤ 0,5%"],
-                    ["Residuo all'incenerimento (solfati)", "≤ 0,1%"],
-                    ["Metalli pesanti (come Pb)", "≤ 10 mg/kg"],
-                    ["Arsenico", "≤ 3 mg/kg"],
-                    ["Conformità", "Reg. (UE) 231/2012 · Codex OIV · FCC"],
-                    ["Packaging disponibile", "Sacchi 25 kg · Big bag 500/1000 kg"],
-                    ["Shelf life", "36 mesi se conservato in luogo asciutto"],
-                  ].map(([k,v]) => (
-                    <div key={k} className="bs-spec-row"><span style={{ color:C.muted }}>{k}</span><span style={{ fontWeight:600, textAlign:"right" }}>{v}</span></div>
-                  ))}
-                  {/* I pulsanti SDS/TDS reali sono ora sempre visibili nella card sopra,
-                      non più qui come placeholder inattivi. */}
+                  {/* Specifiche REALI da product_specs (una riga per campo, ordinate).
+                      Sostituiscono i vecchi campi fissi/inventati. Se il prodotto non
+                      ha specifiche (incl. i "Nessun dato"), messaggio dedicato. */}
+                  {specs.length > 0 ? (
+                    specs.map((s, i) => (
+                      <div key={i} className="bs-spec-row"><span style={{ color:C.muted }}>{s.campo}</span><span style={{ fontWeight:600, textAlign:"right" }}>{s.valore}</span></div>
+                    ))
+                  ) : (
+                    <div style={{ fontSize:13, color:C.muted, padding:"10px 0 6px", lineHeight:1.55 }}>
+                      Scheda tecnica dettagliata non disponibile per questo prodotto.
+                    </div>
+                  )}
                 </div>
               )}
               <button onClick={() => setShowSpecs(!showSpecs)} style={{ width:"100%", padding:"12px", background:"#fff", border:"none", borderTop:`1px solid ${C.border}`, color:C.blue, fontSize:14, fontWeight:600, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:6, fontFamily:"Inter,system-ui" }}>
