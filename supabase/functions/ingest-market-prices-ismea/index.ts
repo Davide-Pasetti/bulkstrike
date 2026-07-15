@@ -51,12 +51,23 @@ q1p8oZFA+OBcz3FYWpDIe5j0NWKlw9hXsTyPY/HeZUV59akskSOSRSmDfe8wJDPX
 const FONTE = "ISMEA";
 // Fonti ISMEA (tabelle HTML server-rendered a URL stabile). Cereali origine copre
 // grano tenero (3 gradi), mais, orzo, riso/risone. Il grano duro ha fonte propria
-// (CUN, edge function dedicata). La soia (semi oleosi) verrà aggiunta come sorgente
-// separata una volta pinnato l'endpoint. Il sorgo non è coperto da ISMEA.
+// (CUN, edge function dedicata). Semi oleosi: origine quota la Soia (= Semi di soia),
+// ingrosso farine quota la Farina di soia (= Farina di estrazione di soia); entrambi
+// sono già nel settore cereali-seminativi con i sinonimi giusti. Il sorgo NON è
+// quotato da ISMEA (resta senza prezzo diretto). Tutte le tabelle hanno lo stesso
+// formato "Prezzi per piazza" (Piazza|Data|Prodotto|Prezzo|Var.|Condizione), €/T.
 const SOURCES = [
   {
     url: "https://www.ismeamercati.it/flex/cm/pages/ServeBLOB.php/L/IT/IDPagina/849",
     descr: "ISMEA · Cereali · Prezzi per piazza · Origine",
+  },
+  {
+    url: "https://www.ismeamercati.it/flex/cm/pages/ServeBLOB.php/L/IT/IDPagina/924",
+    descr: "ISMEA · Semi oleosi · Prezzi per piazza · Origine",
+  },
+  {
+    url: "https://www.ismeamercati.it/flex/cm/pages/ServeBLOB.php/L/IT/IDPagina/1199",
+    descr: "ISMEA · Semi oleosi · Prezzi ingrosso · Farine",
   },
 ];
 
@@ -95,6 +106,7 @@ Per OGNI riga che corrisponde a uno dei prodotti forniti, restituisci un oggetto
 Regole:
 - Mappa SOLO i prodotti NAZIONALI ai product_id forniti: IGNORA le righe con "estero"/"Comunitario"/"Extracomunitario" (sono importazioni, non i nostri prodotti nazionali).
 - IGNORA il FRUMENTO DURO / grano duro (ha una fonte dedicata separata, non è tra i prodotti forniti).
+- Sulle pagine dei SEMI OLEOSI: mappa "Soia" (origine) a Semi di soia e "Farina di soia" (ingrosso) a Farina di estrazione di soia; IGNORA Colza e Girasole se non sono tra i prodotti forniti.
 - IGNORA le righe che non corrispondono a nessun prodotto fornito.
 - IGNORA righe senza un prezzo numerico.
 - Usa il punto come separatore decimale.
