@@ -8,7 +8,7 @@ import { getSupplierProfile, getSession, upsertCartItem, poolErrorMessage, getSu
 import BulkStrikeNav from "@/components/BulkStrikeNav";
 import LoginGate from "@/components/BulkStrikeLoginGate";
 import { BSIcon } from "@/components/BSLogo";
-import { IvaChip } from "@/components/BulkStrikeBadges";
+import { IvaChip, SupplierTypeBadge } from "@/components/BulkStrikeBadges";
 import CountryFlag from "@/components/CountryFlag";
 
 const C = { blue:"#0EA5E9", dark:"#0284C7", text:"#0F172A", muted:"#64748B", border:"#E2E8F0", bg:"#F8FAFE", green:"#059669", red:"#DC2626", amber:"#D97706", purple:"#7C3AED" };
@@ -276,7 +276,11 @@ export default function SupplierPage() {
             </div>
             <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:14, flexWrap:"wrap" }}>
               <div>
-                <h1 style={{ fontSize:30, fontWeight:800, letterSpacing:"-0.02em", marginBottom:6 }}>{profile.name}</h1>
+                <h1 style={{ display:"flex", alignItems:"center", gap:10, fontSize:30, fontWeight:800, letterSpacing:"-0.02em", marginBottom:6 }}>
+                  <CountryFlag code={profile.country_iso2} country={profile.country} size={20} />
+                  <span>{profile.name}</span>
+                  <SupplierTypeBadge type={profile.supplier_type} size={20} />
+                </h1>
                 <div style={{ display:"flex", alignItems:"center", gap:14, fontSize:13.5, color:C.muted, flexWrap:"wrap" }}>
                   <span className="bs-suplink" onClick={() => reviewsRef.current?.scrollIntoView({ behavior:"smooth", block:"start" })} style={{ display:"flex", alignItems:"center", gap:6, cursor:"pointer" }}>
                     <Stars value={profile.rating} /> <b style={{ color:C.text }}>{profile.rating != null ? Number(profile.rating).toFixed(1) : "—"}</b> <span style={{ textDecoration:"underline" }}>({profile.reviews_count ?? 0} recensioni)</span>

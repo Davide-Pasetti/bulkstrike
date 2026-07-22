@@ -18,6 +18,8 @@ import {
   adminGetSupplierDetail,
 } from "@/lib/api";
 import BulkStrikeNav from "@/components/BulkStrikeNav";
+import CountryFlag from "@/components/CountryFlag";
+import { SupplierTypeBadge } from "@/components/BulkStrikeBadges";
 
 const C = { blue: "#0EA5E9", text: "#0F172A", muted: "#64748B", border: "#E2E8F0", bg: "#F8FAFE", green: "#059669", red: "#DC2626", amber: "#D97706", purple: "#7C3AED" };
 const GRID = "26px 1.5fr 1fr 80px 96px 92px 58px 84px 26px";
@@ -229,7 +231,11 @@ export default function AdminSuppliersPage({ inShell = false }) {
                 <input type="checkbox" checked={on} onChange={() => toggleOne(row.id)} onClick={e => e.stopPropagation()} aria-label={`Seleziona ${row.legal_name}`}
                   style={{ width: 16, height: 16, accentColor: C.blue, cursor: "pointer" }} />
                 <div style={{ minWidth: 0 }}>
-                  <div style={{ fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{row.legal_name}</div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+                    <CountryFlag code={row.country_iso2} country={row.country} size={12} />
+                    <span style={{ fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{row.legal_name}</span>
+                    <SupplierTypeBadge type={row.supplier_type} />
+                  </div>
                   {row.europages_url && (
                     <a href={row.europages_url} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
                       style={{ fontSize: 12, color: C.blue, textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 4, marginTop: 2 }}>

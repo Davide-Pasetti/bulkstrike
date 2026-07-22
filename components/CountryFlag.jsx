@@ -14,9 +14,23 @@ const ISO_BY_NAME = {
   "Italia": "IT", "Cina": "CN", "Argentina": "AR", "Polonia": "PL", "Francia": "FR",
   "Germania": "DE", "Spagna": "ES", "Paesi Bassi": "NL", "India": "IN",
   "Stati Uniti": "US", "Turchia": "TR", "Belgio": "BE", "Austria": "AT",
+  // Aggiunti con i lead europei di luglio 2026.
+  "Svizzera": "CH", "Regno Unito": "GB", "Norvegia": "NO", "Finlandia": "FI",
+  "Irlanda": "IE", "Danimarca": "DK", "Slovenia": "SI", "Lussemburgo": "LU",
+  "Ungheria": "HU", "Svezia": "SE",
 };
 // Codice ISO → nome italiano (per aria-label quando arriva già l'ISO)
 const NAME_BY_ISO = Object.fromEntries(Object.entries(ISO_BY_NAME).map(([n, i]) => [i, n]));
+
+// Croce scandinava: barra verticale spostata verso il battente, barra
+// orizzontale centrata. Riutilizzata da DK/NO/FI/SE (stessa geometria, colori
+// diversi); NO la usa due volte, bianca sotto e blu sopra.
+const NordicCross = ({ fill, w = 6 }) => (
+  <g fill={fill}>
+    <rect x={21 - w / 2} y="0" width={w} height="40" />
+    <rect x="0" y={20 - w / 2} width="60" height={w} />
+  </g>
+);
 
 // Stella a 5 punte (raggio unitario), riutilizzata da CN/TR.
 const Star = ({ cx, cy, r, rot = 0, fill = "#FFDE00" }) => (
@@ -54,6 +68,28 @@ const FLAGS = {
     </>
   ),
   TR: <><rect width="60" height="40" fill="#E30A17" /><circle cx="24" cy="20" r="9" fill="#fff" /><circle cx="27.5" cy="20" r="7.2" fill="#E30A17" /><Star cx="37" cy="20" r="4.2" rot={18} fill="#fff" /></>,
+  // Croci scandinave
+  DK: <><rect width="60" height="40" fill="#C8102E" /><NordicCross fill="#fff" /></>,
+  FI: <><rect width="60" height="40" fill="#fff" /><NordicCross fill="#003580" /></>,
+  SE: <><rect width="60" height="40" fill="#006AA7" /><NordicCross fill="#FECC00" /></>,
+  NO: <><rect width="60" height="40" fill="#BA0C2F" /><NordicCross fill="#fff" w={9} /><NordicCross fill="#00205B" w={3.6} /></>,
+  // Croce svizzera (bandiera reale quadrata: qui adattata al riquadro 3:2)
+  CH: <><rect width="60" height="40" fill="#FF0000" /><rect x="26.5" y="9" width="7" height="22" fill="#fff" /><rect x="19.5" y="16" width="21" height="8" fill="#fff" /></>,
+  // Tricolori
+  IE: <><rect width="60" height="40" fill="#fff" /><rect width="20" height="40" fill="#169B62" /><rect x="40" width="20" height="40" fill="#FF883E" /></>,
+  HU: <><rect width="60" height="40" fill="#fff" /><rect width="60" height="13.34" fill="#CD2A3E" /><rect y="26.67" width="60" height="13.33" fill="#436F4D" /></>,
+  LU: <><rect width="60" height="40" fill="#fff" /><rect width="60" height="13.34" fill="#ED2939" /><rect y="26.67" width="60" height="13.33" fill="#00A1DE" /></>,
+  SI: <><rect width="60" height="40" fill="#fff" /><rect y="13.34" width="60" height="13.33" fill="#005CE6" /><rect y="26.67" width="60" height="13.33" fill="#ED1C24" /></>,
+  // Union Jack semplificata: diagonali bianche e rosse + croce di San Giorgio.
+  GB: (
+    <>
+      <rect width="60" height="40" fill="#012169" />
+      <path d="M0,0 60,40 M60,0 0,40" stroke="#fff" strokeWidth="8" />
+      <path d="M0,0 60,40 M60,0 0,40" stroke="#C8102E" strokeWidth="4" />
+      <path d="M30,0 30,40 M0,20 60,20" stroke="#fff" strokeWidth="13" />
+      <path d="M30,0 30,40 M0,20 60,20" stroke="#C8102E" strokeWidth="8" />
+    </>
+  ),
 };
 
 export function countryToIso(v) {

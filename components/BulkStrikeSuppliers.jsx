@@ -10,6 +10,7 @@ import BulkStrikeNav from "@/components/BulkStrikeNav";
 import LoginGate from "@/components/BulkStrikeLoginGate";
 import { BSIcon } from "@/components/BSLogo";
 import CountryFlag from "@/components/CountryFlag";
+import { SupplierTypeBadge } from "@/components/BulkStrikeBadges";
 
 const C = { blue:"#0EA5E9", dark:"#0284C7", text:"#0F172A", muted:"#64748B", border:"#E2E8F0", bg:"#F8FAFE", green:"#059669", red:"#DC2626", amber:"#D97706" };
 
@@ -253,12 +254,19 @@ export default function SuppliersDirectory() {
                             : <span style={{ fontSize:17, fontWeight:900, color:C.blue }}>{initials}</span>}
                         </div>
                         <div style={{ minWidth:0 }}>
+                          {/* Bandiera e nome restano nello stesso flusso: se il nome
+                              va a capo, la bandiera lo segue invece di restare da sola
+                              su una riga sopra. */}
                           <div style={{ display:"flex", alignItems:"center", gap:6, flexWrap:"wrap" }}>
-                            <span style={{ fontSize:15.5, fontWeight:800, lineHeight:1.2 }}>{f.name}</span>
+                            <span style={{ fontSize:15.5, fontWeight:800, lineHeight:1.3 }}>
+                              <CountryFlag code={f.country_iso2} country={f.country} size={13} style={{ marginRight:6 }} />
+                              {f.name}
+                            </span>
+                            <SupplierTypeBadge type={f.supplier_type} />
                             {f.status === "verified" && <ShieldCheck size={14} color={C.green}/>}
                           </div>
                           <div style={{ fontSize:12.5, color:C.muted, marginTop:2 }}>
-                            {TYPE_LABEL[f.supplier_type] || f.supplier_type} · <CountryFlag country={f.country} /> {f.country}{f.city ? ` · ${f.city}` : ""}
+                            {TYPE_LABEL[f.supplier_type] || f.supplier_type} · {f.country}{f.city ? ` · ${f.city}` : ""}
                           </div>
                         </div>
                       </div>
