@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
-import { Search, ArrowRight, Check, Clock, ChevronDown, ChevronRight, ChevronUp, Star, Shield, Truck, FileText, Download, Plus, Minus, Beaker, TrendingDown, Users, Gavel, Info, ShoppingCart } from "lucide-react";
-import { getProduct, getOpenPoolForProduct, getPriceReference, getProductBreadcrumb, getSession, openPool, upsertCartItem, poolErrorMessage, searchProducts, getCart, isFollowingProduct, getMarketPriceSeries, getMarketIndexSeries, getProductSpecs } from "@/lib/api";
+import { Search, ArrowRight, Check, Clock, ChevronDown, ChevronRight, ChevronUp, Star, Shield, Truck, FileText, Download, Plus, Minus, Beaker, TrendingDown, Users, Gavel, Info, ShoppingCart, Factory, ExternalLink } from "lucide-react";
+import { getProduct, getOpenPoolForProduct, getPriceReference, getProductBreadcrumb, getSession, openPool, upsertCartItem, poolErrorMessage, searchProducts, getCart, isFollowingProduct, getMarketPriceSeries, getMarketIndexSeries, getProductSpecs, getProductCandidateSuppliers } from "@/lib/api";
 import PriceSourceNote from "@/components/PriceSourceNote";
 import CountryFlag from "@/components/CountryFlag";
 import { ytdChange } from "@/lib/priceTrend";
@@ -164,6 +164,26 @@ function suggestSupplierMailto(productName) {
   ].join("\n");
   return `mailto:${SUGGEST_SUPPLIER_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 }
+// La stessa azienda può essere stata censita più volte (una per settore), quindi
+// tornare duplicata: si tiene una riga per (ragione sociale, sito).
+function dedupeCandidates(list) {
+  const seen = new Set();
+  return (list || []).filter(c => {
+    const key = `${(c.legal_name || "").trim().toLowerCase()}|${(c.website || "").trim().toLowerCase()}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+// I siti in anagrafica sono spesso senza protocollo ("www.basf.com"): senza
+// https:// il browser lo tratterebbe come percorso relativo di bulkstrike.com.
+function normalizeUrl(website) {
+  const s = (website || "").trim();
+  if (!s) return null;
+  return /^https?:\/\//i.test(s) ? s : `https://${s}`;
+}
+
 // da getOpenPoolForProduct() → shape SEED_POOL
 function mapDbPool(pool) {
   if (!pool) return { exists:false, id:null, bestPrice:0, current:0, companies:0, suppliers:0, closesIn:"", myQuantityKg:0 };
@@ -223,6 +243,9 @@ export default function ProductPage() {
   const [searchQ, setSearchQ] = useState("");
   const [searchResults, setSearchResults] = useState([]);
   const [searchOpen, setSearchOpen] = useState(false);
+  // Aziende censite dalla nostra ricerca che vendono il prodotto ma non sono su
+  // BulkStrike: nessun prezzo, nessun acquisto in piattaforma, solo segnalazione.
+  const [candidates, setCandidates] = useState([]);
   const [cartSupplierIds, setCartSupplierIds] = useState(new Set()); // fornitori già presenti nel tuo carrello → spedizione si consolida
   useEffect(() => { if (productId) isFollowingProduct(productId).then(setFollowingProduct).catch(() => {}); }, [productId]);
 
@@ -252,16 +275,18 @@ export default function ProductPage() {
     getMarketIndexSeries(id).then(setIndexSeries).catch(() => setIndexSeries(null));
     (async () => {
       try {
-        const [p, op, ref, bc, sp] = await Promise.all([
+        const [p, op, ref, bc, sp, cand] = await Promise.all([
           getProduct(id),
           getOpenPoolForProduct(id).catch(() => null),
           getPriceReference(id).catch(() => null),
           getProductBreadcrumb(id).catch(() => null),
           getProductSpecs(id).catch(() => []),
+          getProductCandidateSuppliers(id).catch(() => []),
         ]);
         if (p) {
           setProduct(mapDbProduct(p));
           setSpecs(sp || []);
+          setCandidates(dedupeCandidates(cand));
           setSuppliers((p.suppliers || []).map(mapDbSupplier));
           setPriceRef(ref != null ? Number(ref) : null);
           setPool(mapDbPool(op));
@@ -788,6 +813,50 @@ export default function ProductPage() {
                     >Segnalacelo</a>{" "}
                     e lo contattiamo noi.
                   </div>
+                </div>
+              </div>
+            )}
+
+            {/* FORNITORI INDIVIDUATI — aziende censite dalla nostra ricerca che
+                vendono il prodotto ma non sono su BulkStrike. Complementare al
+                banner qui sopra, non alternativa: il banner resta anche quando
+                questa sezione c'è, perché servono a due cose diverse (segnalarci
+                un fornitore nuovo vs contattarne uno già individuato). */}
+            {candidates.length > 0 && (
+              <div style={{ border: `1px solid ${C.border}`, borderRadius: 14, padding: "18px 20px", marginBottom: 28 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                  <Factory size={17} color={C.muted} />
+                  <span style={{ fontSize: 15, fontWeight: 700 }}>Fornitori individuati</span>
+                  <span className="bs-chip" style={{ background: "#F1F5F9", color: C.muted }}>non ancora su BulkStrike</span>
+                </div>
+                <div style={{ fontSize: 12.5, color: C.muted, lineHeight: 1.55, marginBottom: 14 }}>
+                  Aziende che risultano vendere questa materia prima, individuate dalla nostra ricerca ma
+                  non ancora iscritte a BulkStrike. Non hanno un&apos;offerta attiva qui: non c&apos;è prezzo né
+                  acquisto protetto in escrow. <b>Contatto e trattativa avvengono direttamente sul loro sito,
+                  fuori da BulkStrike.</b>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(240px,1fr))", gap: 10 }}>
+                  {candidates.map(c => {
+                    const url = normalizeUrl(c.website);
+                    return (
+                      <div key={c.id} style={{ border: `1px solid ${C.border}`, borderRadius: 11, padding: "12px 13px", background: C.bg, display: "flex", flexDirection: "column", gap: 8 }}>
+                        <div>
+                          <div style={{ fontSize: 13.5, fontWeight: 700, lineHeight: 1.3 }}>{c.legal_name}</div>
+                          <div style={{ fontSize: 11.5, color: C.muted, marginTop: 2 }}>{c.country || "Paese non indicato"}</div>
+                        </div>
+                        {url ? (
+                          <a href={url} target="_blank" rel="noopener noreferrer" className="bs-btn-ghost"
+                            style={{ textDecoration: "none", justifyContent: "center", fontSize: 12, marginTop: "auto" }}>
+                            Vai al sito per una richiesta di preventivo <ExternalLink size={12} />
+                          </a>
+                        ) : (
+                          <div style={{ fontSize: 11.5, color: C.muted, marginTop: "auto", fontStyle: "italic" }}>
+                            Sito web non disponibile
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}
