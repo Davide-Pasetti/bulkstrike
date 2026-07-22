@@ -1,6 +1,6 @@
 "use client";
 // ============================================================
-// BulkStrike — Admin: Fornitori da verificare (import Europages)
+// BulkStrike — Admin: Fornitori da verificare (coda pending, qualunque origine)
 // Route: app/admin/fornitori/page.jsx
 // Solo platform admin (companies.is_platform_admin): il gate reale è nelle RPC
 // admin_list_pending_suppliers / admin_verify_suppliers / admin_discard_suppliers
@@ -11,15 +11,16 @@
 // Entrambe, singole o in blocco. Ordine di default: sector_hint, poi legal_name (RPC).
 // ============================================================
 import { useState, useEffect, useMemo } from "react";
-import { Search, ShieldAlert, ShieldCheck, ExternalLink, AlertTriangle, Trash2, Check } from "lucide-react";
+import { Search, ShieldAlert, ShieldCheck, ExternalLink, AlertTriangle, Trash2, Check, ChevronDown, ChevronRight } from "lucide-react";
 import {
   getSession, getMyCompany, poolErrorMessage,
   adminListPendingSuppliers, adminVerifySuppliers, adminDiscardSuppliers,
+  adminGetSupplierDetail,
 } from "@/lib/api";
 import BulkStrikeNav from "@/components/BulkStrikeNav";
 
 const C = { blue: "#0EA5E9", text: "#0F172A", muted: "#64748B", border: "#E2E8F0", bg: "#F8FAFE", green: "#059669", red: "#DC2626", amber: "#D97706", purple: "#7C3AED" };
-const GRID = "26px 1.5fr 1fr 80px 96px 92px 58px 84px";
+const GRID = "26px 1.5fr 1fr 80px 96px 92px 58px 84px 26px";
 const TIPO = { producer: "Produttore", distributor: "Distributore" };
 
 export default function AdminSuppliersPage({ inShell = false }) {
@@ -33,6 +34,12 @@ export default function AdminSuppliersPage({ inShell = false }) {
   const [confirm, setConfirm] = useState(null);  // chiave azione distruttiva "armata"
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  // Dettaglio espanso inline (stesso pattern di /andamento-prezzi): una riga
+  // aperta per volta, così filtri e selezioni della lista restano dove sono
+  // mentre si scorre la coda. I dettagli caricati restano in cache per id.
+  const [expanded, setExpanded] = useState(null);
+  const [details, setDetails] = useState({});   // id → oggetto dettaglio
+  const [detailErr, setDetailErr] = useState({});
 
   useEffect(() => {
     (async () => {
@@ -96,8 +103,23 @@ export default function AdminSuppliersPage({ inShell = false }) {
       const done = new Set(ids);
       setRows(prev => prev.filter(r => !done.has(r.id)));
       setSelected(prev => { const n = new Set(prev); ids.forEach(id => n.delete(id)); return n; });
+      // La riga trattata sparisce dalla coda: chiudo il dettaglio se era il suo.
+      setExpanded(prev => (prev && done.has(prev) ? null : prev));
     } catch (e) { setErr(poolErrorMessage(e)); }
     finally { setBusy(false); }
+  }
+
+  // Apre/chiude il dettaglio di una riga, caricandolo la prima volta.
+  async function toggleDetail(id) {
+    if (expanded === id) { setExpanded(null); return; }
+    setExpanded(id);
+    if (details[id] || detailErr[id]) return;
+    try {
+      const d = await adminGetSupplierDetail(id);
+      setDetails(prev => ({ ...prev, [id]: d }));
+    } catch (e) {
+      setDetailErr(prev => ({ ...prev, [id]: poolErrorMessage(e) }));
+    }
   }
 
   // Click su un'azione distruttiva/di massa: primo click arma, secondo esegue.
@@ -134,7 +156,8 @@ export default function AdminSuppliersPage({ inShell = false }) {
     <>
       <h1 style={{ fontSize: 26, fontWeight: 800, letterSpacing: "-0.02em", marginBottom: 6 }}>Fornitori da verificare</h1>
       <p style={{ fontSize: 14, color: C.muted, marginBottom: 20, lineHeight: 1.6, maxWidth: 680 }}>
-        Aziende importate da <b>Europages</b> in attesa di verifica (<span className="mono">status=pending</span>): non ancora visibili sul sito pubblico.
+        Aziende in attesa di verifica (<span className="mono">status=pending</span>), qualunque sia la loro provenienza: non ancora visibili sul sito pubblico.
+        Clicca una riga per aprire la scheda completa prima di decidere.
         <b> Verifica</b> le pubblica nella directory fornitori; <b>Scarta</b> elimina definitivamente il record. Nessun cambiamento è automatico.
       </p>
 
@@ -184,6 +207,7 @@ export default function AdminSuppliersPage({ inShell = false }) {
             <span style={cellHead}>Tipo</span>
             <span style={cellHead}>P.IVA</span>
             <span style={cellHead}>Azioni</span>
+            <span />
           </div>
 
           {filtered.length === 0 ? (
@@ -193,14 +217,21 @@ export default function AdminSuppliersPage({ inShell = false }) {
           ) : filtered.map(row => {
             const on = selected.has(row.id);
             const delKey = `del:${row.id}`;
+            const open = expanded === row.id;
             return (
-              <div key={row.id} style={{ display: "grid", gridTemplateColumns: GRID, gap: 8, padding: "10px 14px", borderTop: `1px solid ${C.border}`, alignItems: "center", fontSize: 13, background: on ? "#F0F9FF" : "transparent" }}>
-                <input type="checkbox" checked={on} onChange={() => toggleOne(row.id)} aria-label={`Seleziona ${row.legal_name}`}
+              <div key={row.id} style={{ borderTop: `1px solid ${C.border}` }}>
+              {/* Riga cliccabile: apre/chiude il dettaglio. I controlli interni
+                  (checkbox, azioni, link) fermano la propagazione, così cliccarli
+                  non apre anche il pannello. */}
+              <div className="as-row" onClick={() => toggleDetail(row.id)} role="button" tabIndex={0} aria-expanded={open}
+                onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleDetail(row.id); } }}
+                style={{ display: "grid", gridTemplateColumns: GRID, gap: 8, padding: "10px 14px", alignItems: "center", fontSize: 13, cursor: "pointer", background: on ? "#F0F9FF" : open ? C.bg : "transparent" }}>
+                <input type="checkbox" checked={on} onChange={() => toggleOne(row.id)} onClick={e => e.stopPropagation()} aria-label={`Seleziona ${row.legal_name}`}
                   style={{ width: 16, height: 16, accentColor: C.blue, cursor: "pointer" }} />
                 <div style={{ minWidth: 0 }}>
                   <div style={{ fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{row.legal_name}</div>
                   {row.europages_url && (
-                    <a href={row.europages_url} target="_blank" rel="noopener noreferrer"
+                    <a href={row.europages_url} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
                       style={{ fontSize: 12, color: C.blue, textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 4, marginTop: 2 }}>
                       Europages <ExternalLink size={12} />
                     </a>
@@ -217,7 +248,7 @@ export default function AdminSuppliersPage({ inShell = false }) {
                     : <Check size={16} color={C.green} aria-label="P.IVA confermata" />}
                 </span>
                 {/* Azioni: bottoni solo icona con tooltip (Scarta a due passi) */}
-                <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
+                <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }} onClick={e => e.stopPropagation()}>
                   <button disabled={busy} onClick={() => run("verify", [row.id])} title="Verifica (pubblica sul sito)" aria-label="Verifica"
                     style={{ background: C.green, color: "#fff", border: "none", borderRadius: 8, width: 32, height: 32, cursor: busy ? "default" : "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                     <ShieldCheck size={15} />
@@ -228,11 +259,166 @@ export default function AdminSuppliersPage({ inShell = false }) {
                     <Trash2 size={15} />
                   </button>
                 </div>
+                <span style={{ display: "flex", justifyContent: "center", color: C.muted }}>
+                  {open ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                </span>
+              </div>
+
+              {open && (
+                <SupplierDetail
+                  detail={details[row.id]}
+                  error={detailErr[row.id]}
+                  busy={busy}
+                  confirmKey={confirm}
+                  onVerify={() => run("verify", [row.id])}
+                  onDiscard={() => guarded(`detail:${row.id}`, "discard", [row.id])}
+                  discardArmed={confirm === `detail:${row.id}`}
+                />
+              )}
               </div>
             );
           })}
         </div>
       </div>
+
+      <style>{`.as-row:hover { background: ${C.bg} !important; }`}</style>
     </>
   );
+}
+
+// ─── Dettaglio fornitore (pannello inline) ──────────────────────────────────
+// Campi raggruppati per sezione invece che in elenco piatto: in revisione si
+// guarda un blocco per volta (chi è / è in regola / come lo contatto / cosa fa).
+// I campi vuoti non vengono mostrati, tranne quelli che contano proprio quando
+// mancano (P.IVA, sito) — su un lead non verificato l'assenza è un'informazione.
+function SupplierDetail({ detail, error, busy, onVerify, onDiscard, discardArmed }) {
+  const box = { padding: "16px 18px 20px", background: C.bg, borderTop: `1px solid ${C.border}` };
+
+  if (error) return <div style={{ ...box, fontSize: 13, color: C.red }}>{error}</div>;
+  if (!detail) return <div style={{ ...box, fontSize: 13, color: C.muted }}>Caricamento dettaglio…</div>;
+
+  const d = detail;
+  const products = Array.isArray(d.candidate_products) ? d.candidate_products : [];
+
+  const SECTIONS = [
+    ["Anagrafica e verifica", [
+      ["Ragione sociale", d.legal_name], ["Stato", d.status], ["Origine dato", d.import_source],
+      ["Verificata a mano", d.manually_verified ? "Sì" : "No"], ["Note di verifica", d.verification_notes],
+      ["Creata", fmtDate(d.created_at)], ["Aggiornata", fmtDate(d.updated_at)],
+    ]],
+    ["Dati fiscali", [
+      ["P.IVA", d.vat, true], ["P.IVA verificata", d.vat_verified ? "Sì" : "No"],
+      ["Fonte verifica P.IVA", d.vat_verification_source], ["Note verifica P.IVA", d.vat_verification_notes],
+      ["Codice ATECO", d.ateco_code], ["Stato CCIAA", d.cciaa_status],
+      ["Intestatario IBAN", d.iban_holder], ["IBAN", d.iban], ["BIC", d.bic],
+    ]],
+    ["Sede e contatti", [
+      ["Paese", d.country], ["Regione", d.region], ["Città", d.city], ["Indirizzo", d.address],
+      ["Coordinate", d.latitude != null && d.longitude != null ? `${d.latitude}, ${d.longitude}` : null],
+      ["Referente", d.contact_name], ["Telefono", d.phone], ["Fax", d.fax],
+      ["Sito web", d.website, true], ["Europages", d.europages_url], ["LinkedIn", d.linkedin_url], ["Facebook", d.facebook_url],
+      ["Email assistenza", d.support_email], ["Email amministrazione", d.email_admin], ["Email direzione", d.email_mgmt],
+      ["PEC", d.pec], ["Codice SDI", d.sdi],
+    ]],
+    ["Attività", [
+      ["Tipo fornitore", TIPO[d.supplier_type] || d.supplier_type],
+      ["Fornisce materie prime", d.raw_material_supplier == null ? null : d.raw_material_supplier ? "Sì" : "No"],
+      ["Settore", d.sector_hint], ["Capacità produttiva", d.production_capacity],
+      ["Paesi serviti", fmtList(d.countries_served)], ["Dipendenti", d.employee_count_range],
+      ["Anno fondazione", d.founded_year], ["Certificazioni", fmtList(d.company_certifications)],
+      ["Descrizione", d.description],
+    ]],
+  ];
+
+  return (
+    <div style={box}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(280px,1fr))", gap: 18, marginBottom: 18 }}>
+        {SECTIONS.map(([title, fields]) => {
+          const shown = fields.filter(([, v, always]) => always || (v != null && v !== ""));
+          if (shown.length === 0) return null;
+          return (
+            <div key={title}>
+              <div style={{ fontSize: 11, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.04em", color: C.muted, marginBottom: 8 }}>{title}</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+                {shown.map(([label, value]) => (
+                  <div key={label} style={{ display: "grid", gridTemplateColumns: "150px 1fr", gap: 10, fontSize: 12.5, alignItems: "baseline" }}>
+                    <span style={{ color: C.muted }}>{label}</span>
+                    <FieldValue value={value} />
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Prodotti abbinati: è ciò che il fornitore porterebbe a catalogo se verificato */}
+      <div style={{ fontSize: 11, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.04em", color: C.muted, marginBottom: 8 }}>
+        Prodotti abbinati ({products.length})
+      </div>
+      {products.length === 0 ? (
+        <div style={{ fontSize: 12.5, color: C.muted, marginBottom: 16 }}>Nessun prodotto abbinato a questo fornitore.</div>
+      ) : (
+        <div style={{ border: `1px solid ${C.border}`, borderRadius: 10, background: "#fff", overflow: "hidden", marginBottom: 16 }}>
+          {products.map(p => (
+            <div key={p.supplier_product_id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", borderTop: `1px solid ${C.border}`, fontSize: 12.5 }}>
+              <span style={{ flex: 1, minWidth: 0, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.product_name || "—"}</span>
+              {p.grade && <span style={{ color: C.muted, flexShrink: 0 }}>{p.grade}</span>}
+              <Badge on={p.active} onLabel="Attivo" offLabel="Non attivo" />
+              <Badge on={p.has_price} onLabel="Con prezzo" offLabel="Senza prezzo" />
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Stesse azioni della lista, così la revisione si chiude da qui */}
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <button disabled={busy} onClick={onVerify}
+          style={{ background: C.green, color: "#fff", border: `1.5px solid ${C.green}`, borderRadius: 8, padding: "9px 14px", fontSize: 12.5, fontWeight: 700, cursor: busy ? "default" : "pointer", display: "inline-flex", alignItems: "center", gap: 6 }}>
+          <ShieldCheck size={14} /> Verifica e pubblica
+        </button>
+        <button disabled={busy} onClick={onDiscard}
+          style={{ background: discardArmed ? C.red : "#fff", color: discardArmed ? "#fff" : C.red, border: `1.5px solid ${C.red}`, borderRadius: 8, padding: "9px 14px", fontSize: 12.5, fontWeight: 700, cursor: busy ? "default" : "pointer", display: "inline-flex", alignItems: "center", gap: 6 }}>
+          <Trash2 size={14} /> {discardArmed ? "Confermi eliminazione?" : "Scarta"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function Badge({ on, onLabel, offLabel }) {
+  return (
+    <span style={{ flexShrink: 0, fontSize: 10.5, fontWeight: 700, borderRadius: 100, padding: "2px 8px", background: on ? "#ECFDF5" : "#F1F5F9", color: on ? C.green : C.muted }}>
+      {on ? onLabel : offLabel}
+    </span>
+  );
+}
+
+function FieldValue({ value }) {
+  if (value == null || value === "") return <span style={{ color: "#94A3B8" }}>—</span>;
+  const s = String(value);
+  if (/^https?:\/\//i.test(s)) {
+    return (
+      <a href={s} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
+        style={{ color: C.blue, textDecoration: "none", wordBreak: "break-all", display: "inline-flex", alignItems: "center", gap: 4 }}>
+        {s.replace(/^https?:\/\//i, "").replace(/\/$/, "")} <ExternalLink size={11} />
+      </a>
+    );
+  }
+  if (s.includes("@") && !s.includes(" ")) {
+    return <a href={`mailto:${s}`} onClick={e => e.stopPropagation()} style={{ color: C.blue, textDecoration: "none", wordBreak: "break-all" }}>{s}</a>;
+  }
+  return <span style={{ fontWeight: 600, wordBreak: "break-word" }}>{s}</span>;
+}
+
+function fmtList(v) {
+  if (v == null) return null;
+  if (Array.isArray(v)) return v.length ? v.join(", ") : null;
+  return String(v) || null;
+}
+
+function fmtDate(v) {
+  if (!v) return null;
+  const d = new Date(v);
+  return Number.isNaN(d.getTime()) ? String(v) : d.toLocaleDateString("it-IT");
 }
