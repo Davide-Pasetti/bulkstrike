@@ -6,17 +6,20 @@
 // conteggio prodotti. Ogni voce porta al catalogo deep-linkato
 // (/catalogo?macro=<slug>&sector=<slug>, già supportato dai filtri catalogo).
 //
-// Desktop: apertura in hover con piccolo delay anti-flicker (120ms apertura,
-// 220ms chiusura) + click/Enter per chi non usa il mouse. Escape chiude e
-// riporta il focus sul bottone. Su mobile NON si usa questo componente ma
-// l'accordion esportato in fondo (MegaMenuMobile), dentro il menu hamburger.
+// Desktop: apertura in hover con piccolo delay anti-flicker + click/Enter per
+// chi non usa il mouse, Escape chiude e riporta il focus sul bottone. Quel
+// comportamento vive in useHoverMenu/HoverMenuPanel (BulkStrikeHoverMenu),
+// condiviso con la tendina "Prodotti" della nav: se va cambiato, si cambia lì,
+// non qui. Su mobile NON si usa questo componente ma l'accordion esportato in
+// fondo (MegaMenuMobile), dentro il menu hamburger.
 //
 // Niente immagini prodotto nella colonna destra: i prodotti non hanno asset
 // immagine nel data model (products non ha colonne immagine), quindi i blocchi
 // mostrano settori + conteggi, non tile fotografiche.
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { LayoutGrid, ChevronDown, ChevronRight, ArrowRight } from "lucide-react";
 import { getMacroAreas, getMacroAreasCached } from "@/lib/api";
+import { useHoverMenu, HoverMenuPanel } from "@/components/BulkStrikeHoverMenu";
 
 const C = { border: "#E2E8F0", text: "#0F172A", muted: "#64748B", blue: "#0EA5E9", dark: "#0D2137", bg: "#F8FAFE" };
 
@@ -24,12 +27,8 @@ export default function MegaMenu() {
   // Stato iniziale dalla cache sincrona: al remount della pagina (swap shell
   // statica → dinamica di cacheComponents) il bottone/pannello non flasha.
   const [taxonomy, setTaxonomy] = useState(() => getMacroAreasCached() || []);
-  const [open, setOpen] = useState(false);
   const [activeId, setActiveId] = useState(() => getMacroAreasCached()?.[0]?.id ?? null);
-  const openTimer = useRef(null);
-  const closeTimer = useRef(null);
-  const triggerRef = useRef(null);
-  const wrapRef = useRef(null);
+  const { open, wrapProps, triggerProps } = useHoverMenu();
 
   useEffect(() => {
     getMacroAreas().then((t) => {
@@ -38,39 +37,12 @@ export default function MegaMenu() {
     }).catch(() => {});
   }, []);
 
-  const clearTimers = () => {
-    if (openTimer.current) { clearTimeout(openTimer.current); openTimer.current = null; }
-    if (closeTimer.current) { clearTimeout(closeTimer.current); closeTimer.current = null; }
-  };
-
-  // Anti-flicker: apertura/chiusura con delay, i timer si annullano a vicenda.
-  const scheduleOpen = () => { clearTimers(); openTimer.current = setTimeout(() => setOpen(true), 120); };
-  const scheduleClose = () => { clearTimers(); closeTimer.current = setTimeout(() => setOpen(false), 220); };
-
-  const close = useCallback((refocus = false) => {
-    clearTimers();
-    setOpen(false);
-    if (refocus) triggerRef.current?.focus();
-  }, []);
-
-  // Escape chiude (accessibilità tastiera); chiusura anche su click fuori.
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e) => { if (e.key === "Escape") close(true); };
-    const onClick = (e) => { if (wrapRef.current && !wrapRef.current.contains(e.target)) close(false); };
-    document.addEventListener("keydown", onKey);
-    document.addEventListener("mousedown", onClick);
-    return () => { document.removeEventListener("keydown", onKey); document.removeEventListener("mousedown", onClick); };
-  }, [open, close]);
-
-  useEffect(() => () => clearTimers(), []);
-
   // Il bottone è SEMPRE renderizzato (mai return null): così non "flasha" via
   // quando la tassonomia arriva o quando cacheComponents rimonta la shell.
   const active = taxonomy.find((m) => m.id === activeId) || taxonomy[0] || null;
 
   return (
-    <div ref={wrapRef} onPointerEnter={scheduleOpen} onPointerLeave={scheduleClose} style={{ position: "relative", flexShrink: 0 }}>
+    <div {...wrapProps} style={{ position: "relative", flexShrink: 0 }}>
       <style>{`
         .bsmm-trigger:focus-visible, .bsmm-macro:focus-visible, .bsmm-sector:focus-visible, .bsmm-all:focus-visible {
           outline: 2px solid ${C.blue}; outline-offset: 2px; border-radius: 8px;
@@ -80,11 +52,8 @@ export default function MegaMenu() {
       `}</style>
 
       <button
-        ref={triggerRef}
+        {...triggerProps}
         className="bsmm-trigger"
-        aria-haspopup="true"
-        aria-expanded={open}
-        onClick={() => (open ? close(false) : (clearTimers(), setOpen(true)))}
         style={{ display: "flex", alignItems: "center", gap: 8, height: 46, padding: "0 16px", background: open ? C.dark : "#fff", color: open ? "#fff" : C.text, border: `1.5px solid ${open ? C.dark : C.border}`, borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "Inter,system-ui", whiteSpace: "nowrap" }}
       >
         <LayoutGrid size={17} color={open ? "#38BDF8" : C.blue} />
@@ -93,18 +62,11 @@ export default function MegaMenu() {
       </button>
 
       {/* Pannello: montato UNA volta (quando la tassonomia è pronta) e mai
-          smontato al toggle — l'apertura/chiusura è solo una transizione CSS di
-          opacità/visibilità. Così non "sparisce e ricompare" e il contenuto
-          resta stabile. paddingTop:8 fa da ponte trasparente sul gap col bottone
-          (niente zona morta che chiude il menu passando col mouse). */}
+          smontato al toggle — apertura/chiusura, ponte anti-zona-morta e
+          transizione stanno in HoverMenuPanel, condiviso con la nav. */}
       {active && (
-        <div
-          role="region"
-          aria-label="Categorie prodotti"
-          aria-hidden={!open}
-          style={{ position: "absolute", top: "100%", left: 0, zIndex: 60, paddingTop: 8, width: "min(920px, calc(100vw - 48px))", opacity: open ? 1 : 0, visibility: open ? "visible" : "hidden", transform: open ? "translateY(0)" : "translateY(-6px)", transition: "opacity .14s ease, transform .14s ease, visibility .14s", pointerEvents: open ? "auto" : "none" }}
-        >
-          <div style={{ display: "flex", width: "100%", maxHeight: "min(560px, calc(100vh - 120px))", background: "#fff", border: `1px solid ${C.border}`, borderRadius: 16, boxShadow: "0 18px 50px rgba(13,33,55,.16)", overflow: "hidden" }}>
+        <HoverMenuPanel open={open} label="Categorie prodotti" width="min(920px, calc(100vw - 48px))">
+          <div style={{ display: "flex", width: "100%", maxHeight: "min(560px, calc(100vh - 120px))" }}>
           {/* Colonna sinistra — macro-aree */}
           <div style={{ width: 280, flexShrink: 0, borderRight: `1px solid ${C.border}`, overflowY: "auto", padding: "10px 8px", background: "#fff" }}>
             {taxonomy.map((m) => (
@@ -154,7 +116,7 @@ export default function MegaMenu() {
             </div>
           </div>
           </div>
-        </div>
+        </HoverMenuPanel>
       )}
     </div>
   );
