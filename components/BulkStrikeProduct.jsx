@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { Search, ArrowRight, Check, Clock, ChevronDown, ChevronRight, ChevronUp, Star, Shield, Truck, FileText, Download, Plus, Minus, Beaker, TrendingDown, Users, Gavel, Info, ShoppingCart, Factory, ExternalLink } from "lucide-react";
-import { getProduct, getOpenPoolForProduct, getPriceReference, getProductBreadcrumb, getSession, openPool, upsertCartItem, poolErrorMessage, searchProducts, getCart, isFollowingProduct, getMarketPriceSeries, getMarketIndexSeries, getProductSpecs, getProductCandidateSuppliers } from "@/lib/api";
+import { getProduct, getOpenPoolForProduct, getPriceReference, getProductBreadcrumb, getSession, openPool, upsertCartItem, poolErrorMessage, searchProducts, getCart, isFollowingProduct, getMarketPriceSeries, getMarketIndexSeries, getProductSpecs, getProductCandidateSuppliers, getMyCompany } from "@/lib/api";
 import PriceSourceNote from "@/components/PriceSourceNote";
 import CountryFlag from "@/components/CountryFlag";
 import { ytdChange } from "@/lib/priceTrend";
@@ -166,14 +166,17 @@ function suggestSupplierMailto(productName) {
 }
 // La stessa azienda può essere stata censita più volte (una per settore), quindi
 // tornare duplicata: si tiene una riga per (ragione sociale, sito).
+// Fra due copie della stessa azienda tiene quella con l'email di contatto: è
+// l'unica differenza che cambia cosa può fare l'utente (chiedere un preventivo
+// via mail invece di dover passare dal sito).
 function dedupeCandidates(list) {
-  const seen = new Set();
-  return (list || []).filter(c => {
+  const byKey = new Map();
+  for (const c of list || []) {
     const key = `${(c.legal_name || "").trim().toLowerCase()}|${(c.website || "").trim().toLowerCase()}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
+    const prev = byKey.get(key);
+    if (!prev || (!prev.support_email && c.support_email)) byKey.set(key, c);
+  }
+  return [...byKey.values()];
 }
 
 // I siti in anagrafica sono spesso senza protocollo ("www.basf.com"): senza
@@ -182,6 +185,32 @@ function normalizeUrl(website) {
   const s = (website || "").trim();
   if (!s) return null;
   return /^https?:\/\//i.test(s) ? s : `https://${s}`;
+}
+
+// Richiesta di preventivo a un fornitore non ancora su BulkStrike. In inglese:
+// sono aziende internazionali e non sappiamo se leggono l'italiano.
+// La quantità è quella già scelta in pagina; se non è ancora impostata resta il
+// segnaposto [quantity], che il buyer completa prima di inviare.
+function quoteRequestMailto({ email, productName, qty, unit, buyerCompanyName }) {
+  const amount = qty > 0 ? `${qty.toLocaleString("en-US")} ${unit}` : "[quantity]";
+  const subject = `Quote Request – ${productName}`;
+  const body = [
+    "Dear Sir or Madam,",
+    "",
+    `We would like to request a quotation for ${amount} of ${productName}.`,
+    "",
+    "Could you kindly share your best price, minimum order quantity, and estimated lead time for delivery within the EU?",
+    "",
+    "Thank you for your time — we look forward to hearing from you.",
+    "",
+    // Da sloggato non conosciamo l'azienda: si firma da sé, meglio di una riga vuota.
+    buyerCompanyName ? `Kind regards,\n${buyerCompanyName}` : "Kind regards,",
+    "",
+    "---",
+    "This inquiry was generated via BulkStrike (bulkstrike.com), a B2B marketplace for raw materials and industrial supplies. We invite you to list your product pricing on BulkStrike in order to receive orders directly from verified buyers.",
+    "",
+  ].join("\n");
+  return `mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 }
 
 // da getOpenPoolForProduct() → shape SEED_POOL
@@ -246,6 +275,7 @@ export default function ProductPage() {
   // Aziende censite dalla nostra ricerca che vendono il prodotto ma non sono su
   // BulkStrike: nessun prezzo, nessun acquisto in piattaforma, solo segnalazione.
   const [candidates, setCandidates] = useState([]);
+  const [buyerCompanyName, setBuyerCompanyName] = useState("");
   const [cartSupplierIds, setCartSupplierIds] = useState(new Set()); // fornitori già presenti nel tuo carrello → spedizione si consolida
   useEffect(() => { if (productId) isFollowingProduct(productId).then(setFollowingProduct).catch(() => {}); }, [productId]);
 
@@ -258,6 +288,11 @@ export default function ProductPage() {
       try {
         const items = await getCart();
         setCartSupplierIds(new Set((items || []).map(it => it.supplier_company_id)));
+      } catch (e) {}
+      // Serve solo a firmare la richiesta di preventivo ai fornitori non iscritti.
+      try {
+        const c = await getMyCompany();
+        if (c?.legal_name) setBuyerCompanyName(c.legal_name);
       } catch (e) {}
     })();
   }, []);
@@ -845,13 +880,39 @@ export default function ProductPage() {
                           <div style={{ fontSize: 11.5, color: C.muted, marginTop: 2 }}>{c.country || "Paese non indicato"}</div>
                         </div>
                         {url ? (
-                          <a href={url} target="_blank" rel="noopener noreferrer" className="bs-btn-ghost"
-                            style={{ textDecoration: "none", justifyContent: "center", fontSize: 12, marginTop: "auto" }}>
-                            Vai al sito per una richiesta di preventivo <ExternalLink size={12} />
-                          </a>
+                          <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: "auto" }}>
+                            <a href={url} target="_blank" rel="noopener noreferrer" className="bs-btn-ghost"
+                              style={{ textDecoration: "none", justifyContent: "center", fontSize: 12 }}>
+                              Visita il sito <ExternalLink size={12} />
+                            </a>
+                            {/* Senza email pubblica non abbiamo un modulo contatti a cui
+                                puntare: il preventivo si chiede dal sito dell'azienda. */}
+                            {c.support_email ? (
+                              <a href={quoteRequestMailto({ email: c.support_email, productName: product.name, qty, unit: massUnit, buyerCompanyName })}
+                                className="bs-btn-ghost"
+                                style={{ textDecoration: "none", justifyContent: "center", fontSize: 12, borderColor: C.blue, color: C.blue, fontWeight: 700 }}>
+                                Chiedi un preventivo
+                              </a>
+                            ) : (
+                              <a href={url} target="_blank" rel="noopener noreferrer" className="bs-btn-ghost"
+                                title="Nessuna email pubblica: la richiesta si fa dal sito dell'azienda"
+                                style={{ textDecoration: "none", justifyContent: "center", fontSize: 12, borderColor: C.blue, color: C.blue, fontWeight: 700 }}>
+                                Chiedi un preventivo <ExternalLink size={12} />
+                              </a>
+                            )}
+                          </div>
                         ) : (
-                          <div style={{ fontSize: 11.5, color: C.muted, marginTop: "auto", fontStyle: "italic" }}>
-                            Sito web non disponibile
+                          // Senza sito non mostriamo un link rotto. Se però l'azienda
+                          // ha un'email pubblica, il preventivo si può comunque chiedere.
+                          <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: "auto" }}>
+                            <div style={{ fontSize: 11.5, color: C.muted, fontStyle: "italic" }}>Sito web non disponibile</div>
+                            {c.support_email && (
+                              <a href={quoteRequestMailto({ email: c.support_email, productName: product.name, qty, unit: massUnit, buyerCompanyName })}
+                                className="bs-btn-ghost"
+                                style={{ textDecoration: "none", justifyContent: "center", fontSize: 12, borderColor: C.blue, color: C.blue, fontWeight: 700 }}>
+                                Chiedi un preventivo
+                              </a>
+                            )}
                           </div>
                         )}
                       </div>
