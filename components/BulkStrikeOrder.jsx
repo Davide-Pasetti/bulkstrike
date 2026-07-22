@@ -6,7 +6,7 @@
 // Tutte le transizioni sono validate server-side (RPC dedicate).
 import { useState, useEffect } from "react";
 import { ChevronRight, Check, Truck, CreditCard, PackageCheck, Star, ShieldCheck, FileText, Clock, AlertTriangle, ArrowRight, MapPin, MessageSquareWarning, MessageCircle, X, Landmark, Lock, Download, QrCode, Tag, Mail, RefreshCw } from "lucide-react";
-import { getOrderDetail, getSession, markOrderPaidDemo, markOrderShipped, confirmDelivery, raiseDispute, poolErrorMessage, getSupplierIbanForOrder, setOrderLot, fetchOrderQrObjectUrl, getMyCompany, adminListOrderEmails, adminResendOrderEmail } from "@/lib/api";
+import { getOrderDetail, getSession, markOrderShipped, confirmDelivery, raiseDispute, poolErrorMessage, getSupplierIbanForOrder, setOrderLot, fetchOrderQrObjectUrl, getMyCompany, adminListOrderEmails, adminResendOrderEmail } from "@/lib/api";
 import BulkStrikeNav from "@/components/BulkStrikeNav";
 import CopyButton from "@/components/CopyButton";
 import EscrowPayinPanel from "@/components/checkout/EscrowPayinPanel";
@@ -329,18 +329,15 @@ export default function OrderPage() {
                     )}
                   </div>
                 ) : isBuyer && order.status === "pending_payment" && (
-                  /* fallback demo per ordini senza metodo escrow stampato (storici) */
+                  /* pending_payment senza metodo escrow stampato: stato anomalo (il
+                     percorso demo è stato rimosso; mark_order_paid_demo è ora solo
+                     service_role). Nessuna azione possibile dal buyer. */
                   <div className="od-card" style={{ borderColor:C.blue, background:"#F0F9FF" }}>
-                    <div style={{ fontSize:14.5, fontWeight:800, marginBottom:6, display:"flex", alignItems:"center", gap:7 }}><CreditCard size={16} color={C.blue}/> Completa il pagamento in escrow</div>
-                    <p style={{ fontSize:13, color:C.muted, lineHeight:1.6, marginBottom:14 }}>
-                      L'importo di <b className="od-num" style={{ color:C.text }}>{eur(order.goods_subtotal)}</b> viene depositato sul conto escrow di BulkStrike.
-                      Il fornitore lo incassa solo dopo la tua conferma di consegna conforme. Se qualcosa va storto, l'importo torna a te.
+                    <div style={{ fontSize:14.5, fontWeight:800, marginBottom:6, display:"flex", alignItems:"center", gap:7 }}><CreditCard size={16} color={C.blue}/> Pagamento in attesa</div>
+                    <p style={{ fontSize:13, color:C.muted, lineHeight:1.6 }}>
+                      Questo ordine risulta in attesa di pagamento ma non ha un metodo di pagamento associato.
+                      Contatta l'assistenza BulkStrike per completarlo.
                     </p>
-                    <button onClick={() => doAction(markOrderPaidDemo, "Pagamento in escrow registrato. Il fornitore è stato avvisato.")} disabled={acting}
-                            style={{ background:C.blue, color:"#fff", border:"none", borderRadius:10, padding:"13px 24px", fontSize:14, fontWeight:700, cursor:acting?"default":"pointer", opacity:acting?0.6:1, display:"inline-flex", alignItems:"center", gap:8, fontFamily:"Inter,system-ui" }}>
-                      {acting ? "Registrazione…" : <>Paga {eur(order.goods_subtotal)} in escrow <ArrowRight size={15}/></>}
-                    </button>
-                    <div style={{ fontSize:11, color:C.muted, marginTop:10 }}>Ambiente dimostrativo: il versamento è simulato in attesa dell'integrazione con il provider di pagamento.</div>
                   </div>
                 )}
                 {!isBuyer && order.status === "paid" && (
