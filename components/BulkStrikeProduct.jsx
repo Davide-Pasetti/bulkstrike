@@ -147,6 +147,23 @@ function mapDbProduct(p) {
     tdsUrl: p.scheda_tecnica_url || null,
   };
 }
+// Segnalazione di un possibile fornitore per un prodotto senza offerte attive.
+// Nessun invio automatico: si apre il client email dell'utente, che decide se spedire.
+const SUGGEST_SUPPLIER_EMAIL = "davide@bulkstrike.com";
+function suggestSupplierMailto(productName) {
+  const nome = productName || "—";
+  const subject = `Segnalazione fornitore — ${nome}`;
+  const body = [
+    "Vi segnalo questo possibile venditore/fornitore per questo prodotto:",
+    "",
+    `Prodotto: ${nome}`,
+    "Nome fornitore proposto:",
+    "Sito web / contatto:",
+    "Note:",
+    "",
+  ].join("\n");
+  return `mailto:${SUGGEST_SUPPLIER_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+}
 // da getOpenPoolForProduct() → shape SEED_POOL
 function mapDbPool(pool) {
   if (!pool) return { exists:false, id:null, bestPrice:0, current:0, companies:0, suppliers:0, closesIn:"", myQuantityKg:0 };
@@ -752,6 +769,26 @@ export default function ProductPage() {
                   : <div style={{ fontSize:12 }}>Imposta almeno {(palletKg/1000).toLocaleString("it-IT")}t (1 pallet) per aprire un'asta a ribasso.</div>}
                 {actionMsg && <div style={{ marginTop:8, fontSize:12, color:C.red, fontWeight:600 }}>{actionMsg}</div>}
                 </>)}
+              </div>
+            )}
+
+            {/* SEGNALA UN FORNITORE — solo quando il prodotto non ha alcun fornitore
+                attivo (getProduct filtra già active=true). Niente invio automatico:
+                apre il client email dell'utente con oggetto e corpo precompilati. */}
+            {!loading && suppliers.length === 0 && (
+              <div style={{ border:`1px solid ${C.border}`, background:"#EFF6FF", borderRadius:14, padding:"18px 20px", marginBottom:28, display:"flex", gap:12, alignItems:"flex-start", flexWrap:"wrap" }}>
+                <Beaker size={18} color={C.blue} style={{ flexShrink:0, marginTop:2 }} />
+                <div style={{ flex:1, minWidth:220 }}>
+                  <div style={{ fontSize:14, fontWeight:700, color:C.text, marginBottom:4 }}>Non ci sono attualmente fornitori che vendono questo prodotto</div>
+                  <div style={{ fontSize:13, color:C.muted, lineHeight:1.55 }}>
+                    Conosci un'azienda che lo produce o lo distribuisce?{" "}
+                    <a
+                      href={suggestSupplierMailto(product.name)}
+                      style={{ color:C.blue, fontWeight:700, textDecoration:"underline" }}
+                    >Segnalacelo</a>{" "}
+                    e lo contattiamo noi.
+                  </div>
+                </div>
               </div>
             )}
 
