@@ -278,11 +278,22 @@ export default function CheckoutPage() {
     const q = quotesBySupplier[s.id];
     return q === "none" || !q || !!selectedCarrier[s.id];
   });
+  // Righe senza prezzo unitario valido. Il carrello già le segnala, ma questa è
+  // l'ultima porta prima del pagamento: il guardrail lato carrello è client-side
+  // e /checkout è raggiungibile per altre vie (link diretto, stato manipolato).
+  // Lato server checkout_cart alza comunque NO_SUPPLIER_AVAILABLE — qui evitiamo
+  // che l'utente arrivi fin lì vedendo importi finti e si becchi un errore secco.
+  const unpricedLines = items.filter(it => {
+    const p = Number(it.unit_price);
+    return !Number.isFinite(p) || p <= 0;
+  });
+  const hasUnpricedLines = unpricedLines.length > 0;
+
   const goodsForDisplay = preview?.goods_subtotal ?? subtotal;
   const shippingForDisplay = preview?.shipping_amount ?? null;
   const vatForDisplay = preview?.vat_amount ?? null;
   const totalForDisplay = preview?.total ?? null;
-  const payReady = quotesReady && selectionsComplete && !previewLoading && !previewErr && preview != null;
+  const payReady = quotesReady && selectionsComplete && !previewLoading && !previewErr && preview != null && !hasUnpricedLines;
 
   // Costo di ELABORAZIONE PAGAMENTO (tariffa del gestore Stripe) per i sub-ordini
   // in escrow: SEPA 0,8%, Carta 1,5% + €0,25, sul totale IVA inclusa (×1,22) — la
@@ -293,18 +304,29 @@ export default function CheckoutPage() {
   const escrowSepaSuppliers = (preview?.by_supplier || []).filter(
     (s) => methodBySupplier[s.supplier_company_id] === "escrow_sepa"
   );
+  // subOrderTotal può essere null (riga senza prezzo): la fee non si stima su un
+  // imponibile inventato, si omette — tanto il pagamento è comunque bloccato.
   const escrowFeeTotal = escrowSepaSuppliers.reduce(
-    (a, s) => a + stripeProcessingFee("sepa", subOrderTotal(s) * 1.22), 0
+    (a, s) => { const t = subOrderTotal(s); return t == null ? a : a + stripeProcessingFee("sepa", t * 1.22); }, 0
   );
 
   const premiumFeeSuppliers = (preview?.by_supplier || []).filter(
     (s) => methodBySupplier[s.supplier_company_id] === "escrow_premium"
   );
   const premiumFeeTotal = premiumFeeSuppliers.reduce(
-    (a, s) => a + stripeProcessingFee("card", subOrderTotal(s) * 1.22), 0
+    (a, s) => { const t = subOrderTotal(s); return t == null ? a : a + stripeProcessingFee("card", t * 1.22); }, 0
   );
 
   const grandTotalForDisplay = totalForDisplay != null ? totalForDisplay + escrowFeeTotal + premiumFeeTotal : null;
+
+  // Messaggio leggibile: dice QUALE riga è senza prezzo, altrimenti l'utente non
+  // sa cosa togliere dal carrello per sbloccarsi.
+  function unpricedMessage(lines) {
+    const nomi = lines.map(l => l.product_name || "prodotto").join(", ");
+    return lines.length === 1
+      ? `Prezzo non disponibile per ${nomi} — impossibile procedere. Rimuovilo dal carrello o chiedi un preventivo al fornitore.`
+      : `Prezzo non disponibile per: ${nomi} — impossibile procedere. Rimuovi queste righe dal carrello o chiedi un preventivo ai fornitori.`;
+  }
 
   // Navigazione step: indietro sempre libera (dati conservati nello stato React),
   // avanti solo dai bottoni con le rispettive validazioni.
@@ -314,25 +336,40 @@ export default function CheckoutPage() {
   }
   function goToShipping() {
     setErr("");
+    if (hasUnpricedLines) { setErr(unpricedMessage(unpricedLines)); return; }
     if (!address.trim()) { setErr("Seleziona o aggiungi l'indirizzo di spedizione."); return; }
     setStep(2);
   }
 
-  // Merce (IVA esclusa) di un fornitore: somma prezzo×quantità delle sue righe nel carrello.
+  // Merce (IVA esclusa) di un fornitore: somma prezzo×quantità delle sue righe.
+  // Se anche una sola riga non ha un prezzo unitario valido si restituisce null,
+  // NON zero: un prezzo mancante non è "gratis", è un dato che manca. Trattarlo
+  // come 0 mostrava un totale d'ordine sbagliato (stesso difetto corretto in
+  // BulkStrikeProduct.jsx, dove un fornitore senza price_tiers appariva a €0/kg).
   function supplierGoods(supplierId) {
-    return items
-      .filter(it => it.supplier_company_id === supplierId)
-      .reduce((a, it) => a + Number(it.unit_price || 0) * Number(it.quantity_kg || 0), 0);
+    const lines = items.filter(it => it.supplier_company_id === supplierId);
+    let sum = 0;
+    for (const it of lines) {
+      const price = Number(it.unit_price);
+      const qty = Number(it.quantity_kg);
+      if (!Number.isFinite(price) || price <= 0 || !Number.isFinite(qty) || qty <= 0) return null;
+      sum += price * qty;
+    }
+    return sum;
   }
-  // Imponibile del sub-ordine (soglia escrow): merce IVA esclusa + spedizione del fornitore.
+  // Imponibile del sub-ordine (soglia escrow): merce IVA esclusa + spedizione.
+  // null se la merce non è calcolabile: chi lo usa deve saperlo, non ricevere 0.
   function subOrderTotal(s) {
-    return supplierGoods(s.supplier_company_id) + Number(s.shipping_amount || 0);
+    const goods = supplierGoods(s.supplier_company_id);
+    if (goods == null) return null;
+    return goods + Number(s.shipping_amount || 0);
   }
 
   const allMethodsChosen = (preview?.by_supplier || []).length > 0
     && preview.by_supplier.every(s => methodBySupplier[s.supplier_company_id]);
 
   async function confirmPayment() {
+    if (hasUnpricedLines) { setErr(unpricedMessage(unpricedLines)); return; }
     setSubmitting(true); setErr("");
     try {
       const res = await checkoutCart(address, notes, selectedCarrier);
@@ -353,7 +390,7 @@ export default function CheckoutPage() {
           count: escrowSuppliers.length,
           // totale imponibile + IVA 22% stimata sugli stessi imponibili (l'IVA per
           // fornitore non è nella preview, la stimiamo qui per la sola visualizzazione).
-          total: escrowSuppliers.reduce((a, s) => a + subOrderTotal(s) * 1.22, 0),
+          total: escrowSuppliers.reduce((a, s) => { const t = subOrderTotal(s); return t == null ? a : a + t * 1.22; }, 0),
         });
         // SOLO gli ordini appena creati da questo checkout (res.orders): senza
         // filtro l'endpoint raccoglierebbe l'intero backlog di ordini escrow
@@ -521,6 +558,19 @@ export default function CheckoutPage() {
                 <span>Alcune righe hanno problemi (quantità sotto il minimo o prezzo non disponibile). <span onClick={() => { window.location.href = "/carrello"; }} style={{ fontWeight: 700, cursor: "pointer", textDecoration: "underline" }}>Torna al carrello</span> per correggerle.</span>
               </div>
             )}
+            {/* Prezzo mancante: bloccante e con i nomi dei prodotti, così si sa
+                cosa togliere. hasIssues copre solo unit_price == null; qui si
+                prendono anche 0, NaN e negativi, che passerebbero quel controllo
+                e finirebbero nel totale come merce gratis. */}
+            {hasUnpricedLines && (
+              <div style={{ display: "flex", gap: 8, alignItems: "flex-start", fontSize: 13, color: C.red, background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 10, padding: "11px 14px", marginBottom: 18 }}>
+                <AlertTriangle size={15} style={{ marginTop: 1, flexShrink: 0 }} />
+                <span>
+                  {unpricedMessage(unpricedLines)}{" "}
+                  <span onClick={() => { window.location.href = "/carrello"; }} style={{ fontWeight: 700, cursor: "pointer", textDecoration: "underline" }}>Torna al carrello</span>
+                </span>
+              </div>
+            )}
             {err && <div style={{ marginBottom: 18, padding: "11px 14px", background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 10, fontSize: 13, color: C.red }}>{err}</div>}
 
             {step === 1 ? (
@@ -580,7 +630,7 @@ export default function CheckoutPage() {
                 </div>
 
                 <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                  <button onClick={goToShipping} disabled={hasIssues}
+                  <button onClick={goToShipping} disabled={hasIssues || hasUnpricedLines}
                     style={{ background: C.blue, color: "#fff", border: "none", borderRadius: 10, padding: "13px 26px", fontSize: 14.5, fontWeight: 700, cursor: hasIssues ? "default" : "pointer", opacity: hasIssues ? 0.5 : 1, display: "inline-flex", alignItems: "center", gap: 8, fontFamily: "Inter,system-ui" }}>
                     Confronta le spedizioni <ArrowRight size={16} />
                   </button>
