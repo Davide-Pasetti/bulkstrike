@@ -15,7 +15,7 @@ import { Search, ShieldAlert, ShieldCheck, ExternalLink, AlertTriangle, Trash2, 
 import {
   getSession, getMyCompany, poolErrorMessage,
   adminListPendingSuppliers, adminVerifySuppliers, adminDiscardSuppliers,
-  adminGetSupplierDetail,
+  adminGetSupplierDetail, adminListClaimRequests, adminReviewClaim, adminSetManuallyVerified,
 } from "@/lib/api";
 import BulkStrikeNav from "@/components/BulkStrikeNav";
 import CountryFlag from "@/components/CountryFlag";
@@ -42,6 +42,10 @@ export default function AdminSuppliersPage({ inShell = false }) {
   const [expanded, setExpanded] = useState(null);
   const [details, setDetails] = useState({});   // id → oggetto dettaglio
   const [detailErr, setDetailErr] = useState({});
+  // Due code distinte ma vicine: "questo lead è reale?" e "questa persona è
+  // davvero di quest'azienda?" sono decisioni diverse, con prove diverse.
+  const [tab, setTab] = useState("lead");       // "lead" | "claim"
+  const [claims, setClaims] = useState([]);
 
   useEffect(() => {
     (async () => {
@@ -51,6 +55,7 @@ export default function AdminSuppliersPage({ inShell = false }) {
         const company = await getMyCompany().catch(() => null);
         if (!company?.is_platform_admin) { setNotAdmin(true); setLoading(false); return; }
         setRows(await adminListPendingSuppliers());
+        setClaims(await adminListClaimRequests().catch(() => []));
       } catch (e) {
         if (String(e?.message || e).includes("NOT_ADMIN")) setNotAdmin(true);
         else setErr(poolErrorMessage(e));
@@ -124,6 +129,30 @@ export default function AdminSuppliersPage({ inShell = false }) {
     }
   }
 
+  async function reviewClaim(requestId, approve) {
+    if (busy) return;
+    setBusy(true); setErr(""); setConfirm(null);
+    try {
+      await adminReviewClaim(requestId, approve, null);
+      setClaims(prev => prev.filter(c => c.request_id !== requestId));
+    } catch (e) { setErr(poolErrorMessage(e)); }
+    finally { setBusy(false); }
+  }
+
+  // Sblocca la pubblicazione dei prezzi: è la via d'uscita del gate
+  // company_can_publish_prices(), che senza questa resterebbe chiuso per tutti.
+  async function markVerified(companyId) {
+    if (busy) return;
+    setBusy(true); setErr(""); setConfirm(null);
+    try {
+      await adminSetManuallyVerified(companyId, true, null);
+      setDetails(prev => prev[companyId]
+        ? { ...prev, [companyId]: { ...prev[companyId], manually_verified: true } }
+        : prev);
+    } catch (e) { setErr(poolErrorMessage(e)); }
+    finally { setBusy(false); }
+  }
+
   // Click su un'azione distruttiva/di massa: primo click arma, secondo esegue.
   function guarded(key, action, ids) {
     if (confirm === key) run(action, ids);
@@ -163,6 +192,24 @@ export default function AdminSuppliersPage({ inShell = false }) {
         <b> Verifica</b> le pubblica nella directory fornitori; <b>Scarta</b> elimina definitivamente il record. Nessun cambiamento è automatico.
       </p>
 
+      {/* Due code, stessa pagina: sono decisioni dello stesso tipo (approvo o no)
+          ma su prove diverse, quindi tab separati e non una lista unica. */}
+      <div style={{ display: "flex", gap: 8, marginBottom: 18, borderBottom: `1px solid ${C.border}` }}>
+        {[["lead", `Fornitori da verificare (${rows.length})`], ["claim", `Richieste di rivendicazione (${claims.length})`]].map(([id, label]) => (
+          <button key={id} onClick={() => setTab(id)}
+            style={{ background: "none", border: "none", borderBottom: `2px solid ${tab === id ? C.blue : "transparent"}`, padding: "9px 4px", marginBottom: -1, fontSize: 13.5, fontWeight: 700, color: tab === id ? C.text : C.muted, cursor: "pointer", fontFamily: "Inter,system-ui" }}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {err && <div style={{ fontSize: 13, color: C.red, marginBottom: 12 }}>{err}</div>}
+
+      {tab === "claim" && (
+        <ClaimQueue claims={claims} busy={busy} onReview={reviewClaim} />
+      )}
+
+      {tab === "lead" && (<>
       {/* Filtri: ricerca su legal_name + dropdown per settore */}
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 14 }}>
         <div style={{ position: "relative", flex: "1 1 280px", maxWidth: 360 }}>
@@ -279,6 +326,7 @@ export default function AdminSuppliersPage({ inShell = false }) {
                   onVerify={() => run("verify", [row.id])}
                   onDiscard={() => guarded(`detail:${row.id}`, "discard", [row.id])}
                   discardArmed={confirm === `detail:${row.id}`}
+                  onMarkVerified={() => markVerified(row.id)}
                 />
               )}
               </div>
@@ -287,8 +335,82 @@ export default function AdminSuppliersPage({ inShell = false }) {
         </div>
       </div>
 
+      </>)}
+
       <style>{`.as-row:hover { background: ${C.bg} !important; }`}</style>
     </>
+  );
+}
+
+// ─── Coda richieste di rivendicazione ───────────────────────────────────────
+// Le prove sono congelate al momento della richiesta: dominio, P.IVA, somiglianza
+// del nome. Vanno mostrate esplicitamente, perché sono l'unica base su cui
+// l'admin decide se questa persona rappresenta davvero quell'azienda.
+function ClaimQueue({ claims, busy, onReview }) {
+  const [armed, setArmed] = useState(null);
+  if (claims.length === 0) {
+    return <div style={{ padding: "28px 16px", textAlign: "center", color: C.muted, fontSize: 14, border: `1px solid ${C.border}`, borderRadius: 14 }}>
+      Nessuna richiesta di rivendicazione in attesa.
+    </div>;
+  }
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      {claims.map(c => (
+        <div key={c.request_id} style={{ border: `1px solid ${C.border}`, borderRadius: 14, padding: "16px 18px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4, flexWrap: "wrap" }}>
+            <CountryFlag code={c.country_iso2} country={c.country} size={13} />
+            <span style={{ fontSize: 15, fontWeight: 700 }}>{c.legal_name}</span>
+            <SupplierTypeBadge type={c.supplier_type} />
+            {c.altre_anagrafiche > 0 && (
+              <span className="bs-chip" style={{ background: "#FEF3C7", color: C.amber }}>
+                +{c.altre_anagrafiche} anagrafiche verranno unificate
+              </span>
+            )}
+          </div>
+          <div style={{ fontSize: 12.5, color: C.muted, marginBottom: 12 }}>
+            {[c.country, c.website, c.sector_hint].filter(Boolean).join(" · ")}
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: 12, marginBottom: 14, fontSize: 12.5 }}>
+            <div>
+              <div style={{ color: C.muted, marginBottom: 2 }}>Richiesta da</div>
+              <div style={{ fontWeight: 600 }}>{c.requester_name || "—"}</div>
+              <div style={{ color: C.muted }}>{c.requester_email}</div>
+            </div>
+            <div>
+              <div style={{ color: C.muted, marginBottom: 2 }}>Prove</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                <Prova ok={c.domain_match} label={`Dominio email (${c.requester_domain || "—"})`} />
+                <Prova ok={c.vat_match} label="P.IVA corrispondente" />
+                <div style={{ color: C.muted }}>
+                  Somiglianza nome: <b style={{ color: C.text }}>{c.name_similarity != null ? c.name_similarity : "—"}</b>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <button disabled={busy} onClick={() => onReview(c.request_id, true)}
+              style={{ background: C.green, color: "#fff", border: "none", borderRadius: 8, padding: "9px 14px", fontSize: 12.5, fontWeight: 700, cursor: busy ? "default" : "pointer", display: "inline-flex", alignItems: "center", gap: 6 }}>
+              <ShieldCheck size={14} /> Approva e collega
+            </button>
+            <button disabled={busy}
+              onClick={() => armed === c.request_id ? onReview(c.request_id, false) : setArmed(c.request_id)}
+              style={{ background: armed === c.request_id ? C.red : "#fff", color: armed === c.request_id ? "#fff" : C.red, border: `1.5px solid ${C.red}`, borderRadius: 8, padding: "9px 14px", fontSize: 12.5, fontWeight: 700, cursor: busy ? "default" : "pointer" }}>
+              {armed === c.request_id ? "Confermi il rifiuto?" : "Rifiuta"}
+            </button>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function Prova({ ok, label }) {
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 5, color: ok ? C.green : C.muted }}>
+      {ok ? <Check size={13} /> : <AlertTriangle size={13} color={C.amber} />} {label}
+    </span>
   );
 }
 
@@ -297,7 +419,7 @@ export default function AdminSuppliersPage({ inShell = false }) {
 // guarda un blocco per volta (chi è / è in regola / come lo contatto / cosa fa).
 // I campi vuoti non vengono mostrati, tranne quelli che contano proprio quando
 // mancano (P.IVA, sito) — su un lead non verificato l'assenza è un'informazione.
-function SupplierDetail({ detail, error, busy, onVerify, onDiscard, discardArmed }) {
+function SupplierDetail({ detail, error, busy, onVerify, onDiscard, discardArmed, onMarkVerified }) {
   const box = { padding: "16px 18px 20px", background: C.bg, borderTop: `1px solid ${C.border}` };
 
   if (error) return <div style={{ ...box, fontSize: 13, color: C.red }}>{error}</div>;
@@ -376,6 +498,26 @@ function SupplierDetail({ detail, error, busy, onVerify, onDiscard, discardArmed
           ))}
         </div>
       )}
+
+      {/* Pubblicazione prezzi: separata dalla verifica del lead. Un fornitore
+          collegato può gestire il catalogo, ma i prezzi restano bloccati
+          (company_can_publish_prices) finché non si sblocca qui. */}
+      <div style={{ border: `1px solid ${C.border}`, borderRadius: 10, background: "#fff", padding: "12px 14px", marginBottom: 14, display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+        <div style={{ flex: 1, minWidth: 220 }}>
+          <div style={{ fontSize: 12.5, fontWeight: 700 }}>Pubblicazione prezzi</div>
+          <div style={{ fontSize: 11.5, color: C.muted, marginTop: 2 }}>
+            {d.manually_verified
+              ? "Abilitata: questo fornitore può pubblicare listini."
+              : "Bloccata finché non verifichi l'azienda a mano."}
+          </div>
+        </div>
+        {d.manually_verified
+          ? <Badge on={true} onLabel="Verificata a mano" offLabel="" />
+          : <button disabled={busy} onClick={onMarkVerified}
+              style={{ background: "#fff", color: C.green, border: `1.5px solid ${C.green}`, borderRadius: 8, padding: "8px 13px", fontSize: 12.5, fontWeight: 700, cursor: busy ? "default" : "pointer", display: "inline-flex", alignItems: "center", gap: 6 }}>
+              <ShieldCheck size={14} /> Segna verificata (abilita prezzi)
+            </button>}
+      </div>
 
       {/* Stesse azioni della lista, così la revisione si chiude da qui */}
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>

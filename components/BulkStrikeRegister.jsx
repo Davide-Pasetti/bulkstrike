@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { registerCompany } from "@/lib/api";
+import { registerCompany, signUpAccount, findClaimCandidates, requestCompanyClaim, completeClaimedCompany } from "@/lib/api";
 import { ShoppingCart, Factory, Truck, Check, ArrowRight, ArrowLeft, Mail, Lock, Building2, Globe, Phone, User, MapPin, Award, Boxes, Shield, X, Bell, Search, Plus, TrendingDown, Zap } from "lucide-react";
 import BulkStrikeNav from "@/components/BulkStrikeNav";
 
@@ -167,6 +167,57 @@ function MaterialsPicker({ type, f, set }) {
   );
 }
 
+// ─── Step "la tua azienda è già nel nostro censimento" ──────────────────────
+// Tono: è una nostra ricerca di mercato, non dati che l'utente ci ha dato e noi
+// gli rigiriamo addosso. Lo diciamo esplicitamente, come nella sezione
+// "Fornitori individuati" delle schede prodotto. Rifiutare dev'essere facile
+// quanto accettare: il bottone per creare un profilo nuovo sta allo stesso
+// livello visivo, non in fondo in piccolo.
+function ClaimStep({ loading, candidates, error, onClaim, onSkip, busy }) {
+  if (loading) {
+    return <div style={{ padding:"40px 0", textAlign:"center", color:C.muted, fontSize:14 }}>Cerchiamo se abbiamo già dei dati sulla tua azienda…</div>;
+  }
+  return (
+    <>
+      <div style={{ fontSize:15, fontWeight:700, marginBottom:6 }}>Abbiamo già dei dati sulla tua azienda</div>
+      <p style={{ fontSize:13.5, color:C.muted, lineHeight:1.6, marginBottom:18 }}>
+        Mappando il mercato delle materie prime abbiamo raccolto informazioni pubbliche su chi produce
+        e distribuisce. Se una di queste è la tua azienda, puoi prenderne il controllo: la completi e la
+        gestisci tu, invece di ricominciare da capo. Nessuno di questi dati arriva da te — se preferisci,
+        crea pure un profilo nuovo.
+      </p>
+
+      {error && <div style={{ fontSize:13, color:C.red, marginBottom:12 }}>{error}</div>}
+
+      <div style={{ display:"flex", flexDirection:"column", gap:10, marginBottom:18 }}>
+        {candidates.map(c => (
+          <div key={c.canonical_id} style={{ border:`1px solid ${C.border}`, borderRadius:12, padding:"14px 16px", display:"flex", gap:12, alignItems:"center", flexWrap:"wrap", background:"#fff" }}>
+            <div style={{ flex:1, minWidth:200 }}>
+              <div style={{ fontSize:14.5, fontWeight:700 }}>{c.legal_name}</div>
+              <div style={{ fontSize:12.5, color:C.muted, marginTop:2 }}>
+                {[c.country, c.website].filter(Boolean).join(" · ")}
+              </div>
+              {(c.settori || []).length > 0 && (
+                <div style={{ fontSize:12, color:C.muted, marginTop:4 }}>
+                  {c.settori.join(" · ")}
+                  {c.righe > 1 && <> — <b>{c.righe} schede da unificare</b></>}
+                </div>
+              )}
+            </div>
+            <button disabled={busy} onClick={() => onClaim(c)} className="bs-btn" style={{ whiteSpace:"nowrap" }}>
+              {busy ? "Attendi…" : "È la mia azienda"}
+            </button>
+          </div>
+        ))}
+      </div>
+
+      <button onClick={onSkip} className="bs-btn-out" style={{ width:"100%" }}>
+        Nessuna di queste — inserisco la mia azienda
+      </button>
+    </>
+  );
+}
+
 export default function RegisterPage() {
   const [type, setType] = useState(null);      // 'buyer' | 'supplier'
   const [step, setStep] = useState(1);
@@ -187,11 +238,85 @@ export default function RegisterPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
 
+  // ── Rivendicazione azienda ────────────────────────────────────────────────
+  // claimState: "choose" = mostriamo le aziende trovate | "form" = inserimento
+  // manuale | "claimed" = rivendicata (l'anagrafica esiste gia', niente modulo).
+  const [claimState, setClaimState] = useState("choose");
+  const [candidates, setCandidates] = useState([]);
+  const [claimLoading, setClaimLoading] = useState(false);
+  const [claiming, setClaiming] = useState(false);
+  const [claimError, setClaimError] = useState(null);
+  const [claimed, setClaimed] = useState(null); // { company_id, status, legal_name }
+
+  // L'account si crea alla fine dello step 1: senza sessione le RPC di
+  // rivendicazione non sono chiamabili (il dominio si legge da auth.users).
+  const [accountCreated, setAccountCreated] = useState(false);
+
+  async function goToCompanyStep() {
+    setError(null);
+    setStep(2);
+    if (!accountCreated) {
+      try {
+        await signUpAccount(f.email.trim(), f.pass);
+        setAccountCreated(true);
+      } catch (e) {
+        const msg = String(e?.message || e);
+        setError(/already|registered|exists/i.test(msg)
+          ? "Questa email risulta già registrata. Accedi invece di registrarti."
+          : "Non è stato possibile creare l'account. Riprova.");
+        setStep(1);
+        return;
+      }
+    }
+    setClaimLoading(true);
+    try {
+      const rows = await findClaimCandidates({
+        email: f.email.trim(), legalName: f.company || null, vat: f.vat || null, role: type,
+      });
+      setCandidates(rows);
+      setClaimState(rows.length ? "choose" : "form");
+    } catch (e) {
+      // Se la ricerca fallisce non si blocca la registrazione: si va al modulo.
+      setCandidates([]);
+      setClaimState("form");
+    } finally {
+      setClaimLoading(false);
+    }
+  }
+
+  async function handleClaim(candidate) {
+    setClaiming(true);
+    setClaimError(null);
+    try {
+      const res = await requestCompanyClaim(candidate.canonical_id);
+      setClaimed({ ...res, legal_name: candidate.legal_name });
+      setClaimState("claimed");
+      set("company", candidate.legal_name);
+    } catch (e) {
+      const msg = String(e?.message || e);
+      setClaimError(/ALREADY_CLAIMED/.test(msg)
+        ? "Questa azienda è già stata rivendicata da un altro account. Scrivici e verifichiamo."
+        : "Non è stato possibile completare la richiesta. Riprova o inserisci i dati a mano.");
+    } finally {
+      setClaiming(false);
+    }
+  }
+
   async function submitRegistration() {
     setSubmitting(true);
     setError(null);
     try {
-      await registerCompany({ ...f, type });
+      // Azienda rivendicata: l'anagrafica esiste gia' e il profilo e' collegato,
+      // qui si completano solo fatturazione/banca/materiali seguiti.
+      if (claimed?.status === "approved") {
+        await completeClaimedCompany({ ...f, type });
+      } else if (claimed?.status === "pending_review") {
+        // Rivendicazione in attesa: NON si crea una seconda anagrafica, sarebbe
+        // il doppione che il claim serve a evitare. L'account resta senza
+        // azienda finche' l'admin non approva e collega quella rivendicata.
+      } else {
+        await registerCompany({ ...f, type });
+      }
       setDone(true);
     } catch (e) {
       setError(e.message === "ALREADY_REGISTERED"
@@ -207,7 +332,12 @@ export default function RegisterPage() {
   // 12 = minimo impostato su Supabase Auth (dashboard): tenere allineati,
   // altrimenti l'errore arriva dal server senza spiegazione nel form
   const step1Valid = !!type && emailOk(f.email) && f.pass.length >= 12 && f.pass === f.pass2;
-  const step2Valid = filled(f.company) && filled(f.vat) && filled(f.country) && filled(f.city) && filled(f.address) && filled(f.phone) && filled(f.contact);
+  // Con azienda rivendicata i dati anagrafici li abbiamo gia': non si richiedono
+  // di nuovo. Nello stato "choose" si prosegue solo scegliendo o rifiutando.
+  const step2Valid = claimed
+    ? true
+    : claimState === "form" &&
+      filled(f.company) && filled(f.vat) && filled(f.country) && filled(f.city) && filled(f.address) && filled(f.phone) && filled(f.contact);
   const step3Valid = type === "supplier" || type === "carrier"
     ? emailOk(f.emailMgmt) && emailOk(f.emailAdmin) && filled(f.ibanHolder) && filled(f.iban) && canConsent
     : emailOk(f.emailMgmt) && emailOk(f.emailAdmin) && canConsent;
@@ -315,10 +445,53 @@ export default function RegisterPage() {
               </>
             )}
 
-            {/* STEP 2 — company */}
-            {step===2 && (
+            {/* STEP 2 — company. Se la nostra ricerca di mercato ha gia' censito
+                l'azienda, prima si offre di prenderne il controllo; il modulo
+                manuale resta sempre raggiungibile e allo stesso livello. */}
+            {step===2 && claimState === "claimed" && (
+              <div style={{ border:`1px solid ${C.border}`, borderRadius:12, padding:"18px 20px", background:"#F0FDF4" }}>
+                <div style={{ fontSize:15, fontWeight:700, marginBottom:6 }}>
+                  {claimed?.status === "approved" ? "Azienda collegata" : "Richiesta inviata"}
+                </div>
+                <div style={{ fontSize:13.5, color:C.muted, lineHeight:1.6 }}>
+                  {claimed?.status === "approved" ? (
+                    <>
+                      <b style={{ color:C.text }}>{claimed?.legal_name}</b> è ora collegata al tuo account: il dominio
+                      della tua email corrisponde a quello aziendale. Nell'ultimo passaggio completi fatturazione e
+                      pagamenti. Per pubblicare i prezzi serve la nostra verifica: ti scriviamo noi, di solito entro un
+                      giorno lavorativo.
+                    </>
+                  ) : (
+                    <>
+                      Abbiamo ricevuto la richiesta per <b style={{ color:C.text }}>{claimed?.legal_name}</b>. Non
+                      potendo confermarla dal dominio della tua email, la controlliamo a mano prima di collegarla:
+                      ti avvisiamo appena è fatto. Intanto puoi completare la registrazione.
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {step===2 && claimState === "choose" && (
+              <ClaimStep
+                loading={claimLoading}
+                candidates={candidates}
+                error={claimError}
+                onClaim={handleClaim}
+                onSkip={() => setClaimState("form")}
+                busy={claiming}
+              />
+            )}
+
+            {step===2 && claimState === "form" && (
               <>
                 <div style={{ fontSize:15, fontWeight:700, marginBottom:16 }}>Dati dell'azienda</div>
+                {candidates.length > 0 && (
+                  <button onClick={() => setClaimState("choose")} className="bs-linklike"
+                    style={{ background:"none", border:"none", color:C.blue, fontSize:13, fontWeight:600, cursor:"pointer", padding:0, marginBottom:14 }}>
+                    ← Torna alle aziende che abbiamo trovato
+                  </button>
+                )}
                 <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"0 16px" }} className="bs-grid2">
                   <Field icon={<Building2 size={14} color={C.muted}/>} label="Ragione sociale" required>
                     <input style={inputStyle} placeholder="Es. Cantina Rossi S.r.l." value={f.company} onChange={e=>set("company",e.target.value)}/>
@@ -512,7 +685,7 @@ export default function RegisterPage() {
                 ? <button className="bs-btn-out" onClick={()=>setStep(step-1)}><ArrowLeft size={16}/> Indietro</button>
                 : <span/>}
               {step<3
-                ? <button className="bs-btn" disabled={!canProceed} onClick={()=>setStep(step+1)}>Continua <ArrowRight size={16}/></button>
+                ? <button className="bs-btn" disabled={!canProceed} onClick={()=> step===1 ? goToCompanyStep() : setStep(step+1)}>Continua <ArrowRight size={16}/></button>
                 : <button className="bs-btn" disabled={!canProceed || submitting} onClick={submitRegistration}>{submitting ? "Invio in corso…" : <>Completa registrazione <Check size={16}/></>}</button>}
             </div>
             {!canProceed && <p style={{ fontSize:12, color:C.muted, textAlign:"right", marginTop:8 }}>Compila i campi obbligatori <span style={{ color:C.blue }}>*</span> per continuare.</p>}

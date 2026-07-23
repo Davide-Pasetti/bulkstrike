@@ -102,7 +102,11 @@ function mapDbSupplier(s) {
   // tiers [[maxKg,price]] ordinati per min_kg; ultimo maxKg = Infinity
   const sorted = [...(s.tiers || [])].sort((a,b) => a.min_kg - b.min_kg);
   const tiers = sorted.map((t) => [t.max_kg == null ? Infinity : Number(t.max_kg), Number(t.price_per_kg)]);
-  if (!tiers.length) tiers.push([Infinity, s.best_price || 0]);
+  // NIENTE fallback a 0: un fornitore senza price_tiers reali non ha un prezzo,
+  // punto. Inventare [Infinity, 0] produceva un "prezzo" fittizio pari al solo
+  // costo di spedizione (bug: mostrava box "Acquista ora" con materia prima
+  // a €0,00/kg per fornitori che non hanno ancora pubblicato un prezzo).
+  const hasPrice = tiers.length > 0;
   const purity = (s.grade && /\d/.test(s.grade)) ? (s.grade.match(/[\d.,]+%/)?.[0] || "") : "";
   return {
     id: s.supplier_product_id,
@@ -116,6 +120,7 @@ function mapDbSupplier(s) {
     type: s.grade || (s.origin === "natural" ? "Naturale" : s.origin === "synthetic" ? "Sintetico" : "—"),
     purity,
     certs: s.certifications || [],
+    hasPrice,
     tiers,
     shipBase: ship.shipBase,
     shipKg: ship.shipKg,
@@ -367,9 +372,19 @@ export default function ProductPage() {
   }, [suppliers]);
   const filteredSuppliers = useMemo(() => {
     const keys = Object.keys(variantFilters).filter(k => variantFilters[k]);
-    if (keys.length === 0) return suppliers;
-    return suppliers.filter(s => keys.every(k => (s.variantAttributes || {})[k] === variantFilters[k]));
+    // Solo fornitori con un prezzo reale (price_tiers) entrano nel confronto
+    // "Acquista ora": compute()/priceForQty() richiedono tiers non vuoti.
+    const priced = suppliers.filter(s => s.hasPrice !== false);
+    if (keys.length === 0) return priced;
+    return priced.filter(s => keys.every(k => (s.variantAttributes || {})[k] === variantFilters[k]));
   }, [suppliers, variantFilters]);
+  // Fornitori reali/verificati su BulkStrike che non hanno ancora pubblicato un
+  // prezzo: niente "Acquista ora", ma restano visibili (a differenza dei
+  // candidati esterni, qui c'è già una scheda fornitore/rating/certificazioni).
+  const unpricedSuppliers = useMemo(
+    () => suppliers.filter(s => s.hasPrice === false),
+    [suppliers]
+  );
 
   const ranked = useMemo(() => {
     return filteredSuppliers.map(s => ({ ...s, calc: compute(s, qty) })).sort((a,b) => a.calc.preVatKg - b.calc.preVatKg);
@@ -848,6 +863,41 @@ export default function ProductPage() {
                     >Segnalacelo</a>{" "}
                     e lo contattiamo noi.
                   </div>
+                </div>
+              </div>
+            )}
+
+            {/* FORNITORI SU BULKSTRIKE SENZA PREZZO PUBBLICATO — a differenza dei
+                "Fornitori individuati" qui sotto, questi sono aziende verificate e
+                iscritte con una scheda fornitore reale (rating, certificazioni,
+                lead time), ma non hanno ancora caricato un listino prezzi: niente
+                "Acquista ora" finché non lo fanno, ma restano visibili e
+                contattabili invece di sparire dalla pagina. */}
+            {unpricedSuppliers.length > 0 && (
+              <div style={{ border:`1px solid ${C.border}`, borderRadius:14, padding:"18px 20px", marginBottom:28 }}>
+                <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:6 }}>
+                  <Factory size={17} color={C.muted} />
+                  <span style={{ fontSize:15, fontWeight:700 }}>Altri fornitori su BulkStrike</span>
+                  <span className="bs-chip" style={{ background:"#FEF3C7", color:C.amber }}>prezzo non ancora pubblicato</span>
+                </div>
+                <div style={{ fontSize:12.5, color:C.muted, lineHeight:1.55, marginBottom:14 }}>
+                  Aziende verificate su BulkStrike che trattano questa materia prima ma non hanno
+                  ancora caricato un listino per questo prodotto. Nessun acquisto protetto in escrow
+                  finché non pubblicano un prezzo.
+                </div>
+                <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))", gap:10 }}>
+                  {unpricedSuppliers.map(s => (
+                    <div key={s.id} style={{ border:`1px solid ${C.border}`, borderRadius:11, padding:"12px 13px", background:C.bg }}>
+                      <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:4 }}>
+                        <SupplierName name={s.name} companyId={s.company_id} className="bs-suplink" style={{ fontSize:13.5, fontWeight:700 }}/>
+                        <CountryFlag country={s.origin} size={12} />
+                      </div>
+                      <div style={{ display:"flex", alignItems:"center", gap:8, fontSize:11.5, color:C.muted, flexWrap:"wrap" }}>
+                        <span style={{ display:"flex", alignItems:"center", gap:3 }}><Star size={11} fill={C.amber} color={C.amber}/> {s.rating.toFixed(1)}</span>
+                        <span style={{ display:"flex", alignItems:"center", gap:3 }}><Truck size={11}/> {s.delivery}</span>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             )}
