@@ -367,9 +367,18 @@ export default function RegisterPage() {
             <div style={{ width:64, height:64, borderRadius:"50%", background:"#ECFDF5", display:"flex", alignItems:"center", justifyContent:"center", margin:"0 auto 18px" }}>
               <Check size={32} color={C.green}/>
             </div>
-            <h1 style={{ fontSize:24, fontWeight:800, marginBottom:8 }}>Registrazione inviata!</h1>
+            <h1 style={{ fontSize:24, fontWeight:800, marginBottom:8 }}>
+              {claimed?.status === "pending_review" ? "Richiesta ricevuta" : "Registrazione inviata!"}
+            </h1>
             <p style={{ fontSize:15, color:C.muted, lineHeight:1.6, marginBottom:8, maxWidth:440, marginLeft:"auto", marginRight:"auto" }}>
-              {type==="supplier"
+              {/* Azienda rivendicata: l'anagrafica esisteva già, quindi il messaggio
+                  standard "attendi che attiviamo il profilo" sarebbe sbagliato — il
+                  profilo è già attivo, in attesa c'è solo la pubblicazione prezzi. */}
+              {claimed?.status === "approved"
+                ? "Grazie. La tua azienda è già collegata all'account: puoi entrare subito e sistemare la scheda. Per pubblicare i prezzi serve la nostra verifica, di solito entro 1-2 giorni lavorativi: ti avvisiamo via email."
+                : claimed?.status === "pending_review"
+                ? "Grazie. Stiamo verificando a mano che l'azienda che hai indicato sia la tua: non essendo confermabile dal dominio della tua email, la controlliamo noi. Ti scriviamo appena è collegata, di solito entro 1-2 giorni lavorativi."
+                : type==="supplier"
                 ? "Grazie. Il team verifica la tua azienda (controllo P.IVA, sanzioni e certificazioni) entro 1-2 giorni lavorativi. Ti avviseremo via email quando il profilo sarà attivo."
                 : type==="carrier"
                 ? "Grazie. Il team verifica la tua azienda entro 1-2 giorni lavorativi. Nel frattempo puoi già configurare le aree che servi e le tue tariffe."
