@@ -610,7 +610,10 @@ export default function ProductPage() {
             <div style={{ display:"flex", gap:8, marginBottom:8, flexWrap:"wrap" }}>
               <span className="bs-chip" style={{ background:"#EFF6FF", color:"#1D4ED8" }}>{product.enum}</span>
               <span className="bs-chip" style={{ background:"#F1F5F9", color:C.muted }}>{product.category}</span>
-              <span className="bs-chip" style={{ background:"#ECFDF5", color:C.green }}><Check size={11}/> {ranked.length} fornitori disponibili</span>
+              {/* "con prezzo", non "disponibili": i fornitori senza listino sono
+                  comunque presenti sulla scheda, ma non sono acquistabili — la
+                  distinzione fra quotato e solo censito deve restare netta. */}
+              <span className="bs-chip" style={{ background:"#ECFDF5", color:C.green }}><Check size={11}/> {ranked.length} fornitori con prezzo</span>
             </div>
             <h1 style={{ fontSize:32, fontWeight:800, letterSpacing:"-0.02em", marginBottom:6 }}>{product.name}</h1>
             <p style={{ fontSize:14, color:C.muted }}>{product.form} · Purezza {product.purityRange} · CAS {product.cas}</p>
