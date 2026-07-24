@@ -2,7 +2,8 @@
 // BulkStrikeSuppliers — anagrafica pubblica dei fornitori verificati (/fornitori).
 // Dati da get_suppliers_directory(); filtri client-side per paese, tipo,
 // macro-area → settore, certificazioni, rating minimo. Deep-link via URL:
-// ?macro= &sector= &country= &cert= &q=
+// ?macro= &sector= &country= &cert= &q= &type= (la tendina "Fornitori" in nav
+// arriva qui con type=producer|distributor|importer)
 import { useState, useEffect, useMemo } from "react";
 import { Search, Star, ShieldCheck, ChevronRight, X, SlidersHorizontal, Package, Layers, Award, ArrowRight } from "lucide-react";
 import { getSuppliersDirectory, getMacroAreas, getSession } from "@/lib/api";
@@ -14,7 +15,11 @@ import { SupplierTypeBadge } from "@/components/BulkStrikeBadges";
 
 const C = { blue:"#0EA5E9", dark:"#0284C7", text:"#0F172A", muted:"#64748B", border:"#E2E8F0", bg:"#F8FAFE", green:"#059669", red:"#DC2626", amber:"#D97706" };
 
-const TYPE_LABEL = { producer:"Produttore", distributor:"Distributore", trader:"Trader" };
+const TYPE_LABEL = { producer:"Produttore", distributor:"Distributore", importer:"Importatore", trader:"Trader" };
+
+// Opzioni del filtro "Tipo fornitore" e valori accettati dal deep-link ?type=.
+// Rispecchia l'enum supplier_type del DB (producer/distributor/importer).
+const TYPE_OPTIONS = [["producer","Produttore"],["distributor","Distributore"],["importer","Importatore"]];
 
 function Chip({ label, onClear }) {
   return (
@@ -33,7 +38,7 @@ export default function SuppliersDirectory() {
 
   const [q, setQ] = useState("");
   const [country, setCountry] = useState(null);
-  const [type, setType] = useState(null);          // producer | distributor
+  const [type, setType] = useState(null);          // producer | distributor | importer
   const [minRating, setMinRating] = useState(null); // 4 | 4.5
   const [certSel, setCertSel] = useState([]);       // multi
   const [activeMacro, setActiveMacro] = useState(null);   // slug
@@ -57,6 +62,7 @@ export default function SuppliersDirectory() {
     if (sp.get("country")) setCountry(sp.get("country"));
     if (sp.get("cert")) setCertSel([sp.get("cert")]);
     if (sp.get("q")) setQ(sp.get("q"));
+    if (TYPE_OPTIONS.some(([v]) => v === sp.get("type"))) setType(sp.get("type"));
   }, []);
 
   // opzioni filtri derivate dai dati reali
@@ -159,7 +165,7 @@ export default function SuppliersDirectory() {
             </div>
 
             <FilterTitle>Tipo fornitore</FilterTitle>
-            {[["producer","Produttore"],["distributor","Distributore"]].map(([v,l]) => (
+            {TYPE_OPTIONS.map(([v,l]) => (
               <Opt key={v} on={type === v} onClick={() => setType(type === v ? null : v)}>{l}</Opt>
             ))}
 

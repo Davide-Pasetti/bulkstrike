@@ -42,6 +42,7 @@ export function IvaChip({ style }) {
 export const SUPPLIER_TYPES = {
   producer: { icon: "🏭", label: "Produttore", hint: "Produce direttamente la materia prima" },
   distributor: { icon: "🚚", label: "Distributore", hint: "Rivende materie prime di altri produttori" },
+  importer: { icon: "🚢", label: "Importatore", hint: "Importa materie prime da mercati esteri" },
 };
 
 export function SupplierTypeBadge({ type, withLabel = false, size = 12.5, style }) {

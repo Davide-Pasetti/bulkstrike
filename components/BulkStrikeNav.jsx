@@ -25,9 +25,16 @@ const PRODOTTI_MENU = [
   ["Andamento prezzi", "/andamento-prezzi", "Come si muovono i prezzi di mercato"],
 ];
 
+// "Fornitori" segue lo stesso schema: le tre tipologie portano alla directory
+// già filtrata per tipo (deep-link ?type= gestito da BulkStrikeSuppliers).
+const FORNITORI_MENU = [
+  ["Produttori", "/fornitori?type=producer", "Chi produce direttamente la materia prima"],
+  ["Distributori", "/fornitori?type=distributor", "Chi rivende materie prime di altri produttori"],
+  ["Importatori", "/fornitori?type=importer", "Chi importa materie prime da mercati esteri"],
+];
+
 // Fixed link set — same labels/order everywhere.
 const LINKS = [
-  ["Fornitori", "/fornitori"],
   ["Corrieri", "/corrieri"],
 ];
 
@@ -83,7 +90,8 @@ export default function BulkStrikeNav() {
           {/* Nav right */}
           <div style={{ display: "flex", alignItems: "center", gap: 20, flexShrink: 0, marginLeft: "auto" }}>
             <div className="bsnav-links">
-              <ProdottiMenu />
+              <NavDropdown label="Prodotti" items={PRODOTTI_MENU} />
+              <NavDropdown label="Fornitori" items={FORNITORI_MENU} />
               {LINKS.map(([l, href]) => (
                 <span key={l} onClick={() => { window.location.href = href; }} style={{ fontSize: 14, color: C.muted, cursor: "pointer", fontWeight: 500, whiteSpace: "nowrap" }}>{l}</span>
               ))}
@@ -97,12 +105,14 @@ export default function BulkStrikeNav() {
           <ProductSearch height={46} placeholder="Cerca materie prime, CAS, E-number..." />
         </div>
 
-        {/* Menu mobile: categorie (accordion tap-to-open), poi Prodotti con le
-            sue tre voci — stesso tap-to-open, niente hover — poi i link fissi */}
+        {/* Menu mobile: categorie (accordion tap-to-open), poi Prodotti e
+            Fornitori con le loro voci — stesso tap-to-open, niente hover —
+            poi i link fissi */}
         {mobileMenuOpen && (
           <div className="bsnav-menu-panel">
             <MegaMenuMobile />
-            <ProdottiMenuMobile />
+            <NavDropdownMobile label="Prodotti" items={PRODOTTI_MENU} />
+            <NavDropdownMobile label="Fornitori" items={FORNITORI_MENU} />
             {LINKS.map(([l, href]) => (
               <div key={l} onClick={() => { window.location.href = href; }} style={{ padding: "13px 20px", fontSize: 15, fontWeight: 600, color: C.text, borderBottom: `1px solid ${C.border}`, cursor: "pointer" }}>{l}</div>
             ))}
@@ -113,41 +123,42 @@ export default function BulkStrikeNav() {
   );
 }
 
-// ─── Tendina "Prodotti" — desktop ────────────────────────────────────────────
+// ─── Tendina di nav generica — desktop ───────────────────────────────────────
 // Stesso meccanismo di "Categorie" (useHoverMenu/HoverMenuPanel): hover con
 // delay anti-flicker, click per chi non usa il mouse, pannello sempre montato.
-// Allineato a destra perché la voce sta nel gruppo di link di destra.
-function ProdottiMenu() {
+// Allineata a destra perché le voci stanno nel gruppo di link di destra.
+// Usata da "Prodotti" e "Fornitori": una sola implementazione, non copie.
+function NavDropdown({ label, items }) {
   const { open, close, wrapProps, triggerProps } = useHoverMenu();
   return (
     <div {...wrapProps} style={{ position: "relative", display: "flex", alignItems: "center" }}>
       <style>{`
-        .bsnav-prodotti-trigger:focus-visible, .bsnav-prodotti-item:focus-visible {
+        .bsnav-dd-trigger:focus-visible, .bsnav-dd-item:focus-visible {
           outline: 2px solid ${C.blue}; outline-offset: 2px; border-radius: 8px;
         }
-        .bsnav-prodotti-item:hover { background: ${C.bg}; }
+        .bsnav-dd-item:hover { background: ${C.bg}; }
       `}</style>
 
       <button
         {...triggerProps}
-        className="bsnav-prodotti-trigger"
+        className="bsnav-dd-trigger"
         style={{ display: "flex", alignItems: "center", gap: 4, background: "none", border: "none", padding: 0, fontSize: 14, fontWeight: 500, color: open ? C.dark : C.muted, cursor: "pointer", whiteSpace: "nowrap", fontFamily: "Inter,system-ui" }}
       >
-        Prodotti
+        {label}
         <ChevronDown size={14} style={{ transform: open ? "rotate(180deg)" : "none", transition: "transform .15s" }} />
       </button>
 
-      <HoverMenuPanel open={open} label="Prodotti" width={280} align="right">
+      <HoverMenuPanel open={open} label={label} width={280} align="right">
         <div style={{ padding: 8 }}>
-          {PRODOTTI_MENU.map(([label, href, hint]) => (
+          {items.map(([itemLabel, href, hint]) => (
             <a
               key={href}
-              className="bsnav-prodotti-item"
+              className="bsnav-dd-item"
               href={href}
               onClick={() => close(false)}
               style={{ display: "block", padding: "10px 12px", borderRadius: 10, textDecoration: "none" }}
             >
-              <div style={{ fontSize: 13.5, fontWeight: 700, color: C.dark }}>{label}</div>
+              <div style={{ fontSize: 13.5, fontWeight: 700, color: C.dark }}>{itemLabel}</div>
               <div style={{ fontSize: 11.5, color: C.muted, marginTop: 2 }}>{hint}</div>
             </a>
           ))}
@@ -157,9 +168,9 @@ function ProdottiMenu() {
   );
 }
 
-// ─── Tendina "Prodotti" — mobile ─────────────────────────────────────────────
+// ─── Tendina di nav generica — mobile ────────────────────────────────────────
 // Accordion tap-to-open, stesso schema di MegaMenuMobile (niente hover).
-function ProdottiMenuMobile() {
+function NavDropdownMobile({ label, items }) {
   const [expanded, setExpanded] = useState(false);
   return (
     <div style={{ borderBottom: `1px solid ${C.border}` }}>
@@ -168,13 +179,13 @@ function ProdottiMenuMobile() {
         aria-expanded={expanded}
         style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", textAlign: "left", padding: "13px 20px", background: expanded ? C.bg : "transparent", border: "none", fontSize: 15, fontWeight: 600, color: C.text, cursor: "pointer", fontFamily: "Inter,system-ui" }}
       >
-        <span style={{ flex: 1 }}>Prodotti</span>
+        <span style={{ flex: 1 }}>{label}</span>
         <ChevronDown size={15} color={C.muted} style={{ transform: expanded ? "rotate(180deg)" : "none", transition: "transform .15s" }} />
       </button>
       {expanded && (
         <div style={{ padding: "2px 12px 10px 20px", display: "flex", flexDirection: "column" }}>
-          {PRODOTTI_MENU.map(([label, href]) => (
-            <a key={href} href={href} style={{ padding: "9px 10px", fontSize: 14, fontWeight: 600, color: C.text, textDecoration: "none" }}>{label}</a>
+          {items.map(([itemLabel, href]) => (
+            <a key={href} href={href} style={{ padding: "9px 10px", fontSize: 14, fontWeight: 600, color: C.text, textDecoration: "none" }}>{itemLabel}</a>
           ))}
         </div>
       )}
