@@ -131,8 +131,11 @@ export default function SuppliersDirectory() {
         <div style={{ display:"flex", alignItems:"flex-end", justifyContent:"space-between", gap:14, marginBottom:20, flexWrap:"wrap" }}>
           <div>
             <div style={{ fontSize:11, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.1em", color:C.blue, marginBottom:6 }}>Anagrafica</div>
-            <h1 style={{ fontSize:30, fontWeight:800, letterSpacing:"-0.02em" }}>Fornitori verificati</h1>
-            <p style={{ fontSize:14, color:C.muted, marginTop:6 }}>{needLogin ? "Fornitori verificati, pagamento in escrow — riservato agli utenti registrati." : `${all.length} fornitori attivi su BulkStrike — tutti verificati, pagamento in escrow.`}</p>
+            {/* DAV-33: "verified" ora significa "controllato da un admin" — la
+                directory include anche i censiti in attesa di verifica, quindi
+                niente più "tutti verificati" nel copy. */}
+            <h1 style={{ fontSize:30, fontWeight:800, letterSpacing:"-0.02em" }}>Fornitori</h1>
+            <p style={{ fontSize:14, color:C.muted, marginTop:6 }}>{needLogin ? "La directory dei fornitori è riservata agli utenti registrati." : `${all.length} fornitori su BulkStrike — il badge indica le aziende verificate dal nostro team; pagamento in escrow sui fornitori con listino.`}</p>
           </div>
           {!needLogin && <div style={{ display:"flex", gap:10, alignItems:"center", flexWrap:"wrap" }}>
             <div style={{ display:"flex", alignItems:"center", gap:6, border:`1.5px solid ${C.border}`, borderRadius:9, padding:"9px 12px", minWidth:230, background:"#fff" }}>
