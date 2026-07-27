@@ -926,9 +926,11 @@ export default function ProductPage() {
                   <span className="bs-chip" style={{ background:"#FEF3C7", color:C.amber }}>in attesa di verifica</span>
                 </div>
                 <div style={{ fontSize:12.5, color:C.muted, lineHeight:1.55, marginBottom:14 }}>
-                  Aziende censite su BulkStrike che trattano questa materia prima ma non ancora
-                  verificate dal nostro team: nessun prezzo pubblicato né acquisto protetto in
-                  escrow. Puoi comunque scriverle: la conversazione resta sulla piattaforma.
+                  Aziende individuate da <b>fonti pubbliche</b> che trattano questa materia prima,
+                  non ancora verificate da BulkStrike: nessun prezzo pubblicato né acquisto protetto
+                  in escrow. Puoi comunque scriverle: la conversazione resta sulla piattaforma.
+                  Sei il titolare di una di queste aziende? Dal suo profilo puoi rivendicarla o
+                  chiederne la rimozione.
                 </div>
                 <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))", gap:10 }}>
                   {unverifiedSuppliers.map(s => (
@@ -944,10 +946,16 @@ export default function ProductPage() {
                         </div>
                       </div>
                       {s.company_id && (
-                        <a href={`/messaggi?to=${s.company_id}`} className="bs-btn-ghost"
-                          style={{ textDecoration:"none", justifyContent:"center", fontSize:12, borderColor:C.blue, color:C.blue, fontWeight:700, marginTop:"auto" }}>
-                          <MessageSquare size={12}/> Contatta fornitore
-                        </a>
+                        <div style={{ display:"flex", flexDirection:"column", gap:5, marginTop:"auto" }}>
+                          <a href={`/messaggi?to=${s.company_id}`} className="bs-btn-ghost"
+                            style={{ textDecoration:"none", justifyContent:"center", fontSize:12, borderColor:C.blue, color:C.blue, fontWeight:700 }}>
+                            <MessageSquare size={12}/> Contatta fornitore
+                          </a>
+                          <a href={`/fornitore?id=${s.company_id}#titolare`}
+                            style={{ fontSize:10.5, color:C.muted, textDecoration:"underline", textAlign:"center" }}>
+                            Sei il titolare?
+                          </a>
+                        </div>
                       )}
                     </div>
                   ))}

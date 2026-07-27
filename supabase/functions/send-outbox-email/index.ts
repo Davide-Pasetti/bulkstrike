@@ -4,12 +4,13 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 // ============================================================
 // BulkStrike — drena una riga di emails_outbox via Resend (DAV-33).
 // POST { id: string }  ← chiamata da net.http_post nel trigger
-// trg_outbox_dispatch (AFTER INSERT su emails_outbox, solo kind
-// 'claim_request' e 'unclaimed_contact'; i kind ordini restano al
-// loro flusso: questa function li rifiuta).
+// trg_outbox_dispatch (AFTER INSERT su emails_outbox, solo i kind in
+// ALLOWED_KINDS; i kind ordini restano al loro flusso: questa function
+// li rifiuta).
 //
 // Destinatario per kind:
 //   claim_request      → ALERT_EMAIL (l'admin: stessa env del watchdog)
+//   removal_request    → ALERT_EMAIL (richiesta di rimozione, DAV-33-bis)
 //   unclaimed_contact  → to_email della riga (support_email dell'azienda)
 //
 // Autorizzazione: header x-cron-secret == app_secrets.ingest_cron_secret
@@ -23,7 +24,7 @@ const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") ?? "";
 const FROM_EMAIL = Deno.env.get("FROM_EMAIL") ?? "BulkStrike <ordini@updates.bulkstrike.com>";
 const ALERT_TO = Deno.env.get("ALERT_EMAIL") ?? "davide@bulkstrike.com";
 
-const ALLOWED_KINDS = ["claim_request", "unclaimed_contact"] as const;
+const ALLOWED_KINDS = ["claim_request", "unclaimed_contact", "removal_request"] as const;
 
 function json(status: number, body: unknown) {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
@@ -53,14 +54,14 @@ Deno.serve(async (req: Request) => {
   }
   if (row.status !== "queued") return json(200, { ok: true, skipped: "ALREADY_PROCESSED", status: row.status });
 
-  const recipient = row.kind === "claim_request" ? ALERT_TO : (row.to_email ?? "");
+  const recipient = row.kind === "unclaimed_contact" ? (row.to_email ?? "") : ALERT_TO;
 
   const fail = async (msg: string, status: number) => {
     await admin.from("emails_outbox").update({ status: "failed" }).eq("id", id).eq("status", "queued");
     return json(status, { error: msg });
   };
 
-  if (!recipient) return await fail(row.kind === "claim_request" ? "ALERT_TO_NOT_SET" : "NO_RECIPIENT_EMAIL", 422);
+  if (!recipient) return await fail(row.kind === "unclaimed_contact" ? "NO_RECIPIENT_EMAIL" : "ALERT_EMAIL_NOT_SET", 422);
   if (!RESEND_API_KEY) return await fail("RESEND_API_KEY_NOT_SET", 500);
 
   try {

@@ -18,6 +18,7 @@ import {
   getSession, getMyCompany, poolErrorMessage,
   adminListPendingSuppliers, adminVerifySuppliers, adminDiscardSuppliers,
   adminGetSupplierDetail, adminListClaimRequests, adminReviewClaim, adminSetManuallyVerified,
+  adminListRemovalRequests, adminReviewRemoval, adminSetCompanyHidden,
 } from "@/lib/api";
 import BulkStrikeNav from "@/components/BulkStrikeNav";
 import CountryFlag from "@/components/CountryFlag";
@@ -46,8 +47,9 @@ export default function AdminSuppliersPage({ inShell = false }) {
   const [detailErr, setDetailErr] = useState({});
   // Due code distinte ma vicine: "questo lead è reale?" e "questa persona è
   // davvero di quest'azienda?" sono decisioni diverse, con prove diverse.
-  const [tab, setTab] = useState("lead");       // "lead" | "claim"
+  const [tab, setTab] = useState("lead");       // "lead" | "claim" | "removal"
   const [claims, setClaims] = useState([]);
+  const [removals, setRemovals] = useState([]); // richieste di rimozione pending (DAV-33-bis)
 
   useEffect(() => {
     (async () => {
@@ -58,6 +60,7 @@ export default function AdminSuppliersPage({ inShell = false }) {
         if (!company?.is_platform_admin) { setNotAdmin(true); setLoading(false); return; }
         setRows(await adminListPendingSuppliers());
         setClaims(await adminListClaimRequests().catch(() => []));
+        setRemovals(await adminListRemovalRequests().catch(() => []));
       } catch (e) {
         if (String(e?.message || e).includes("NOT_ADMIN")) setNotAdmin(true);
         else setErr(poolErrorMessage(e));
@@ -141,6 +144,31 @@ export default function AdminSuppliersPage({ inShell = false }) {
     finally { setBusy(false); }
   }
 
+  // Richiesta di rimozione (DAV-33-bis): 'hide' nasconde l'azienda da tutte le
+  // viste pubbliche e segna gestita; 'dismiss' la ignora senza toccare nulla.
+  async function reviewRemoval(requestId, action) {
+    if (busy) return;
+    setBusy(true); setErr(""); setConfirm(null);
+    try {
+      await adminReviewRemoval(requestId, action);
+      setRemovals(prev => prev.filter(r => r.request_id !== requestId));
+    } catch (e) { setErr(poolErrorMessage(e)); }
+    finally { setBusy(false); }
+  }
+
+  // Nascondi/ripristina un'azienda in tutte le viste pubbliche (reversibile).
+  async function toggleHidden(companyId, hidden) {
+    if (busy) return;
+    setBusy(true); setErr(""); setConfirm(null);
+    try {
+      await adminSetCompanyHidden(companyId, hidden, null);
+      setDetails(prev => prev[companyId]
+        ? { ...prev, [companyId]: { ...prev[companyId], hidden_from_public: hidden } }
+        : prev);
+    } catch (e) { setErr(poolErrorMessage(e)); }
+    finally { setBusy(false); }
+  }
+
   // L'unica approvazione (DAV-33): lato DB imposta INSIEME manually_verified
   // (rende pubblici i prezzi già compilati) e status='verified' (badge pubblico,
   // esce dalla sezione "Fornitori non verificati").
@@ -198,7 +226,7 @@ export default function AdminSuppliersPage({ inShell = false }) {
       {/* Due code, stessa pagina: sono decisioni dello stesso tipo (approvo o no)
           ma su prove diverse, quindi tab separati e non una lista unica. */}
       <div style={{ display: "flex", gap: 8, marginBottom: 18, borderBottom: `1px solid ${C.border}` }}>
-        {[["lead", `Fornitori da verificare (${rows.length})`], ["claim", `Richieste di rivendicazione (${claims.length})`]].map(([id, label]) => (
+        {[["lead", `Fornitori da verificare (${rows.length})`], ["claim", `Richieste di rivendicazione (${claims.length})`], ["removal", `Richieste di rimozione (${removals.length})`]].map(([id, label]) => (
           <button key={id} onClick={() => setTab(id)}
             style={{ background: "none", border: "none", borderBottom: `2px solid ${tab === id ? C.blue : "transparent"}`, padding: "9px 4px", marginBottom: -1, fontSize: 13.5, fontWeight: 700, color: tab === id ? C.text : C.muted, cursor: "pointer", fontFamily: "Inter,system-ui" }}>
             {label}
@@ -210,6 +238,10 @@ export default function AdminSuppliersPage({ inShell = false }) {
 
       {tab === "claim" && (
         <ClaimQueue claims={claims} busy={busy} onReview={reviewClaim} />
+      )}
+
+      {tab === "removal" && (
+        <RemovalQueue removals={removals} busy={busy} onReview={reviewRemoval} />
       )}
 
       {tab === "lead" && (<>
@@ -330,6 +362,7 @@ export default function AdminSuppliersPage({ inShell = false }) {
                   onDiscard={() => guarded(`detail:${row.id}`, "discard", [row.id])}
                   discardArmed={confirm === `detail:${row.id}`}
                   onMarkVerified={() => markVerified(row.id)}
+                  onToggleHidden={(hidden) => toggleHidden(row.id, hidden)}
                 />
               )}
               </div>
@@ -409,6 +442,55 @@ function ClaimQueue({ claims, busy, onReview }) {
   );
 }
 
+// ─── Coda richieste di rimozione (DAV-33-bis) ────────────────────────────────
+// Ogni richiesta arriva dal form pubblico "Richiedi la rimozione" (senza
+// login): "Nascondi e segna gestita" toglie l'azienda da TUTTE le viste
+// pubbliche senza cancellare nulla; "Ignora" chiude la richiesta come
+// pretestuosa/spam. Entrambe con conferma armata come le altre azioni.
+function RemovalQueue({ removals, busy, onReview }) {
+  const [armed, setArmed] = useState(null);
+  if (removals.length === 0) {
+    return <div style={{ padding: "28px 16px", textAlign: "center", color: C.muted, fontSize: 14, border: `1px solid ${C.border}`, borderRadius: 14 }}>
+      Nessuna richiesta di rimozione in attesa.
+    </div>;
+  }
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      {removals.map(r => (
+        <div key={r.request_id} style={{ border: `1px solid ${C.border}`, borderRadius: 14, padding: "16px 18px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4, flexWrap: "wrap" }}>
+            <CountryFlag code={r.country_iso2} country={r.country} size={13} />
+            <span style={{ fontSize: 15, fontWeight: 700 }}>{r.legal_name}</span>
+            {r.hidden_from_public && (
+              <span className="bs-chip" style={{ background: "#F1F5F9", color: C.muted }}>già nascosta</span>
+            )}
+          </div>
+          <div style={{ fontSize: 12.5, color: C.muted, marginBottom: 10 }}>
+            {[r.country, r.website].filter(Boolean).join(" · ")}
+          </div>
+          <div style={{ fontSize: 12.5, marginBottom: 12 }}>
+            <div style={{ color: C.muted, marginBottom: 2 }}>Richiesta da</div>
+            <div style={{ fontWeight: 600 }}>{r.requested_by_email}</div>
+            {r.reason && <div style={{ color: C.muted, marginTop: 6, whiteSpace: "pre-wrap" }}>{r.reason}</div>}
+          </div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <button disabled={busy}
+              onClick={() => armed === `hide:${r.request_id}` ? onReview(r.request_id, "hide") : setArmed(`hide:${r.request_id}`)}
+              style={{ background: armed === `hide:${r.request_id}` ? C.red : C.text, color: "#fff", border: "none", borderRadius: 8, padding: "9px 14px", fontSize: 12.5, fontWeight: 700, cursor: busy ? "default" : "pointer", display: "inline-flex", alignItems: "center", gap: 6 }}>
+              <ShieldAlert size={14} /> {armed === `hide:${r.request_id}` ? "Confermi? Sparirà da tutte le viste pubbliche" : "Nascondi e segna gestita"}
+            </button>
+            <button disabled={busy}
+              onClick={() => armed === `dismiss:${r.request_id}` ? onReview(r.request_id, "dismiss") : setArmed(`dismiss:${r.request_id}`)}
+              style={{ background: "#fff", color: C.muted, border: `1.5px solid ${C.border}`, borderRadius: 8, padding: "9px 14px", fontSize: 12.5, fontWeight: 700, cursor: busy ? "default" : "pointer" }}>
+              {armed === `dismiss:${r.request_id}` ? "Confermi? La richiesta viene ignorata" : "Ignora"}
+            </button>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function Prova({ ok, label }) {
   return (
     <span style={{ display: "inline-flex", alignItems: "center", gap: 5, color: ok ? C.green : C.muted }}>
@@ -422,7 +504,7 @@ function Prova({ ok, label }) {
 // guarda un blocco per volta (chi è / è in regola / come lo contatto / cosa fa).
 // I campi vuoti non vengono mostrati, tranne quelli che contano proprio quando
 // mancano (P.IVA, sito) — su un lead non verificato l'assenza è un'informazione.
-function SupplierDetail({ detail, error, busy, onVerify, onDiscard, discardArmed, onMarkVerified }) {
+function SupplierDetail({ detail, error, busy, onVerify, onDiscard, discardArmed, onMarkVerified, onToggleHidden }) {
   const box = { padding: "16px 18px 20px", background: C.bg, borderTop: `1px solid ${C.border}` };
 
   if (error) return <div style={{ ...box, fontSize: 13, color: C.red }}>{error}</div>;
@@ -519,6 +601,29 @@ function SupplierDetail({ detail, error, busy, onVerify, onDiscard, discardArmed
           : <button disabled={busy} onClick={onMarkVerified}
               style={{ background: "#fff", color: C.green, border: `1.5px solid ${C.green}`, borderRadius: 8, padding: "8px 13px", fontSize: 12.5, fontWeight: 700, cursor: busy ? "default" : "pointer", display: "inline-flex", alignItems: "center", gap: 6 }}>
               <ShieldCheck size={14} /> Segna verificata (badge + prezzi pubblici)
+            </button>}
+      </div>
+
+      {/* Visibilità pubblica (DAV-33-bis): risposta immediata a una lamentela —
+          l'azienda sparisce da directory/prodotto/profilo/candidati senza
+          cancellare nulla. Reversibile. */}
+      <div style={{ border: `1px solid ${C.border}`, borderRadius: 10, background: "#fff", padding: "12px 14px", marginBottom: 14, display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+        <div style={{ flex: 1, minWidth: 220 }}>
+          <div style={{ fontSize: 12.5, fontWeight: 700 }}>Visibilità pubblica</div>
+          <div style={{ fontSize: 11.5, color: C.muted, marginTop: 2 }}>
+            {d.hidden_from_public
+              ? `Nascosta da tutte le viste pubbliche${d.hidden_reason ? ` — ${d.hidden_reason}` : ""}.`
+              : "Visibile nelle viste pubbliche (directory, scheda prodotto, profilo)."}
+          </div>
+        </div>
+        {d.hidden_from_public
+          ? <button disabled={busy} onClick={() => onToggleHidden(false)}
+              style={{ background: "#fff", color: C.text, border: `1.5px solid ${C.border}`, borderRadius: 8, padding: "8px 13px", fontSize: 12.5, fontWeight: 700, cursor: busy ? "default" : "pointer" }}>
+              Ripristina visibilità
+            </button>
+          : <button disabled={busy} onClick={() => onToggleHidden(true)}
+              style={{ background: "#fff", color: C.red, border: `1.5px solid ${C.red}`, borderRadius: 8, padding: "8px 13px", fontSize: 12.5, fontWeight: 700, cursor: busy ? "default" : "pointer", display: "inline-flex", alignItems: "center", gap: 6 }}>
+              <ShieldAlert size={14} /> Nascondi su richiesta
             </button>}
       </div>
 

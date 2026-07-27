@@ -303,8 +303,17 @@ export default function SuppliersDirectory() {
                         {more > 0 && <span style={{ fontSize:11, fontWeight:700, borderRadius:100, padding:"3px 9px", background:"#EFF6FF", color:"#0369A1" }}>+{more}</span>}
                       </div>
 
-                      <div style={{ marginTop:"auto", display:"flex", alignItems:"center", justifyContent:"flex-end", gap:5, fontSize:13, fontWeight:700, color:C.blue }}>
-                        Vedi profilo <ArrowRight size={14}/>
+                      <div style={{ marginTop:"auto", display:"flex", alignItems:"center", justifyContent:"space-between", gap:8 }}>
+                        {/* Via d'uscita sempre visibile per le aziende censite ma non
+                            verificate (DAV-33-bis): porta al blocco #titolare del
+                            profilo (rivendica o richiedi la rimozione). */}
+                        {f.status !== "verified"
+                          ? <a href={`/fornitore?id=${f.id}#titolare`} onClick={e => e.stopPropagation()}
+                              style={{ fontSize:11, color:C.muted, textDecoration:"underline" }}>Sei il titolare?</a>
+                          : <span/>}
+                        <span style={{ display:"flex", alignItems:"center", gap:5, fontSize:13, fontWeight:700, color:C.blue }}>
+                          Vedi profilo <ArrowRight size={14}/>
+                        </span>
                       </div>
                     </div>
                   );

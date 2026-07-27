@@ -4,7 +4,7 @@
 // Da qui si può ordinare direttamente ogni prodotto del listino (Acquisto Rapido).
 import { useState, useEffect, useMemo, useRef } from "react";
 import { Search, Star, ShieldCheck, MapPin, Phone, Globe, Mail, User, FileText, Package, Layers, Award, Clock, ChevronRight, ArrowRight, Flame, Building2, Truck, ExternalLink, Check, X, MessageSquare, Send, ShoppingCart } from "lucide-react";
-import { getSupplierProfile, getSession, upsertCartItem, poolErrorMessage, getSupplierReviews, getReviewableOrders, submitReview, getCart, followSupplier, unfollowSupplier, isFollowingSupplier } from "@/lib/api";
+import { getSupplierProfile, getSession, upsertCartItem, poolErrorMessage, getSupplierReviews, getReviewableOrders, submitReview, getCart, followSupplier, unfollowSupplier, isFollowingSupplier, requestCompanyRemoval } from "@/lib/api";
 import BulkStrikeNav from "@/components/BulkStrikeNav";
 import LoginGate from "@/components/BulkStrikeLoginGate";
 import { BSIcon } from "@/components/BSLogo";
@@ -47,6 +47,87 @@ function FollowButton({ supplierId }) {
       <Star size={15} fill={following ? "#D97706" : "none"} color={following ? "#D97706" : C.muted} />
       {following ? "Lo segui" : "Segui"}
     </button>
+  );
+}
+
+// ─── "Sei il titolare?" (DAV-33-bis, layer legale) ───────────────────────────
+// Solo sui profili NON verificati: dichiara la provenienza da fonti pubbliche
+// e dà sempre le due vie d'uscita — rivendicare il profilo (→ /registrati) o
+// chiederne la RIMOZIONE senza login (RPC request_company_removal, eseguibile
+// da anon: email aziendale + motivo, una richiesta aperta per azienda).
+// Raggiungibile con l'ancora #titolare dai link "Sei il titolare?" sulle card.
+function OwnerActions({ companyId, companyName }) {
+  const ref = useRef(null);
+  const [open, setOpen] = useState(false);
+  const [email, setEmail] = useState("");
+  const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [outcome, setOutcome] = useState(null); // 'ok' | 'already_pending' | errore testuale
+
+  useEffect(() => {
+    if (window.location.hash === "#titolare" && ref.current) {
+      ref.current.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }, []);
+
+  async function submit() {
+    if (busy) return;
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.trim())) { setOutcome("Inserisci un'email aziendale valida."); return; }
+    setBusy(true); setOutcome(null);
+    try {
+      const r = await requestCompanyRemoval(companyId, email.trim(), reason.trim() || null);
+      setOutcome(r?.status === "already_pending" ? "already_pending" : "ok");
+    } catch {
+      setOutcome("Invio non riuscito, riprova tra qualche minuto.");
+    } finally { setBusy(false); }
+  }
+
+  return (
+    <div id="titolare" ref={ref} style={{ border:`1px solid ${C.border}`, background:C.bg, borderRadius:14, padding:"14px 18px", marginBottom:24 }}>
+      <div style={{ fontSize:13.5, fontWeight:700, marginBottom:4 }}>Sei il titolare di questa azienda?</div>
+      <div style={{ fontSize:12.5, color:C.muted, lineHeight:1.55, marginBottom:10 }}>
+        Questa scheda è stata creata da BulkStrike a partire da <b>fonti pubbliche</b> e non è ancora
+        stata verificata. Puoi prenderne il controllo, oppure chiederci di rimuoverla.
+      </div>
+      {outcome === "ok" || outcome === "already_pending" ? (
+        <div style={{ display:"flex", gap:8, alignItems:"flex-start", fontSize:13, color:C.green, fontWeight:600 }}>
+          <Check size={15} style={{ flexShrink:0, marginTop:1 }}/>
+          {outcome === "ok"
+            ? "Richiesta di rimozione inviata: la esaminiamo al più presto e ti ricontattiamo all'email indicata."
+            : "C'è già una richiesta di rimozione in lavorazione per questa azienda."}
+        </div>
+      ) : (
+        <>
+          <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+            <a href="/registrati" style={{ display:"inline-flex", alignItems:"center", gap:6, background:C.blue, color:"#fff", borderRadius:8, padding:"8px 14px", fontSize:12.5, fontWeight:700, textDecoration:"none" }}>
+              <ShieldCheck size={14}/> Rivendica il profilo
+            </a>
+            <button onClick={() => setOpen(o => !o)}
+              style={{ background:"#fff", color:C.text, border:`1px solid ${C.border}`, borderRadius:8, padding:"8px 14px", fontSize:12.5, fontWeight:700, cursor:"pointer", fontFamily:"Inter,system-ui" }}>
+              Richiedi la rimozione
+            </button>
+          </div>
+          {open && (
+            <div style={{ marginTop:12, display:"flex", flexDirection:"column", gap:8, maxWidth:460 }}>
+              <input type="email" value={email} onChange={e => setEmail(e.target.value)}
+                placeholder="Email aziendale (per ricontattarti)"
+                style={{ border:`1px solid ${C.border}`, borderRadius:8, padding:"9px 11px", fontSize:13, fontFamily:"Inter,system-ui", background:"#fff", color:C.text }} />
+              <textarea value={reason} onChange={e => setReason(e.target.value)} rows={3}
+                placeholder={`Motivo (facoltativo) — es. "${companyName || "La nostra azienda"} non desidera comparire su BulkStrike"`}
+                style={{ border:`1px solid ${C.border}`, borderRadius:8, padding:"9px 11px", fontSize:13, fontFamily:"Inter,system-ui", resize:"vertical", background:"#fff", color:C.text }} />
+              <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap" }}>
+                <button onClick={submit} disabled={busy}
+                  style={{ background:C.text, color:"#fff", border:"none", borderRadius:8, padding:"9px 16px", fontSize:12.5, fontWeight:700, cursor:busy ? "default" : "pointer", fontFamily:"Inter,system-ui", opacity:busy ? 0.6 : 1 }}>
+                  {busy ? "Invio…" : "Invia richiesta di rimozione"}
+                </button>
+                <span style={{ fontSize:11.5, color:C.muted }}>Nessuna registrazione richiesta.</span>
+              </div>
+              {outcome && <div style={{ fontSize:12.5, color:C.red }}>{outcome}</div>}
+            </div>
+          )}
+        </>
+      )}
+    </div>
   );
 }
 
@@ -306,6 +387,9 @@ export default function SupplierPage() {
             {profile.description && <p style={{ fontSize:14, color:C.muted, lineHeight:1.6, marginTop:10, maxWidth:640 }}>{profile.description}</p>}
           </div>
         </div>
+
+        {/* Sei il titolare? — solo profili non verificati (DAV-33-bis) */}
+        {profile.status !== "verified" && <OwnerActions companyId={profile.id} companyName={profile.name} />}
 
         {/* STATS BAR */}
         <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(130px,1fr))", gap:0, border:`1px solid ${C.border}`, borderRadius:14, overflow:"hidden", marginBottom:24, background:C.bg }}>
