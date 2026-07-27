@@ -27,11 +27,12 @@ function leadTimeLabel(min, max) {
 const MODE_LABELS = {
   strada_ftl: "Strada (FTL)",
   groupage_ltl: "Groupage/LTL",
+  espresso_pacchi: "Corriere espresso / pacchi",
   mare: "Mare",
   ferrovia: "Ferrovia",
   multimodale: "Multimodale/3PL",
 };
-const MODE_ORDER = ["strada_ftl", "groupage_ltl", "mare", "ferrovia", "multimodale"];
+const MODE_ORDER = ["strada_ftl", "groupage_ltl", "espresso_pacchi", "mare", "ferrovia", "multimodale"];
 
 // Chip di filtro attivo sopra la griglia (stesso stile di /fornitori).
 function Chip({ label, onClear }) {
