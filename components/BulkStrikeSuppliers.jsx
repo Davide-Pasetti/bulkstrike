@@ -269,7 +269,9 @@ export default function SuppliersDirectory() {
                               {f.name}
                             </span>
                             <SupplierTypeBadge type={f.supplier_type} />
-                            {f.status === "verified" && <ShieldCheck size={14} color={C.green}/>}
+                            {/* Dopo DAV-33 il badge è significativo: solo le aziende
+                                controllate davvero da un admin sono "verified". */}
+                            {f.status === "verified" && <span title="Verificato da BulkStrike" style={{ display:"inline-flex", cursor:"help" }}><ShieldCheck size={14} color={C.green}/></span>}
                           </div>
                           <div style={{ fontSize:12.5, color:C.muted, marginTop:2 }}>
                             {TYPE_LABEL[f.supplier_type] || f.supplier_type} · {f.country}{f.city ? ` · ${f.city}` : ""}

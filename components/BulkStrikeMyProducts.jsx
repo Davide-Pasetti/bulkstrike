@@ -40,6 +40,10 @@ export default function MyProductsPage({ inShell = false }) {
   const [loading, setLoading] = useState(true);
   const [needLogin, setNeedLogin] = useState(false);
   const [notSupplier, setNotSupplier] = useState(false);
+  // DAV-33: il listino si compila e si salva SEMPRE (anche appena rivendicato),
+  // ma i prezzi diventano pubblici solo quando l'admin verifica l'azienda
+  // (manually_verified). Questo flag pilota solo l'avviso, il gate è RLS.
+  const [canPublish, setCanPublish] = useState(true);
   const [listings, setListings] = useState([]);
   const [err, setErr] = useState("");
   const [okMsg, setOkMsg] = useState("");
@@ -76,6 +80,7 @@ export default function MyProductsPage({ inShell = false }) {
     try {
       const company = await getMyCompany();
       if (!company?.is_supplier) { setNotSupplier(true); setLoading(false); return; }
+      setCanPublish(!!company.manually_verified);
       const rows = await getMySupplierListings();
       setListings(rows);
     } catch (e) { setErr(poolErrorMessage(e)); }
@@ -371,6 +376,16 @@ export default function MyProductsPage({ inShell = false }) {
             <p style={{ fontSize:13.5, color:C.muted, marginBottom:20, maxWidth:680 }}>
               Ogni prodotto può avere più varianti (es. granulometria, purezza, colore diversi), ognuna con il proprio prezzo e formato di vendita. Puoi anche caricare il tuo listino in PDF: l'AI lo interpreta e ti propone le righe da confermare. Gli attributi di variante compaiono ai clienti solo dopo una verifica.
             </p>
+            {!canPublish && (
+              <div style={{ display:"flex", gap:10, alignItems:"flex-start", border:"1px solid #FDE68A", background:"#FFFBEB", borderRadius:12, padding:"12px 16px", marginBottom:20, maxWidth:680 }}>
+                <ShieldCheck size={16} color="#D97706" style={{ flexShrink:0, marginTop:2 }}/>
+                <span style={{ fontSize:13, color:"#92400E", lineHeight:1.55 }}>
+                  Il tuo profilo non è ancora stato verificato da BulkStrike: puoi già compilare e salvare
+                  il listino, ma i prezzi <b>non sono ancora visibili ai clienti</b>. Diventeranno pubblici
+                  automaticamente appena il profilo viene verificato dal nostro team.
+                </span>
+              </div>
+            )}
 
             {err && <div style={{ marginBottom:16, padding:"10px 14px", background:"#FEF2F2", border:"1px solid #FECACA", borderRadius:9, fontSize:13, color:C.red }}>{err}</div>}
             {okMsg && <div style={{ marginBottom:16, padding:"10px 14px", background:"#ECFDF5", border:"1px solid #A7F3D0", borderRadius:9, fontSize:13, color:C.green }}>{okMsg}</div>}

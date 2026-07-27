@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
-import { Search, ArrowRight, Check, Clock, ChevronDown, ChevronRight, ChevronUp, Star, Shield, Truck, FileText, Download, Plus, Minus, Beaker, TrendingDown, Users, Gavel, Info, ShoppingCart, Factory, ExternalLink } from "lucide-react";
+import { Search, ArrowRight, Check, Clock, ChevronDown, ChevronRight, ChevronUp, Star, Shield, Truck, FileText, Download, Plus, Minus, Beaker, TrendingDown, Users, Gavel, Info, ShoppingCart, Factory, ExternalLink, MessageSquare } from "lucide-react";
 import { getProduct, getOpenPoolForProduct, getPriceReference, getProductBreadcrumb, getSession, openPool, upsertCartItem, poolErrorMessage, searchProducts, getCart, isFollowingProduct, getMarketPriceSeries, getMarketIndexSeries, getProductSpecs, getProductCandidateSuppliers, getMyCompany } from "@/lib/api";
 import PriceSourceNote from "@/components/PriceSourceNote";
 import CountryFlag from "@/components/CountryFlag";
@@ -121,6 +121,9 @@ function mapDbSupplier(s) {
     purity,
     certs: s.certifications || [],
     hasPrice,
+    // 'verified' | 'pending' (DAV-33): decide in quale sezione compare un
+    // fornitore senza prezzo pubblicato.
+    status: s.status || null,
     tiers,
     shipBase: ship.shipBase,
     shipKg: ship.shipKg,
@@ -358,8 +361,8 @@ export default function ProductPage() {
     if (q.length < 2) return;
     searchProducts(q).then(rows => { setSearchResults(rows); setSearchOpen(true); }).catch(() => {});
   }
-  // Attributi di variante disponibili tra i fornitori (solo quelli verificati arrivano
-  // già popolati da getProduct). Un fornitore senza la variante selezionata sparisce.
+  // Attributi di variante disponibili tra i fornitori (arrivano già popolati e
+  // approvati da getProduct). Un fornitore senza la variante selezionata sparisce.
   const variantOptions = useMemo(() => {
     const opts = {};
     for (const s of suppliers) {
@@ -378,11 +381,18 @@ export default function ProductPage() {
     if (keys.length === 0) return priced;
     return priced.filter(s => keys.every(k => (s.variantAttributes || {})[k] === variantFilters[k]));
   }, [suppliers, variantFilters]);
-  // Fornitori reali/verificati su BulkStrike che non hanno ancora pubblicato un
-  // prezzo: niente "Acquista ora", ma restano visibili (a differenza dei
-  // candidati esterni, qui c'è già una scheda fornitore/rating/certificazioni).
-  const unpricedSuppliers = useMemo(
-    () => suppliers.filter(s => s.hasPrice === false),
+  // Fornitori VERIFICATI senza prezzo pubblicato (caso raro/transitorio dopo
+  // DAV-33: verificato di norma implica listino visibile): restano nella
+  // sezione "Altri fornitori su BulkStrike".
+  const verifiedUnpriced = useMemo(
+    () => suppliers.filter(s => s.hasPrice === false && s.status === "verified"),
+    [suppliers]
+  );
+  // Fornitori censiti ma NON ancora verificati da un admin (DAV-33): sezione
+  // "Fornitori non verificati", contattabili via messaggistica interna
+  // (mascheramento contatti DAV-23), mai col mailto esterno dei candidati.
+  const unverifiedSuppliers = useMemo(
+    () => suppliers.filter(s => s.hasPrice === false && s.status !== "verified"),
     [suppliers]
   );
 
@@ -870,13 +880,11 @@ export default function ProductPage() {
               </div>
             )}
 
-            {/* FORNITORI SU BULKSTRIKE SENZA PREZZO PUBBLICATO — a differenza dei
-                "Fornitori individuati" qui sotto, questi sono aziende verificate e
-                iscritte con una scheda fornitore reale (rating, certificazioni,
-                lead time), ma non hanno ancora caricato un listino prezzi: niente
-                "Acquista ora" finché non lo fanno, ma restano visibili e
-                contattabili invece di sparire dalla pagina. */}
-            {unpricedSuppliers.length > 0 && (
+            {/* FORNITORI VERIFICATI SENZA PREZZO PUBBLICATO — dopo DAV-33 è un
+                caso raro/transitorio (l'approvazione admin rende visibile il
+                listino già compilato), ma se esiste resta distinto dalla sezione
+                "Fornitori non verificati": qui la verifica c'è, manca il listino. */}
+            {verifiedUnpriced.length > 0 && (
               <div style={{ border:`1px solid ${C.border}`, borderRadius:14, padding:"18px 20px", marginBottom:28 }}>
                 <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:6 }}>
                   <Factory size={17} color={C.muted} />
@@ -889,7 +897,7 @@ export default function ProductPage() {
                   finché non pubblicano un prezzo.
                 </div>
                 <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))", gap:10 }}>
-                  {unpricedSuppliers.map(s => (
+                  {verifiedUnpriced.map(s => (
                     <div key={s.id} style={{ border:`1px solid ${C.border}`, borderRadius:11, padding:"12px 13px", background:C.bg }}>
                       <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:4 }}>
                         <SupplierName name={s.name} companyId={s.company_id} className="bs-suplink" style={{ fontSize:13.5, fontWeight:700 }}/>
@@ -899,6 +907,48 @@ export default function ProductPage() {
                         <span style={{ display:"flex", alignItems:"center", gap:3 }}><Star size={11} fill={C.amber} color={C.amber}/> {s.rating.toFixed(1)}</span>
                         <span style={{ display:"flex", alignItems:"center", gap:3 }}><Truck size={11}/> {s.delivery}</span>
                       </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* FORNITORI NON VERIFICATI (DAV-33) — aziende censite su BulkStrike
+                (schede da import, collegate al prodotto) che nessun admin ha
+                ancora controllato. Niente prezzo né escrow, ma si contattano con
+                la messaggistica INTERNA (mascheramento DAV-23) — mai col mailto
+                esterno, che resta solo per i "Fornitori individuati" qui sotto. */}
+            {unverifiedSuppliers.length > 0 && (
+              <div style={{ border:`1px solid ${C.border}`, borderRadius:14, padding:"18px 20px", marginBottom:28 }}>
+                <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:6 }}>
+                  <Factory size={17} color={C.muted} />
+                  <span style={{ fontSize:15, fontWeight:700 }}>Fornitori non verificati</span>
+                  <span className="bs-chip" style={{ background:"#FEF3C7", color:C.amber }}>in attesa di verifica</span>
+                </div>
+                <div style={{ fontSize:12.5, color:C.muted, lineHeight:1.55, marginBottom:14 }}>
+                  Aziende censite su BulkStrike che trattano questa materia prima ma non ancora
+                  verificate dal nostro team: nessun prezzo pubblicato né acquisto protetto in
+                  escrow. Puoi comunque scriverle: la conversazione resta sulla piattaforma.
+                </div>
+                <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))", gap:10 }}>
+                  {unverifiedSuppliers.map(s => (
+                    <div key={s.id} style={{ border:`1px solid ${C.border}`, borderRadius:11, padding:"12px 13px", background:C.bg, display:"flex", flexDirection:"column", gap:8 }}>
+                      <div>
+                        <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:4 }}>
+                          <SupplierName name={s.name} companyId={s.company_id} className="bs-suplink" style={{ fontSize:13.5, fontWeight:700 }}/>
+                          <CountryFlag country={s.origin} size={12} />
+                        </div>
+                        <div style={{ display:"flex", alignItems:"center", gap:8, fontSize:11.5, color:C.muted, flexWrap:"wrap" }}>
+                          <span style={{ display:"flex", alignItems:"center", gap:3 }}><Star size={11} fill={C.amber} color={C.amber}/> {s.rating.toFixed(1)}</span>
+                          <span style={{ display:"flex", alignItems:"center", gap:3 }}><Truck size={11}/> {s.delivery}</span>
+                        </div>
+                      </div>
+                      {s.company_id && (
+                        <a href={`/messaggi?to=${s.company_id}`} className="bs-btn-ghost"
+                          style={{ textDecoration:"none", justifyContent:"center", fontSize:12, borderColor:C.blue, color:C.blue, fontWeight:700, marginTop:"auto" }}>
+                          <MessageSquare size={12}/> Contatta fornitore
+                        </a>
+                      )}
                     </div>
                   ))}
                 </div>

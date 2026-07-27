@@ -270,7 +270,9 @@ export default function SupplierPage() {
           </div>
           <div style={{ flex:1, minWidth:260 }}>
             <div style={{ display:"flex", gap:8, marginBottom:8, flexWrap:"wrap" }}>
-              {profile.status === "verified" && <span style={{ display:"inline-flex", alignItems:"center", gap:4, background:"#ECFDF5", color:C.green, borderRadius:100, padding:"3px 10px", fontSize:12, fontWeight:700 }}><ShieldCheck size={12}/> Verificato</span>}
+              {profile.status === "verified"
+                ? <span style={{ display:"inline-flex", alignItems:"center", gap:4, background:"#ECFDF5", color:C.green, borderRadius:100, padding:"3px 10px", fontSize:12, fontWeight:700 }}><ShieldCheck size={12}/> Verificato</span>
+                : <span title="Profilo censito su BulkStrike, non ancora controllato dal nostro team" style={{ display:"inline-flex", alignItems:"center", gap:4, background:"#FFFBEB", color:"#B45309", borderRadius:100, padding:"3px 10px", fontSize:12, fontWeight:700, cursor:"help" }}><Clock size={12}/> In attesa di verifica</span>}
               <span style={{ background:"#EFF6FF", color:"#1D4ED8", borderRadius:100, padding:"3px 10px", fontSize:12, fontWeight:700 }}>{TYPE_LABEL[profile.supplier_type] || profile.supplier_type || "Fornitore"}</span>
               {profile.site_rank && <span style={{ background:"#FEF3C7", color:"#B45309", borderRadius:100, padding:"3px 10px", fontSize:12, fontWeight:800 }}>#{profile.site_rank} su {profile.suppliers_total} su BulkStrike</span>}
             </div>
@@ -290,8 +292,10 @@ export default function SupplierPage() {
                 </div>
               </div>
               {/* Messaggistica interna (thread buyer↔fornitore) — sostituisce il
-                  vecchio mailto: funziona per ogni fornitore verificato, con
-                  storico conversazione su /messaggi. Accanto: Segui/Non seguire. */}
+                  vecchio mailto: funziona per ogni fornitore visibile, anche non
+                  ancora verificato (DAV-33: se l'azienda non è rivendicata parte
+                  una email di cortesia al suo support_email, senza contatti del
+                  mittente). Storico su /messaggi. Accanto: Segui/Non seguire. */}
               <div style={{ flexShrink:0, display:"flex", gap:8, flexWrap:"wrap" }}>
                 <a href={`/messaggi?to=${profile.id}`} style={{ display:"inline-flex", alignItems:"center", gap:7, background:C.blue, color:"#fff", border:"none", borderRadius:9, padding:"10px 18px", fontSize:13.5, fontWeight:700, textDecoration:"none" }}>
                   <MessageSquare size={15}/> Contatta il fornitore

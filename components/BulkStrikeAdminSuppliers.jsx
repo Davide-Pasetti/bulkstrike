@@ -6,8 +6,10 @@
 // admin_list_pending_suppliers / admin_verify_suppliers / admin_discard_suppliers
 // (SECURITY DEFINER lato DB). Qui il controllo client serve solo per l'UI.
 //
-// "Verifica" → status='verified' (li rende visibili in suppliers_public): azione
-// manuale, mai automatica. "Scarta" → DELETE del record (con conferma a due passi).
+// "Verifica" (DAV-33) → status='verified' + manually_verified insieme: è l'unica
+// approvazione, dà il badge "Verificato" E abilita/rende pubblici i prezzi. I
+// pending censiti dall'import sono comunque già visibili come "non verificati".
+// Azione manuale, mai automatica. "Scarta" → DELETE del record (con conferma a due passi).
 // Entrambe, singole o in blocco. Ordine di default: sector_hint, poi legal_name (RPC).
 // ============================================================
 import { useState, useEffect, useMemo } from "react";
@@ -23,7 +25,7 @@ import { SupplierTypeBadge } from "@/components/BulkStrikeBadges";
 
 const C = { blue: "#0EA5E9", text: "#0F172A", muted: "#64748B", border: "#E2E8F0", bg: "#F8FAFE", green: "#059669", red: "#DC2626", amber: "#D97706", purple: "#7C3AED" };
 const GRID = "26px 1.5fr 1fr 80px 96px 92px 58px 84px 26px";
-const TIPO = { producer: "Produttore", distributor: "Distributore" };
+const TIPO = { producer: "Produttore", distributor: "Distributore", importer: "Importatore" };
 
 export default function AdminSuppliersPage({ inShell = false }) {
   const [loading, setLoading] = useState(true);
@@ -139,15 +141,16 @@ export default function AdminSuppliersPage({ inShell = false }) {
     finally { setBusy(false); }
   }
 
-  // Sblocca la pubblicazione dei prezzi: è la via d'uscita del gate
-  // company_can_publish_prices(), che senza questa resterebbe chiuso per tutti.
+  // L'unica approvazione (DAV-33): lato DB imposta INSIEME manually_verified
+  // (rende pubblici i prezzi già compilati) e status='verified' (badge pubblico,
+  // esce dalla sezione "Fornitori non verificati").
   async function markVerified(companyId) {
     if (busy) return;
     setBusy(true); setErr(""); setConfirm(null);
     try {
       await adminSetManuallyVerified(companyId, true, null);
       setDetails(prev => prev[companyId]
-        ? { ...prev, [companyId]: { ...prev[companyId], manually_verified: true } }
+        ? { ...prev, [companyId]: { ...prev[companyId], manually_verified: true, status: "verified" } }
         : prev);
     } catch (e) { setErr(poolErrorMessage(e)); }
     finally { setBusy(false); }
@@ -499,23 +502,23 @@ function SupplierDetail({ detail, error, busy, onVerify, onDiscard, discardArmed
         </div>
       )}
 
-      {/* Pubblicazione prezzi: separata dalla verifica del lead. Un fornitore
-          collegato può gestire il catalogo, ma i prezzi restano bloccati
-          (company_can_publish_prices) finché non si sblocca qui. */}
+      {/* Verifica azienda (DAV-33): unica azione di approvazione — badge
+          "Verificato" pubblico + i listini già compilati dal fornitore
+          rivendicato diventano visibili da soli (gate in lettura su price_tiers). */}
       <div style={{ border: `1px solid ${C.border}`, borderRadius: 10, background: "#fff", padding: "12px 14px", marginBottom: 14, display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
         <div style={{ flex: 1, minWidth: 220 }}>
-          <div style={{ fontSize: 12.5, fontWeight: 700 }}>Pubblicazione prezzi</div>
+          <div style={{ fontSize: 12.5, fontWeight: 700 }}>Verifica azienda</div>
           <div style={{ fontSize: 11.5, color: C.muted, marginTop: 2 }}>
             {d.manually_verified
-              ? "Abilitata: questo fornitore può pubblicare listini."
-              : "Bloccata finché non verifichi l'azienda a mano."}
+              ? "Verificata: badge pubblico e listini visibili ai clienti."
+              : "Non verificata: profilo visibile come “in attesa di verifica”, listini salvabili ma non pubblici."}
           </div>
         </div>
         {d.manually_verified
-          ? <Badge on={true} onLabel="Verificata a mano" offLabel="" />
+          ? <Badge on={true} onLabel="Verificata" offLabel="" />
           : <button disabled={busy} onClick={onMarkVerified}
               style={{ background: "#fff", color: C.green, border: `1.5px solid ${C.green}`, borderRadius: 8, padding: "8px 13px", fontSize: 12.5, fontWeight: 700, cursor: busy ? "default" : "pointer", display: "inline-flex", alignItems: "center", gap: 6 }}>
-              <ShieldCheck size={14} /> Segna verificata (abilita prezzi)
+              <ShieldCheck size={14} /> Segna verificata (badge + prezzi pubblici)
             </button>}
       </div>
 
