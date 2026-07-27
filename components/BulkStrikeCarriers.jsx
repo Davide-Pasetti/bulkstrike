@@ -5,8 +5,8 @@
 // dalla RPC get_carriers_directory — mai dati sensibili).
 // La GESTIONE del proprio listino tariffe resta nel profilo corriere
 // (/corriere), raggiungibile dalla CTA in fondo se sei loggato come corriere.
-import { useState, useEffect, useMemo } from "react";
-import { Truck, MapPin, Clock, ChevronRight, Search, ArrowRight } from "lucide-react";
+import { useState, useEffect, useMemo, useRef } from "react";
+import { Truck, MapPin, Clock, ChevronRight, Search, ArrowRight, Globe, Home, Star, Check, X } from "lucide-react";
 import { supabase } from "@/lib/supabase"; // RPC diretta per non toccare lib/api
 import { getSession } from "@/lib/api";
 import BulkStrikeNav from "@/components/BulkStrikeNav";
@@ -21,11 +21,92 @@ function leadTimeLabel(min, max) {
   return `${min ?? max} gg`;
 }
 
+// Modalità di trasporto: valore tecnico (dal DB) → etichetta italiana.
+// Le 5 opzioni sono l'enum CHECK di carrier_transport_modes.
+const MODE_LABELS = {
+  strada_ftl: "Strada (FTL)",
+  groupage_ltl: "Groupage/LTL",
+  mare: "Mare",
+  ferrovia: "Ferrovia",
+  multimodale: "Multimodale/3PL",
+};
+const MODE_ORDER = ["strada_ftl", "groupage_ltl", "mare", "ferrovia", "multimodale"];
+
+// Dropdown paese multi-select con ricerca interna. Filtra sui soli `countries`
+// (paesi espliciti), non sulle region generiche.
+function CountryFilter({ options, selected, onToggle, onClear }) {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState("");
+  const ref = useRef(null);
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [open]);
+  const shown = q.trim() ? options.filter(o => o.toLowerCase().includes(q.trim().toLowerCase())) : options;
+  return (
+    <div ref={ref} style={{ position:"relative" }}>
+      <button onClick={() => setOpen(o => !o)}
+        style={{ display:"inline-flex", alignItems:"center", gap:6, border:`1px solid ${selected.size ? C.blue : C.border}`, borderRadius:10, padding:"9px 13px", fontSize:12.5, fontWeight:600, cursor:"pointer", fontFamily:"'Inter',system-ui",
+          background: selected.size ? "#EFF6FF" : "#fff", color: selected.size ? "#0369A1" : C.muted }}>
+        <MapPin size={13}/> Paese{selected.size > 0 ? ` (${selected.size})` : ""}
+        <ChevronRight size={13} style={{ transform: open ? "rotate(90deg)" : "none", transition:"transform .15s" }}/>
+      </button>
+      {open && (
+        <div style={{ position:"absolute", top:"calc(100% + 6px)", left:0, zIndex:20, width:260, maxHeight:340, background:"#fff", border:`1px solid ${C.border}`, borderRadius:12, boxShadow:"0 12px 32px rgba(15,23,42,0.14)", display:"flex", flexDirection:"column", overflow:"hidden" }}>
+          <div style={{ padding:10, borderBottom:`1px solid ${C.border}` }}>
+            <input autoFocus value={q} onChange={e => setQ(e.target.value)} placeholder="Cerca paese…"
+              style={{ width:"100%", border:`1px solid ${C.border}`, borderRadius:8, padding:"7px 10px", fontSize:13, outline:"none", fontFamily:"'Inter',system-ui" }} />
+          </div>
+          <div style={{ overflowY:"auto", padding:"4px 0" }}>
+            {shown.length === 0 ? (
+              <div style={{ padding:"12px 14px", fontSize:12.5, color:C.muted }}>Nessun paese</div>
+            ) : shown.map(o => {
+              const on = selected.has(o);
+              return (
+                <button key={o} onClick={() => onToggle(o)}
+                  style={{ display:"flex", alignItems:"center", gap:8, width:"100%", textAlign:"left", border:"none", background: on ? "#F8FAFE" : "#fff", padding:"8px 14px", fontSize:13, fontWeight: on ? 700 : 500, color: on ? C.text : C.muted, cursor:"pointer", fontFamily:"'Inter',system-ui" }}>
+                  <span style={{ width:16, height:16, borderRadius:4, border:`1.5px solid ${on ? C.blue : C.border}`, background: on ? C.blue : "#fff", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+                    {on && <Check size={11} color="#fff"/>}
+                  </span>
+                  {o}
+                </button>
+              );
+            })}
+          </div>
+          {selected.size > 0 && (
+            <button onClick={onClear} style={{ borderTop:`1px solid ${C.border}`, background:"#fff", border:"none", padding:"9px 14px", fontSize:12.5, fontWeight:700, color:C.blue, cursor:"pointer", textAlign:"left", fontFamily:"'Inter',system-ui" }}>
+              Deseleziona tutti
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function CarriersPage() {
   const [carriers, setCarriers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [needLogin, setNeedLogin] = useState(false); // la RPC directory è solo per autenticati
   const [q, setQ] = useState("");
+  const [selCountries, setSelCountries] = useState(() => new Set()); // paesi selezionati
+  const [scope, setScope] = useState("all");   // "all" | "national" | "international"
+  const [selModes, setSelModes] = useState(() => new Set());       // modalità selezionate
+
+  // Paesi disponibili: unione dei soli `countries` (NON zones, che mischia
+  // paese e region generica tipo "Europa"). Ordinati alfabeticamente.
+  const allCountries = useMemo(() => {
+    const s = new Set();
+    for (const c of carriers) for (const co of (c.countries || [])) if (co) s.add(co);
+    return [...s].sort((a, b) => a.localeCompare(b, "it"));
+  }, [carriers]);
+
+  // Le recensioni non esistono ancora per nessun corriere: il filtro rating
+  // resta in UI ma disabilitato finché non c'è almeno un corriere recensito.
+  // (Stessa lezione del prezzo fittizio: non mostrare un dato come reale se non lo è.)
+  const ratingAvailable = useMemo(() => carriers.some(c => (c.reviews_count || 0) > 0), [carriers]);
 
   useEffect(() => {
     (async () => {
@@ -39,16 +120,32 @@ export default function CarriersPage() {
     })();
   }, []);
 
+  // Tutti i filtri si combinano in AND fra loro e con la search testuale.
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
-    if (!s) return carriers;
-    return carriers.filter(c =>
-      (c.name || "").toLowerCase().includes(s) ||
-      (c.country || "").toLowerCase().includes(s) ||
-      (c.city || "").toLowerCase().includes(s) ||
-      (c.zones || []).some(z => (z || "").toLowerCase().includes(s))
-    );
-  }, [carriers, q]);
+    return carriers.filter(c => {
+      if (s && !(
+        (c.name || "").toLowerCase().includes(s) ||
+        (c.country || "").toLowerCase().includes(s) ||
+        (c.city || "").toLowerCase().includes(s) ||
+        (c.zones || []).some(z => (z || "").toLowerCase().includes(s))
+      )) return false;
+      // Paese: passa se almeno uno dei paesi selezionati è nella copertura.
+      if (selCountries.size > 0 && !(c.countries || []).some(co => selCountries.has(co))) return false;
+      // Nazionale / internazionale: usa is_international così com'è dal DB.
+      if (scope === "national" && c.is_international) return false;
+      if (scope === "international" && !c.is_international) return false;
+      // Modalità: passa se ha almeno una delle modalità selezionate.
+      if (selModes.size > 0 && !(c.modes || []).some(m => selModes.has(m))) return false;
+      return true;
+    });
+  }, [carriers, q, selCountries, scope, selModes]);
+
+  const activeFilters = selCountries.size + selModes.size + (scope !== "all" ? 1 : 0);
+  function clearFilters() { setSelCountries(new Set()); setScope("all"); setSelModes(new Set()); }
+  function toggleSet(setter, value) {
+    setter(prev => { const n = new Set(prev); n.has(value) ? n.delete(value) : n.add(value); return n; });
+  }
 
   return (
     <div style={{ background:"#fff", color:C.text, fontFamily:"'Inter',system-ui,sans-serif", minHeight:"100vh", colorScheme:"light" }}>
@@ -96,6 +193,52 @@ export default function CarriersPage() {
           </div>
         </div>
 
+        {/* BARRA FILTRI */}
+        <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap", marginBottom:18 }}>
+          {/* Paese: dropdown multi-select con ricerca */}
+          <CountryFilter options={allCountries} selected={selCountries} onToggle={co => toggleSet(setSelCountries, co)} onClear={() => setSelCountries(new Set())} />
+
+          {/* Nazionale / Internazionale */}
+          <div style={{ display:"inline-flex", border:`1px solid ${C.border}`, borderRadius:10, overflow:"hidden" }}>
+            {[["all","Tutti",null],["national","Nazionale",Home],["international","Internazionale",Globe]].map(([val,label,Icon]) => (
+              <button key={val} onClick={() => setScope(val)}
+                style={{ display:"inline-flex", alignItems:"center", gap:5, border:"none", padding:"9px 13px", fontSize:12.5, fontWeight:600, cursor:"pointer", fontFamily:"'Inter',system-ui",
+                  background: scope === val ? C.blue : "#fff", color: scope === val ? "#fff" : C.muted }}>
+                {Icon && <Icon size={13}/>} {label}
+              </button>
+            ))}
+          </div>
+
+          {/* Modalità: chip multi-select */}
+          <div style={{ display:"inline-flex", gap:6, flexWrap:"wrap" }}>
+            {MODE_ORDER.map(m => {
+              const on = selModes.has(m);
+              return (
+                <button key={m} onClick={() => toggleSet(setSelModes, m)}
+                  style={{ border:`1px solid ${on ? C.blue : C.border}`, borderRadius:100, padding:"8px 13px", fontSize:12.5, fontWeight:600, cursor:"pointer", fontFamily:"'Inter',system-ui",
+                    background: on ? "#EFF6FF" : "#fff", color: on ? "#0369A1" : C.muted, display:"inline-flex", alignItems:"center", gap:5 }}>
+                  {on && <Check size={12}/>} {MODE_LABELS[m]}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Rating: presente ma disabilitato finché nessun corriere ha recensioni */}
+          <button disabled title={ratingAvailable ? "" : "Nessun corriere ha ancora recensioni: filtro disponibile appena arrivano le prime."}
+            style={{ border:`1px dashed ${C.border}`, borderRadius:100, padding:"8px 13px", fontSize:12.5, fontWeight:600, cursor:"not-allowed", fontFamily:"'Inter',system-ui",
+              background:"#F8FAFE", color:"#94A3B8", display:"inline-flex", alignItems:"center", gap:6 }}>
+            <Star size={12}/> Valutazione
+            <span style={{ fontSize:10, fontWeight:700, background:"#F1F5F9", color:C.muted, borderRadius:100, padding:"1px 7px" }}>presto disponibile</span>
+          </button>
+
+          {activeFilters > 0 && (
+            <button onClick={clearFilters}
+              style={{ background:"none", border:"none", color:C.blue, fontSize:12.5, fontWeight:700, cursor:"pointer", display:"inline-flex", alignItems:"center", gap:4, fontFamily:"'Inter',system-ui" }}>
+              <X size={13}/> Azzera filtri
+            </button>
+          )}
+        </div>
+
         {loading ? (
           <div style={{ padding:"60px 0", textAlign:"center", color:C.muted, fontSize:14 }}>Caricamento corrieri…</div>
         ) : filtered.length === 0 ? (
@@ -108,9 +251,15 @@ export default function CarriersPage() {
           <div className="cr-grid">
             {filtered.map(c => {
               const zones = c.zones || [];
+              const countries = c.countries || [];
+              const modes = (c.modes || []).slice().sort((a, b) => MODE_ORDER.indexOf(a) - MODE_ORDER.indexOf(b));
               const shown = zones.slice(0, 6);
               const extra = zones.length - shown.length;
               const lt = leadTimeLabel(c.lead_time_min, c.lead_time_max);
+              // Copertura solo generica (nessun paese esplicito, solo region tipo
+              // "Europa"): lo si segnala così l'utente capisce che il corriere
+              // probabilmente serve anche il suo paese pur non comparendo nel filtro.
+              const genericOnly = countries.length === 0 && zones.length > 0;
               return (
                 <div key={c.id} className="cr-card">
                   <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:10 }}>
@@ -126,6 +275,12 @@ export default function CarriersPage() {
                   </div>
 
                   <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:10 }}>
+                    <span className="cr-chip" style={{ background: c.is_international ? "#EFF6FF" : "#F1F5F9", color: c.is_international ? "#0369A1" : C.muted }}>
+                      {c.is_international ? <Globe size={11}/> : <Home size={11}/>} {c.is_international ? "Internazionale" : "Nazionale"}
+                    </span>
+                    {modes.map(m => (
+                      <span key={m} className="cr-chip" style={{ background:"#F5F3FF", color:"#6D28D9" }}><Truck size={11}/> {MODE_LABELS[m]}</span>
+                    ))}
                     {c.pricing_mode && (
                       <span className="cr-chip" style={{ background:"#EFF6FF", color:"#0369A1" }}>
                         {c.pricing_mode === "distance" ? "Tariffe a distanza" : "Tariffe a zona"}
@@ -142,6 +297,11 @@ export default function CarriersPage() {
                     <div style={{ display:"flex", gap:5, flexWrap:"wrap" }}>
                       {shown.map(z => <span key={z} className="cr-chip">{z}</span>)}
                       {extra > 0 && <span className="cr-chip" style={{ background:"#EFF6FF", color:C.blue }}>+{extra}</span>}
+                    </div>
+                  )}
+                  {genericOnly && (
+                    <div style={{ fontSize:11, color:C.muted, marginTop:7, fontStyle:"italic", lineHeight:1.4 }}>
+                      Copertura generica: probabilmente serve anche il tuo paese anche se non compare nel filtro per paese.
                     </div>
                   )}
                 </div>
