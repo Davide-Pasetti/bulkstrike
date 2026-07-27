@@ -60,3 +60,21 @@ export function SupplierTypeBadge({ type, withLabel = false, size = 12.5, style 
     </span>
   );
 }
+
+// Un'azienda può avere più ruoli (es. importatore + distributore): qui li mostra
+// TUTTI, uno per ruolo. `roles` è l'array da company_supplier_roles (via il
+// campo `roles` di get_suppliers_directory / get_supplier_profile). Se `roles`
+// manca o è vuoto (RPC che non lo espongono ancora, es. coda admin) fa fallback
+// sul singolo `type`, così SupplierTypeBadge resta usabile com'era.
+// Ordine: importatore per primo (è la novità), poi produttore, poi distributore.
+const ROLE_ORDER = ["importer", "producer", "distributor"];
+export function SupplierTypeBadges({ roles, type, withLabel = false, size = 12.5, style }) {
+  const list = Array.isArray(roles) ? roles.filter(r => SUPPLIER_TYPES[r]) : [];
+  if (list.length === 0) return <SupplierTypeBadge type={type} withLabel={withLabel} size={size} style={style} />;
+  const ordered = [...list].sort((a, b) => ROLE_ORDER.indexOf(a) - ROLE_ORDER.indexOf(b));
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+      {ordered.map(r => <SupplierTypeBadge key={r} type={r} withLabel={withLabel} size={size} style={style} />)}
+    </span>
+  );
+}

@@ -11,7 +11,7 @@ import BulkStrikeNav from "@/components/BulkStrikeNav";
 import LoginGate from "@/components/BulkStrikeLoginGate";
 import { BSIcon } from "@/components/BSLogo";
 import CountryFlag from "@/components/CountryFlag";
-import { SupplierTypeBadge } from "@/components/BulkStrikeBadges";
+import { SupplierTypeBadges } from "@/components/BulkStrikeBadges";
 
 const C = { blue:"#0EA5E9", dark:"#0284C7", text:"#0F172A", muted:"#64748B", border:"#E2E8F0", bg:"#F8FAFE", green:"#059669", red:"#DC2626", amber:"#D97706" };
 
@@ -271,7 +271,7 @@ export default function SuppliersDirectory() {
                               <CountryFlag code={f.country_iso2} country={f.country} size={13} style={{ marginRight:6 }} />
                               {f.name}
                             </span>
-                            <SupplierTypeBadge type={f.supplier_type} />
+                            <SupplierTypeBadges roles={f.roles} type={f.supplier_type} />
                             {/* Dopo DAV-33 il badge è significativo: solo le aziende
                                 controllate davvero da un admin sono "verified". */}
                             {f.status === "verified" && <span title="Verificato da BulkStrike" style={{ display:"inline-flex", cursor:"help" }}><ShieldCheck size={14} color={C.green}/></span>}

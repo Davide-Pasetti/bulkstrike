@@ -8,7 +8,7 @@ import { getSupplierProfile, getSession, upsertCartItem, poolErrorMessage, getSu
 import BulkStrikeNav from "@/components/BulkStrikeNav";
 import LoginGate from "@/components/BulkStrikeLoginGate";
 import { BSIcon } from "@/components/BSLogo";
-import { IvaChip, SupplierTypeBadge } from "@/components/BulkStrikeBadges";
+import { IvaChip, SupplierTypeBadges } from "@/components/BulkStrikeBadges";
 import CountryFlag from "@/components/CountryFlag";
 
 const C = { blue:"#0EA5E9", dark:"#0284C7", text:"#0F172A", muted:"#64748B", border:"#E2E8F0", bg:"#F8FAFE", green:"#059669", red:"#DC2626", amber:"#D97706", purple:"#7C3AED" };
@@ -281,7 +281,7 @@ export default function SupplierPage() {
                 <h1 style={{ display:"flex", alignItems:"center", gap:10, fontSize:30, fontWeight:800, letterSpacing:"-0.02em", marginBottom:6 }}>
                   <CountryFlag code={profile.country_iso2} country={profile.country} size={20} />
                   <span>{profile.name}</span>
-                  <SupplierTypeBadge type={profile.supplier_type} size={20} />
+                  <SupplierTypeBadges roles={profile.roles} type={profile.supplier_type} size={20} />
                 </h1>
                 <div style={{ display:"flex", alignItems:"center", gap:14, fontSize:13.5, color:C.muted, flexWrap:"wrap" }}>
                   <span className="bs-suplink" onClick={() => reviewsRef.current?.scrollIntoView({ behavior:"smooth", block:"start" })} style={{ display:"flex", alignItems:"center", gap:6, cursor:"pointer" }}>
