@@ -22,7 +22,7 @@ import {
 } from "@/lib/api";
 import BulkStrikeNav from "@/components/BulkStrikeNav";
 import CountryFlag from "@/components/CountryFlag";
-import { SupplierTypeBadge } from "@/components/BulkStrikeBadges";
+import { SupplierTypeBadge, SupplierTypeBadges } from "@/components/BulkStrikeBadges";
 
 const C = { blue: "#0EA5E9", text: "#0F172A", muted: "#64748B", border: "#E2E8F0", bg: "#F8FAFE", green: "#059669", red: "#DC2626", amber: "#D97706", purple: "#7C3AED" };
 const GRID = "26px 1.5fr 1fr 80px 96px 92px 58px 84px 26px";
@@ -316,7 +316,7 @@ export default function AdminSuppliersPage({ inShell = false }) {
                   <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
                     <CountryFlag code={row.country_iso2} country={row.country} size={12} />
                     <span style={{ fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{row.legal_name}</span>
-                    <SupplierTypeBadge type={row.supplier_type} />
+                    <SupplierTypeBadges roles={row.roles} type={row.supplier_type} />
                   </div>
                   {row.europages_url && (
                     <a href={row.europages_url} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
@@ -534,7 +534,7 @@ function SupplierDetail({ detail, error, busy, onVerify, onDiscard, discardArmed
       ["PEC", d.pec], ["Codice SDI", d.sdi],
     ]],
     ["Attività", [
-      ["Tipo fornitore", TIPO[d.supplier_type] || d.supplier_type],
+      ["Tipo fornitore", (Array.isArray(d.roles) && d.roles.length ? d.roles : (d.supplier_type ? [d.supplier_type] : [])).map(r => TIPO[r] || r).join(" · ") || null],
       ["Fornisce materie prime", d.raw_material_supplier == null ? null : d.raw_material_supplier ? "Sì" : "No"],
       ["Settore", d.sector_hint], ["Capacità produttiva", d.production_capacity],
       ["Paesi serviti", fmtList(d.countries_served)], ["Dipendenti", d.employee_count_range],

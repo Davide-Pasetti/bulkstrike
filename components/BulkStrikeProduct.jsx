@@ -10,7 +10,7 @@ import BulkStrikeNav from "@/components/BulkStrikeNav";
 import SupplierName, { SupplierLoginHint } from "@/components/BulkStrikeSupplierName";
 import BulkStrikeChatWidget from "@/components/BulkStrikeChatWidget";
 import { BSIcon } from "@/components/BSLogo";
-import { IvaChip, SupplierTypeBadge } from "@/components/BulkStrikeBadges";
+import { IvaChip, SupplierTypeBadges } from "@/components/BulkStrikeBadges";
 
 // ─── PALETTE (matches homepage) ───────────────────────────────────────────────
 const C = { blue:"#0EA5E9", dark:"#0284C7", text:"#0F172A", muted:"#64748B", border:"#E2E8F0", bg:"#F8FAFE", green:"#059669", red:"#DC2626", amber:"#D97706", purple:"#7C3AED" };
@@ -990,7 +990,7 @@ export default function ProductPage() {
                           <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13.5, fontWeight: 700, lineHeight: 1.3 }}>
                             <CountryFlag code={c.country_iso2} country={c.country} size={12} />
                             <span style={{ flex: 1, minWidth: 0 }}>{c.legal_name}</span>
-                            <SupplierTypeBadge type={c.supplier_type} />
+                            <SupplierTypeBadges roles={c.roles} type={c.supplier_type} />
                           </div>
                           <div style={{ fontSize: 11.5, color: C.muted, marginTop: 2 }}>{c.country || "Paese non indicato"}</div>
                         </div>
