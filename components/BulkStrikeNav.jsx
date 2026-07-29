@@ -90,8 +90,8 @@ export default function BulkStrikeNav() {
           {/* Nav right */}
           <div style={{ display: "flex", alignItems: "center", gap: 20, flexShrink: 0, marginLeft: "auto" }}>
             <div className="bsnav-links">
-              <NavDropdown label="Prodotti" items={PRODOTTI_MENU} />
-              <NavDropdown label="Fornitori" items={FORNITORI_MENU} />
+              <NavDropdown label="Prodotti" items={PRODOTTI_MENU} home="/catalogo" />
+              <NavDropdown label="Fornitori" items={FORNITORI_MENU} home="/fornitori" />
               {LINKS.map(([l, href]) => (
                 <span key={l} onClick={() => { window.location.href = href; }} style={{ fontSize: 14, color: C.muted, cursor: "pointer", fontWeight: 500, whiteSpace: "nowrap" }}>{l}</span>
               ))}
@@ -111,8 +111,8 @@ export default function BulkStrikeNav() {
         {mobileMenuOpen && (
           <div className="bsnav-menu-panel">
             <MegaMenuMobile />
-            <NavDropdownMobile label="Prodotti" items={PRODOTTI_MENU} />
-            <NavDropdownMobile label="Fornitori" items={FORNITORI_MENU} />
+            <NavDropdownMobile label="Prodotti" items={PRODOTTI_MENU} home="/catalogo" />
+            <NavDropdownMobile label="Fornitori" items={FORNITORI_MENU} home="/fornitori" />
             {LINKS.map(([l, href]) => (
               <div key={l} onClick={() => { window.location.href = href; }} style={{ padding: "13px 20px", fontSize: 15, fontWeight: 600, color: C.text, borderBottom: `1px solid ${C.border}`, cursor: "pointer" }}>{l}</div>
             ))}
@@ -128,10 +128,10 @@ export default function BulkStrikeNav() {
 // delay anti-flicker, click per chi non usa il mouse, pannello sempre montato.
 // Allineata a destra perché le voci stanno nel gruppo di link di destra.
 // Usata da "Prodotti" e "Fornitori": una sola implementazione, non copie.
-function NavDropdown({ label, items }) {
+function NavDropdown({ label, items, home }) {
   const { open, close, wrapProps, triggerProps } = useHoverMenu();
   return (
-    <div {...wrapProps} style={{ position: "relative", display: "flex", alignItems: "center" }}>
+    <div {...wrapProps} style={{ position: "relative", display: "flex", alignItems: "center", gap: 2 }}>
       <style>{`
         .bsnav-dd-trigger:focus-visible, .bsnav-dd-item:focus-visible {
           outline: 2px solid ${C.blue}; outline-offset: 2px; border-radius: 8px;
@@ -139,12 +139,23 @@ function NavDropdown({ label, items }) {
         .bsnav-dd-item:hover { background: ${C.bg}; }
       `}</style>
 
-      <button
-        {...triggerProps}
+      {/* La label è un vero link alla pagina principale della sezione: cliccarla
+          naviga (Catalogo / Tutti i fornitori). La tendina si apre in hover
+          (desktop) o cliccando la freccia — che resta il trigger per chi non usa
+          il mouse (tastiera / focus). */}
+      <a
+        href={home}
         className="bsnav-dd-trigger"
-        style={{ display: "flex", alignItems: "center", gap: 4, background: "none", border: "none", padding: 0, fontSize: 14, fontWeight: 500, color: open ? C.dark : C.muted, cursor: "pointer", whiteSpace: "nowrap", fontFamily: "Inter,system-ui" }}
+        style={{ display: "flex", alignItems: "center", background: "none", border: "none", padding: 0, fontSize: 14, fontWeight: 500, color: open ? C.dark : C.muted, cursor: "pointer", whiteSpace: "nowrap", fontFamily: "Inter,system-ui", textDecoration: "none" }}
       >
         {label}
+      </a>
+      <button
+        {...triggerProps}
+        aria-label={`Apri il menu ${label}`}
+        className="bsnav-dd-trigger"
+        style={{ display: "flex", alignItems: "center", background: "none", border: "none", padding: 0, color: open ? C.dark : C.muted, cursor: "pointer" }}
+      >
         <ChevronDown size={14} style={{ transform: open ? "rotate(180deg)" : "none", transition: "transform .15s" }} />
       </button>
 
@@ -170,18 +181,28 @@ function NavDropdown({ label, items }) {
 
 // ─── Tendina di nav generica — mobile ────────────────────────────────────────
 // Accordion tap-to-open, stesso schema di MegaMenuMobile (niente hover).
-function NavDropdownMobile({ label, items }) {
+function NavDropdownMobile({ label, items, home }) {
   const [expanded, setExpanded] = useState(false);
   return (
     <div style={{ borderBottom: `1px solid ${C.border}` }}>
-      <button
-        onClick={() => setExpanded(e => !e)}
-        aria-expanded={expanded}
-        style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", textAlign: "left", padding: "13px 20px", background: expanded ? C.bg : "transparent", border: "none", fontSize: 15, fontWeight: 600, color: C.text, cursor: "pointer", fontFamily: "Inter,system-ui" }}
-      >
-        <span style={{ flex: 1 }}>{label}</span>
-        <ChevronDown size={15} color={C.muted} style={{ transform: expanded ? "rotate(180deg)" : "none", transition: "transform .15s" }} />
-      </button>
+      {/* Mobile: la label naviga subito (link), la freccia dedicata apre/chiude
+          l'accordion delle sotto-voci — così cliccare la label non fa solo toggle. */}
+      <div style={{ display: "flex", alignItems: "center", background: expanded ? C.bg : "transparent" }}>
+        <a
+          href={home}
+          style={{ flex: 1, padding: "13px 20px", fontSize: 15, fontWeight: 600, color: C.text, textDecoration: "none", fontFamily: "Inter,system-ui" }}
+        >
+          {label}
+        </a>
+        <button
+          onClick={() => setExpanded(e => !e)}
+          aria-expanded={expanded}
+          aria-label={`Mostra le voci di ${label}`}
+          style={{ display: "flex", alignItems: "center", padding: "13px 20px", background: "none", border: "none", cursor: "pointer" }}
+        >
+          <ChevronDown size={15} color={C.muted} style={{ transform: expanded ? "rotate(180deg)" : "none", transition: "transform .15s" }} />
+        </button>
+      </div>
       {expanded && (
         <div style={{ padding: "2px 12px 10px 20px", display: "flex", flexDirection: "column" }}>
           {items.map(([itemLabel, href]) => (
