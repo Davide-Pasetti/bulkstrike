@@ -6,7 +6,7 @@
 // arriva qui con type=producer|distributor|importer)
 import { useState, useEffect, useMemo } from "react";
 import { Search, Star, ShieldCheck, ChevronRight, X, SlidersHorizontal, Package, Layers, Award, ArrowRight } from "lucide-react";
-import { getSuppliersDirectory, getMacroAreas, getSession } from "@/lib/api";
+import { getSuppliersDirectory, getMacroAreas, getMyFollowedSectors, followSector, unfollowSector, getSession } from "@/lib/api";
 import BulkStrikeNav from "@/components/BulkStrikeNav";
 import LoginGate from "@/components/BulkStrikeLoginGate";
 import { BSIcon } from "@/components/BSLogo";
@@ -45,6 +45,9 @@ export default function SuppliersDirectory() {
   const [activeSector, setActiveSector] = useState(null); // slug
   const [sort, setSort] = useState("rating");
   const [showFilters, setShowFilters] = useState(false);
+  // Settori preferiti (sector_follows): stesso stato condiviso con il pannello
+  // filtri del catalogo — la stella messa di là si ritrova accesa anche qui.
+  const [followedSectorIds, setFollowedSectorIds] = useState(null); // Set | null
 
   useEffect(() => {
     (async () => {
@@ -55,6 +58,9 @@ export default function SuppliersDirectory() {
         setAll(d || []); setMacrosTax(m || []);
       } catch {}
       setLoading(false);
+      getMyFollowedSectors()
+        .then(list => setFollowedSectorIds(new Set((list || []).map(x => x.sector_id))))
+        .catch(() => setFollowedSectorIds(new Set()));
     })();
     const sp = new URLSearchParams(window.location.search);
     if (sp.get("macro")) setActiveMacro(sp.get("macro"));
@@ -97,6 +103,20 @@ export default function SuppliersDirectory() {
   const activeSectorObj = (activeMacroObj?.sub_areas || []).find(s => s.slug === activeSector);
   const clearFilters = () => { setQ(""); setCountrySel([]); setTypeSel([]); setMinRating(null); setCertSel([]); setActiveMacro(null); setActiveSector(null); };
   const activeCount = countrySel.length+typeSel.length+(minRating?1:0)+certSel.length+(activeMacro?1:0)+(activeSector?1:0);
+  // Stella settore: aggiornamento ottimistico con rollback + login se la RPC
+  // fallisce — identico al pannello filtri del catalogo (stesso sector_follows).
+  const toggleSectorFollow = (e, sectorId) => {
+    e.stopPropagation();
+    const wasOn = !!(followedSectorIds && followedSectorIds.has(sectorId));
+    const flip = (on) => setFollowedSectorIds(prev => {
+      const n = new Set(prev || []); on ? n.add(sectorId) : n.delete(sectorId); return n;
+    });
+    flip(!wasOn);
+    (wasOn ? unfollowSector(sectorId) : followSector(sectorId)).catch(() => {
+      flip(wasOn);
+      window.location.href = "/auth/login";
+    });
+  };
   const toggleCert = (c) => setCertSel(prev => prev.includes(c) ? prev.filter(x => x !== c) : [...prev, c]);
   const toggleType = (v) => setTypeSel(prev => prev.includes(v) ? prev.filter(x => x !== v) : [...prev, v]);
   const toggleCountry = (c) => setCountrySel(prev => prev.includes(c) ? prev.filter(x => x !== c) : [...prev, c]);
@@ -214,11 +234,20 @@ export default function SuppliersDirectory() {
                     </div>
                     {on && (
                       <div style={{ display:"flex", flexDirection:"column", gap:1, padding:"3px 0 6px 12px", borderLeft:`2px solid ${C.border}`, marginLeft:13 }}>
-                        {(m.sub_areas || []).map(s => {
+                        {[...(m.sub_areas || [])]
+                          // I settori preferiti salgono in cima (a parità, ordine originale).
+                          .sort((a, b) => (followedSectorIds?.has(b.id) ? 1 : 0) - (followedSectorIds?.has(a.id) ? 1 : 0))
+                          .map(s => {
                           const son = activeSector === s.slug;
+                          const fav = !!(followedSectorIds && followedSectorIds.has(s.id));
                           return (
                             <div key={s.id} onClick={() => setActiveSector(son ? null : s.slug)}
                                  style={{ display:"flex", alignItems:"center", gap:6, padding:"5px 9px", borderRadius:7, cursor:"pointer", background:son?"#DBEAFE":"transparent", fontSize:12.5, fontWeight:son?700:500, color:son?"#0369A1":C.muted }}>
+                              <button onClick={(e) => toggleSectorFollow(e, s.id)} aria-pressed={fav}
+                                title={fav ? "Rimuovi dai settori preferiti" : "Aggiungi ai settori preferiti"}
+                                style={{ display:"inline-flex", alignItems:"center", justifyContent:"center", background:"transparent", border:"none", cursor:"pointer", padding:2, flexShrink:0 }}>
+                                <Star size={13} fill={fav ? "#D97706" : "none"} color={fav ? "#D97706" : C.muted} />
+                              </button>
                               <span>{s.icon || "•"}</span>
                               <span style={{ flex:1 }}>{s.name}</span>
                             </div>
