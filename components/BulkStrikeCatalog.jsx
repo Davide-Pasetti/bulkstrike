@@ -10,7 +10,7 @@
 // filtra live la griglia mentre digiti (onQueryChange → setQ).
 import { useState, useEffect, useMemo } from "react";
 import { ChevronRight, X, Flame, Package, SlidersHorizontal, ShieldCheck, Gavel, Layers, FileCheck2, Boxes, Star } from "lucide-react";
-import { getCatalog, getMacroAreas, getMyFollowedProducts, getSession } from "@/lib/api";
+import { getCatalog, getMacroAreas, getChemicalClasses, getMyFollowedProducts, getSession } from "@/lib/api";
 import BulkStrikeNav from "@/components/BulkStrikeNav";
 import ProductFollowButton from "@/components/BulkStrikeProductFollow";
 import { BSIcon } from "@/components/BSLogo";
@@ -32,11 +32,15 @@ const BENEFITS = [
 export default function CatalogPage() {
   const [all, setAll] = useState([]);
   const [macros, setMacros] = useState([]);
+  const [chemGroups, setChemGroups] = useState([]); // [{slug,name,ord,classes:[...]}]
   const [loading, setLoading] = useState(true);
 
   const [q, setQ] = useState("");
   const [activeMacro, setActiveMacro] = useState(null); // slug
   const [activeSector, setActiveSector] = useState(null); // slug
+  const [activeClasses, setActiveClasses] = useState(() => new Set()); // slug[] (multi, OR)
+  // Le due sotto-sezioni di "Tipo di sostanza" partono aperte; l'utente le chiude.
+  const [openChemGroups, setOpenChemGroups] = useState(() => new Set(["famiglia-chimica", "tipo-materiale"]));
   const [minP, setMinP] = useState("");
   const [maxP, setMaxP] = useState("");
   const [poolOnly, setPoolOnly] = useState(false);
@@ -47,12 +51,13 @@ export default function CatalogPage() {
   const [loggedIn, setLoggedIn] = useState(false);
 
   useEffect(() => {
-    Promise.all([getCatalog(), getMacroAreas()])
-      .then(([c, m]) => { setAll(c || []); setMacros(m || []); setLoading(false); })
+    Promise.all([getCatalog(), getMacroAreas(), getChemicalClasses()])
+      .then(([c, m, cg]) => { setAll(c || []); setMacros(m || []); setChemGroups(cg || []); setLoading(false); })
       .catch(() => setLoading(false));
     const sp = new URLSearchParams(window.location.search);
     if (sp.get("macro")) setActiveMacro(sp.get("macro"));
     if (sp.get("sector")) setActiveSector(sp.get("sector"));
+    if (sp.get("sostanza")) setActiveClasses(new Set(sp.get("sostanza").split(",").map(s => s.trim()).filter(Boolean)));
     if (sp.get("q")) setQ(sp.get("q"));
     getSession().then(s => {
       if (!s) { setLoggedIn(false); return; }
@@ -81,6 +86,8 @@ export default function CatalogPage() {
       (p.e_number || "").toLowerCase().includes(s));
     if (activeMacro) list = list.filter(p => (p.macros || []).includes(activeMacro));
     if (activeSector) list = list.filter(p => (p.sectors || []).includes(activeSector));
+    // Tipo di sostanza: multi-selezione, semantica OR (almeno una classe combacia).
+    if (activeClasses.size) list = list.filter(p => (p.chemical_classes || []).some(c => activeClasses.has(c)));
     if (poolOnly) list = list.filter(p => p.has_pool);
     if (favActive) list = list.filter(p => followedIds.has(p.id));
     const mn = parseFloat(minP), mx = parseFloat(maxP);
@@ -92,12 +99,24 @@ export default function CatalogPage() {
     else if (sort === "suppliers") list.sort((a, b) => (b.supplier_count || 0) - (a.supplier_count || 0));
     else list.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
     return list;
-  }, [all, q, activeMacro, activeSector, poolOnly, minP, maxP, sort, favActive, followedIds]);
+  }, [all, q, activeMacro, activeSector, activeClasses, poolOnly, minP, maxP, sort, favActive, followedIds]);
 
   const activeMacroObj = macros.find(m => m.slug === activeMacro);
   const activeSectorObj = (activeMacroObj?.sub_areas || []).find(s => s.slug === activeSector);
-  const clearFilters = () => { setQ(""); setActiveMacro(null); setActiveSector(null); setMinP(""); setMaxP(""); setPoolOnly(false); };
-  const activeCount = (activeMacro ? 1 : 0) + (activeSector ? 1 : 0) + (poolOnly ? 1 : 0) + (minP ? 1 : 0) + (maxP ? 1 : 0);
+  // Mappa slug→nome classe, per le chip dei filtri attivi.
+  const classNameBySlug = useMemo(() => {
+    const map = {};
+    chemGroups.forEach(g => (g.classes || []).forEach(c => { map[c.slug] = c.name; }));
+    return map;
+  }, [chemGroups]);
+  const toggleClass = (slug) => setActiveClasses(prev => {
+    const n = new Set(prev); n.has(slug) ? n.delete(slug) : n.add(slug); return n;
+  });
+  const toggleChemGroup = (slug) => setOpenChemGroups(prev => {
+    const n = new Set(prev); n.has(slug) ? n.delete(slug) : n.add(slug); return n;
+  });
+  const clearFilters = () => { setQ(""); setActiveMacro(null); setActiveSector(null); setActiveClasses(new Set()); setMinP(""); setMaxP(""); setPoolOnly(false); };
+  const activeCount = (activeMacro ? 1 : 0) + (activeSector ? 1 : 0) + activeClasses.size + (poolOnly ? 1 : 0) + (minP ? 1 : 0) + (maxP ? 1 : 0);
 
   return (
     <div style={{ background: "#fff", color: C.text, fontFamily: "'Inter',system-ui,sans-serif", minHeight: "100vh", colorScheme: "light" }}>
@@ -221,6 +240,41 @@ export default function CatalogPage() {
               })}
             </div>
 
+            {/* tipo di sostanza (tassonomia chimica) — 2 gruppi collassabili,
+                multi-selezione con semantica OR. Indipendente dalle Aree. */}
+            {chemGroups.length > 0 && (
+              <div style={{ marginTop: 22 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 8 }}>Tipo di sostanza</div>
+                {chemGroups.map(g => {
+                  const gopen = openChemGroups.has(g.slug);
+                  return (
+                    <div key={g.slug} style={{ marginBottom: 4 }}>
+                      <div onClick={() => toggleChemGroup(g.slug)}
+                        style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 10px", borderRadius: 8, cursor: "pointer", fontSize: 12.5, fontWeight: 700, color: C.text }}>
+                        <span style={{ flex: 1 }}>{g.name}</span>
+                        <ChevronRight size={14} color={C.muted} style={{ transform: gopen ? "rotate(90deg)" : "none", transition: "transform 0.15s" }} />
+                      </div>
+                      {gopen && (
+                        <div style={{ display: "flex", flexDirection: "column", gap: 1, padding: "2px 0 6px 6px" }}>
+                          {(g.classes || []).map(c => {
+                            const con = activeClasses.has(c.slug);
+                            return (
+                              <label key={c.slug}
+                                style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", borderRadius: 7, cursor: "pointer", background: con ? "#DBEAFE" : "transparent", fontSize: 12.5, fontWeight: con ? 700 : 500, color: con ? "#0369A1" : C.muted }}>
+                                <input type="checkbox" checked={con} onChange={() => toggleClass(c.slug)} style={{ accentColor: C.blue, width: 14, height: 14, flexShrink: 0 }} />
+                                <span style={{ flex: 1 }}>{c.name}</span>
+                                <span style={{ fontSize: 11, color: C.muted }}>{c.product_count}</span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
             <button className="cat-filter-toggle" onClick={() => setShowFilters(false)} style={{ marginTop: 18, width: "100%", justifyContent: "center", padding: "12px", borderRadius: 9, border: "none", background: C.blue, color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
               Mostra {filtered.length} risultati
             </button>
@@ -228,10 +282,11 @@ export default function CatalogPage() {
 
           {/* GRIGLIA PRODOTTI */}
           <main>
-            {(activeMacro || activeSector) && (
+            {(activeMacro || activeSector || activeClasses.size > 0) && (
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 14 }}>
                 {activeMacroObj && <Chip label={activeMacroObj.name} onClear={() => { setActiveMacro(null); setActiveSector(null); }} />}
                 {activeSector && <Chip label={(activeMacroObj?.sub_areas || []).find(s => s.slug === activeSector)?.name || activeSector} onClear={() => setActiveSector(null)} />}
+                {[...activeClasses].map(slug => <Chip key={slug} label={classNameBySlug[slug] || slug} onClear={() => toggleClass(slug)} />)}
               </div>
             )}
 
