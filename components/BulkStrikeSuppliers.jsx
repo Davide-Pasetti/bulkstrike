@@ -37,8 +37,8 @@ export default function SuppliersDirectory() {
   const [needLogin, setNeedLogin] = useState(false); // la RPC directory è solo per autenticati
 
   const [q, setQ] = useState("");
-  const [country, setCountry] = useState(null);
-  const [type, setType] = useState(null);          // producer | distributor | importer
+  const [countrySel, setCountrySel] = useState([]); // multi
+  const [typeSel, setTypeSel] = useState([]);       // multi: producer | distributor | importer
   const [minRating, setMinRating] = useState(null); // 4 | 4.5
   const [certSel, setCertSel] = useState([]);       // multi
   const [activeMacro, setActiveMacro] = useState(null);   // slug
@@ -59,10 +59,14 @@ export default function SuppliersDirectory() {
     const sp = new URLSearchParams(window.location.search);
     if (sp.get("macro")) setActiveMacro(sp.get("macro"));
     if (sp.get("sector")) setActiveSector(sp.get("sector"));
-    if (sp.get("country")) setCountry(sp.get("country"));
+    // country/type accettano deep-link sia a valore singolo che a lista
+    // separata da virgole (?country=Italia,Francia&type=producer,distributor),
+    // per restare compatibili con eventuali link già in giro con un solo valore.
+    if (sp.get("country")) setCountrySel(sp.get("country").split(",").map(s => s.trim()).filter(Boolean));
     if (sp.get("cert")) setCertSel([sp.get("cert")]);
     if (sp.get("q")) setQ(sp.get("q"));
-    if (TYPE_OPTIONS.some(([v]) => v === sp.get("type"))) setType(sp.get("type"));
+    const typesFromUrl = (sp.get("type") || "").split(",").map(s => s.trim()).filter(v => TYPE_OPTIONS.some(([tv]) => tv === v));
+    if (typesFromUrl.length) setTypeSel(typesFromUrl);
   }, []);
 
   // opzioni filtri derivate dai dati reali
@@ -73,8 +77,11 @@ export default function SuppliersDirectory() {
     let list = all;
     const s = q.trim().toLowerCase();
     if (s) list = list.filter(f => (f.name || "").toLowerCase().includes(s));
-    if (country) list = list.filter(f => f.country === country);
-    if (type) list = list.filter(f => f.supplier_type === type);
+    if (countrySel.length) list = list.filter(f => countrySel.includes(f.country));
+    // Un'azienda può avere più ruoli (company_supplier_roles, es. produttore E
+    // distributore): filtriamo su f.roles quando disponibile, con fallback al
+    // singolo supplier_type per i pochissimi record senza roles popolate.
+    if (typeSel.length) list = list.filter(f => typeSel.some(t => (f.roles && f.roles.length ? f.roles.includes(t) : f.supplier_type === t)));
     if (minRating != null) list = list.filter(f => Number(f.rating || 0) >= minRating);
     if (certSel.length) list = list.filter(f => certSel.every(c => (f.certifications || []).includes(c)));
     if (activeMacro) list = list.filter(f => (f.macros || []).includes(activeMacro));
@@ -84,13 +91,15 @@ export default function SuppliersDirectory() {
     else if (sort === "products") list.sort((a, b) => (b.product_count || 0) - (a.product_count || 0));
     else list.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
     return list;
-  }, [all, q, country, type, minRating, certSel, activeMacro, activeSector, sort]);
+  }, [all, q, countrySel, typeSel, minRating, certSel, activeMacro, activeSector, sort]);
 
   const activeMacroObj = macrosTax.find(m => m.slug === activeMacro);
   const activeSectorObj = (activeMacroObj?.sub_areas || []).find(s => s.slug === activeSector);
-  const clearFilters = () => { setQ(""); setCountry(null); setType(null); setMinRating(null); setCertSel([]); setActiveMacro(null); setActiveSector(null); };
-  const activeCount = (country?1:0)+(type?1:0)+(minRating?1:0)+certSel.length+(activeMacro?1:0)+(activeSector?1:0);
+  const clearFilters = () => { setQ(""); setCountrySel([]); setTypeSel([]); setMinRating(null); setCertSel([]); setActiveMacro(null); setActiveSector(null); };
+  const activeCount = countrySel.length+typeSel.length+(minRating?1:0)+certSel.length+(activeMacro?1:0)+(activeSector?1:0);
   const toggleCert = (c) => setCertSel(prev => prev.includes(c) ? prev.filter(x => x !== c) : [...prev, c]);
+  const toggleType = (v) => setTypeSel(prev => prev.includes(v) ? prev.filter(x => x !== v) : [...prev, v]);
+  const toggleCountry = (c) => setCountrySel(prev => prev.includes(c) ? prev.filter(x => x !== c) : [...prev, c]);
 
   const FilterTitle = ({ children }) => <div style={{ fontSize:12, fontWeight:700, color:C.muted, textTransform:"uppercase", letterSpacing:"0.04em", margin:"18px 0 8px" }}>{children}</div>;
   const Opt = ({ on, onClick, children }) => (
@@ -169,7 +178,7 @@ export default function SuppliersDirectory() {
 
             <FilterTitle>Tipo fornitore</FilterTitle>
             {TYPE_OPTIONS.map(([v,l]) => (
-              <Opt key={v} on={type === v} onClick={() => setType(type === v ? null : v)}>{l}</Opt>
+              <Opt key={v} on={typeSel.includes(v)} onClick={() => toggleType(v)}>{l}</Opt>
             ))}
 
             <FilterTitle>Rating minimo</FilterTitle>
@@ -180,7 +189,7 @@ export default function SuppliersDirectory() {
             <FilterTitle>Paese sede</FilterTitle>
             <div style={{ maxHeight:180, overflowY:"auto" }}>
               {countries.map(c => (
-                <Opt key={c} on={country === c} onClick={() => setCountry(country === c ? null : c)}><CountryFlag country={c} /> {c}</Opt>
+                <Opt key={c} on={countrySel.includes(c)} onClick={() => toggleCountry(c)}><CountryFlag country={c} /> {c}</Opt>
               ))}
             </div>
 
@@ -231,8 +240,8 @@ export default function SuppliersDirectory() {
           <main>
             {activeCount > 0 && (
               <div style={{ display:"flex", flexWrap:"wrap", gap:8, marginBottom:14 }}>
-                {country && <Chip label={<><CountryFlag country={country} /> {country}</>} onClear={() => setCountry(null)}/>}
-                {type && <Chip label={TYPE_LABEL[type]} onClear={() => setType(null)}/>}
+                {countrySel.map(c => <Chip key={c} label={<><CountryFlag country={c} /> {c}</>} onClear={() => toggleCountry(c)}/>)}
+                {typeSel.map(t => <Chip key={t} label={TYPE_LABEL[t]} onClear={() => toggleType(t)}/>)}
                 {minRating && <Chip label={`≥ ${minRating} ★`} onClear={() => setMinRating(null)}/>}
                 {certSel.map(c => <Chip key={c} label={c} onClear={() => toggleCert(c)}/>)}
                 {activeMacroObj && <Chip label={activeMacroObj.name} onClear={() => { setActiveMacro(null); setActiveSector(null); }}/>}
