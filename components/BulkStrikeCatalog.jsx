@@ -10,7 +10,7 @@
 // filtra live la griglia mentre digiti (onQueryChange → setQ).
 import { useState, useEffect, useMemo } from "react";
 import { ChevronRight, X, Flame, Package, SlidersHorizontal, ShieldCheck, Gavel, Layers, FileCheck2, Boxes, Star } from "lucide-react";
-import { getCatalog, getMacroAreas, getChemicalClasses, getMyFollowedProducts, getSession } from "@/lib/api";
+import { getCatalog, getMacroAreas, getChemicalClasses, getMyFollowedProducts, getMyFollowedSectors, followSector, unfollowSector, getSession } from "@/lib/api";
 import BulkStrikeNav from "@/components/BulkStrikeNav";
 import ProductFollowButton from "@/components/BulkStrikeProductFollow";
 import { BSIcon } from "@/components/BSLogo";
@@ -39,8 +39,11 @@ export default function CatalogPage() {
   const [activeMacro, setActiveMacro] = useState(null); // slug
   const [activeSector, setActiveSector] = useState(null); // slug
   const [activeClasses, setActiveClasses] = useState(() => new Set()); // slug[] (multi, OR)
-  // Le due sotto-sezioni di "Tipo di sostanza" partono aperte; l'utente le chiude.
-  const [openChemGroups, setOpenChemGroups] = useState(() => new Set(["famiglia-chimica", "tipo-materiale"]));
+  // Le tre tendine del pannello (Aree, Famiglia chimica, Tipo di materiale)
+  // partono TUTTE chiuse; si aprono solo al click o se un filtro arriva da URL.
+  const [openAree, setOpenAree] = useState(false);
+  const [openChemGroups, setOpenChemGroups] = useState(() => new Set());
+  const [followedSectorIds, setFollowedSectorIds] = useState(null); // Set | null (non caricato)
   const [minP, setMinP] = useState("");
   const [maxP, setMaxP] = useState("");
   const [poolOnly, setPoolOnly] = useState(false);
@@ -59,6 +62,14 @@ export default function CatalogPage() {
     if (sp.get("sector")) setActiveSector(sp.get("sector"));
     if (sp.get("sostanza")) setActiveClasses(new Set(sp.get("sostanza").split(",").map(s => s.trim()).filter(Boolean)));
     if (sp.get("q")) setQ(sp.get("q"));
+    // Filtro preselezionato da URL → apri la tendina che lo contiene, altrimenti
+    // il filtro attivo resterebbe nascosto dentro una sezione chiusa.
+    if (sp.get("macro") || sp.get("sector")) setOpenAree(true);
+    if (sp.get("sostanza")) setOpenChemGroups(new Set(["famiglia-chimica", "tipo-materiale"]));
+    // Stelle dei settori: visibili (vuote) anche da anonimo, la RPC ritorna [].
+    getMyFollowedSectors()
+      .then(list => setFollowedSectorIds(new Set((list || []).map(x => x.sector_id))))
+      .catch(() => setFollowedSectorIds(new Set()));
     getSession().then(s => {
       if (!s) { setLoggedIn(false); return; }
       setLoggedIn(true);
@@ -115,6 +126,21 @@ export default function CatalogPage() {
   const toggleChemGroup = (slug) => setOpenChemGroups(prev => {
     const n = new Set(prev); n.has(slug) ? n.delete(slug) : n.add(slug); return n;
   });
+  // Stella settore: aggiornamento ottimistico; se la RPC fallisce (tipicamente
+  // utente non loggato) si ripristina lo stato e si va al login, come per i
+  // preferiti prodotto/fornitore.
+  const toggleSectorFollow = (e, sectorId) => {
+    e.stopPropagation();
+    const wasOn = !!(followedSectorIds && followedSectorIds.has(sectorId));
+    const flip = (on) => setFollowedSectorIds(prev => {
+      const n = new Set(prev || []); on ? n.add(sectorId) : n.delete(sectorId); return n;
+    });
+    flip(!wasOn);
+    (wasOn ? unfollowSector(sectorId) : followSector(sectorId)).catch(() => {
+      flip(wasOn);
+      window.location.href = "/auth/login"; // i preferiti richiedono un account
+    });
+  };
   const clearFilters = () => { setQ(""); setActiveMacro(null); setActiveSector(null); setActiveClasses(new Set()); setMinP(""); setMaxP(""); setPoolOnly(false); };
   const activeCount = (activeMacro ? 1 : 0) + (activeSector ? 1 : 0) + activeClasses.size + (poolOnly ? 1 : 0) + (minP ? 1 : 0) + (maxP ? 1 : 0);
 
@@ -207,9 +233,15 @@ export default function CatalogPage() {
               </div>
             </div>
 
-            {/* macro-aree + settori */}
-            <div style={{ fontSize: 12, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 8 }}>Aree</div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+            {/* macro-aree + settori — un'unica tendina "Aree", stesso pattern
+                delle sotto-sezioni di "Tipo di sostanza" (chiusa di default) */}
+            <div onClick={() => setOpenAree(v => !v)}
+              style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 10px", borderRadius: 8, cursor: "pointer", fontSize: 12.5, fontWeight: 700, color: C.text }}>
+              <span style={{ flex: 1 }}>Aree</span>
+              <ChevronRight size={14} color={C.muted} style={{ transform: openAree ? "rotate(90deg)" : "none", transition: "transform 0.15s" }} />
+            </div>
+            {openAree && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 2, padding: "2px 0 6px 6px" }}>
               {macros.map(m => {
                 const on = activeMacro === m.slug;
                 return (
@@ -222,11 +254,21 @@ export default function CatalogPage() {
                     </div>
                     {on && (
                       <div style={{ display: "flex", flexDirection: "column", gap: 1, padding: "4px 0 8px 14px", borderLeft: `2px solid ${C.border}`, marginLeft: 14 }}>
-                        {(m.sub_areas || []).filter(s => (s.product_count || 0) > 0).map(s => {
+                        {(m.sub_areas || [])
+                          .filter(s => (s.product_count || 0) > 0)
+                          // I settori preferiti salgono in cima (a parità, ordine originale).
+                          .sort((a, b) => (followedSectorIds?.has(b.id) ? 1 : 0) - (followedSectorIds?.has(a.id) ? 1 : 0))
+                          .map(s => {
                           const son = activeSector === s.slug;
+                          const fav = !!(followedSectorIds && followedSectorIds.has(s.id));
                           return (
                             <div key={s.id} onClick={() => setActiveSector(son ? null : s.slug)}
                               style={{ display: "flex", alignItems: "center", gap: 7, padding: "6px 10px", borderRadius: 7, cursor: "pointer", background: son ? "#DBEAFE" : "transparent", fontSize: 12.5, fontWeight: son ? 700 : 500, color: son ? "#0369A1" : C.muted }}>
+                              <button onClick={(e) => toggleSectorFollow(e, s.id)} aria-pressed={fav}
+                                title={fav ? "Rimuovi dai settori preferiti" : "Aggiungi ai settori preferiti"}
+                                style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", background: "transparent", border: "none", cursor: "pointer", padding: 2, flexShrink: 0 }}>
+                                <Star size={13} fill={fav ? "#D97706" : "none"} color={fav ? "#D97706" : C.muted} />
+                              </button>
                               <span>{s.icon || "•"}</span>
                               <span style={{ flex: 1 }}>{s.name}</span>
                               <span style={{ fontSize: 11, color: C.muted }}>{s.product_count}</span>
@@ -239,6 +281,7 @@ export default function CatalogPage() {
                 );
               })}
             </div>
+            )}
 
             {/* tipo di sostanza (tassonomia chimica) — 2 gruppi collassabili,
                 multi-selezione con semantica OR. Indipendente dalle Aree. */}
