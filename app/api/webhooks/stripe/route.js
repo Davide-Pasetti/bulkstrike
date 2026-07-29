@@ -88,12 +88,39 @@ export async function POST(request) {
             );
           if (payErr) throw payErr;
 
-          const { error: orderErr } = await supabase
+          const { data: updated, error: orderErr } = await supabase
             .from('orders')
             .update({ status: 'paid', paid_at: new Date().toISOString() })
             .eq('id', orderId)
-            .eq('status', 'pending_payment'); // non retrocedere stati logistici successivi
+            .eq('status', 'pending_payment') // non retrocedere stati logistici successivi
+            .select('id, supplier_company_id, product_id, buyer_company_id');
           if (orderErr) throw orderErr;
+
+          // Notifica al fornitore "spedisci" SOLO se l'ordine è passato ORA a
+          // 'paid' (updated non vuoto): il pagamento in garanzia è incassato.
+          // Su retry del webhook la guardia .eq('status','pending_payment') dà 0
+          // righe → nessuna notifica duplicata. Non deve MAI far fallire il
+          // webhook (Stripe ritenta all'infinito): ogni errore è solo loggato.
+          if (updated && updated.length > 0) {
+            const o = updated[0];
+            try {
+              const [{ data: prod }, { data: buyer }] = await Promise.all([
+                supabase.from('products').select('canonical_name').eq('id', o.product_id).single(),
+                supabase.from('companies').select('legal_name').eq('id', o.buyer_company_id).single(),
+              ]);
+              await supabase.from('notifications').insert({
+                company_id: o.supplier_company_id,
+                type: 'order_update',
+                product_id: o.product_id,
+                title: 'Pagamento confermato — spedisci l\'ordine',
+                body: `Il pagamento in garanzia per l'ordine da ${buyer?.legal_name || 'un cliente BulkStrike'} (${prod?.canonical_name || 'prodotto'}) è stato incassato. Puoi procedere alla spedizione.`,
+                action_label: 'Vedi ordine',
+                action_url: `/ordine?id=${orderId}`,
+              });
+            } catch (notifyErr) {
+              console.error('Notifica "pagamento confermato" non inviata (ordine comunque pagato):', notifyErr?.message);
+            }
+          }
         }
         break;
       }
