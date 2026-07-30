@@ -9,7 +9,7 @@
 // dropdown di suggerimenti (nome+CAS+E-number+sinonimi) e, in parallelo,
 // filtra live la griglia mentre digiti (onQueryChange → setQ).
 import { useState, useEffect, useMemo } from "react";
-import { ChevronRight, X, Flame, Package, SlidersHorizontal, ShieldCheck, Gavel, Layers, FileCheck2, Boxes, Star } from "lucide-react";
+import { ChevronRight, X, Flame, Package, SlidersHorizontal, ShieldCheck, Gavel, Layers, FileCheck2, Boxes, Star, Tag } from "lucide-react";
 import { getCatalog, getMacroAreas, getChemicalClasses, getMyFollowedProducts, getMyFollowedSectors, followSector, unfollowSector, getSession } from "@/lib/api";
 import BulkStrikeNav from "@/components/BulkStrikeNav";
 import ProductFollowButton from "@/components/BulkStrikeProductFollow";
@@ -39,13 +39,12 @@ export default function CatalogPage() {
   const [activeMacro, setActiveMacro] = useState(null); // slug
   const [activeSector, setActiveSector] = useState(null); // slug
   const [activeClasses, setActiveClasses] = useState(() => new Set()); // slug[] (multi, OR)
-  // Le tre tendine del pannello (Aree, Famiglia chimica, Tipo di materiale)
+  // Le tre tendine del pannello (Settore, Famiglia chimica, Tipo di materiale)
   // partono TUTTE chiuse; si aprono solo al click o se un filtro arriva da URL.
   const [openAree, setOpenAree] = useState(false);
   const [openChemGroups, setOpenChemGroups] = useState(() => new Set());
   const [followedSectorIds, setFollowedSectorIds] = useState(null); // Set | null (non caricato)
-  const [minP, setMinP] = useState("");
-  const [maxP, setMaxP] = useState("");
+  const [priceOnly, setPriceOnly] = useState(false); // solo prodotti con un prezzo pubblicato
   const [poolOnly, setPoolOnly] = useState(false);
   const [sort, setSort] = useState("name");
   const [showFilters, setShowFilters] = useState(false);
@@ -101,16 +100,16 @@ export default function CatalogPage() {
     if (activeClasses.size) list = list.filter(p => (p.chemical_classes || []).some(c => activeClasses.has(c)));
     if (poolOnly) list = list.filter(p => p.has_pool);
     if (favActive) list = list.filter(p => followedIds.has(p.id));
-    const mn = parseFloat(minP), mx = parseFloat(maxP);
-    if (!isNaN(mn)) list = list.filter(p => p.best_price != null && p.best_price >= mn);
-    if (!isNaN(mx)) list = list.filter(p => p.best_price != null && p.best_price <= mx);
+    // Prezzo disponibile: almeno un prezzo pubblicato da un fornitore verificato
+    // (best_price valorizzato — le card senza mostrano "da €—/kg").
+    if (priceOnly) list = list.filter(p => p.best_price != null);
     list = [...list];
     if (sort === "price_asc") list.sort((a, b) => (a.best_price ?? 1e9) - (b.best_price ?? 1e9));
     else if (sort === "price_desc") list.sort((a, b) => (b.best_price ?? -1) - (a.best_price ?? -1));
     else if (sort === "suppliers") list.sort((a, b) => (b.supplier_count || 0) - (a.supplier_count || 0));
     else list.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
     return list;
-  }, [all, q, activeMacro, activeSector, activeClasses, poolOnly, minP, maxP, sort, favActive, followedIds]);
+  }, [all, q, activeMacro, activeSector, activeClasses, poolOnly, priceOnly, sort, favActive, followedIds]);
 
   const activeMacroObj = macros.find(m => m.slug === activeMacro);
   const activeSectorObj = (activeMacroObj?.sub_areas || []).find(s => s.slug === activeSector);
@@ -158,8 +157,8 @@ export default function CatalogPage() {
         window.location.href = "/auth/login"; // i preferiti richiedono un account
       });
   };
-  const clearFilters = () => { setQ(""); setActiveMacro(null); setActiveSector(null); setActiveClasses(new Set()); setMinP(""); setMaxP(""); setPoolOnly(false); };
-  const activeCount = (activeMacro ? 1 : 0) + (activeSector ? 1 : 0) + activeClasses.size + (poolOnly ? 1 : 0) + (minP ? 1 : 0) + (maxP ? 1 : 0);
+  const clearFilters = () => { setQ(""); setActiveMacro(null); setActiveSector(null); setActiveClasses(new Set()); setPriceOnly(false); setPoolOnly(false); };
+  const activeCount = (activeMacro ? 1 : 0) + (activeSector ? 1 : 0) + activeClasses.size + (poolOnly ? 1 : 0) + (priceOnly ? 1 : 0);
 
   return (
     <div style={{ background: "#fff", color: C.text, fontFamily: "'Inter',system-ui,sans-serif", minHeight: "100vh", colorScheme: "light" }}>
@@ -243,31 +242,30 @@ export default function CatalogPage() {
               style={{ display: "flex", alignItems: "center", gap: 9, padding: "10px 12px", border: `1px solid ${favActive ? "#FDE68A" : C.border}`, borderRadius: 10, cursor: (loggedIn && !hasFavs) ? "not-allowed" : "pointer", background: favActive ? "#FEF3C7" : "#fff", marginBottom: 10, opacity: (loggedIn && !hasFavs) ? 0.55 : 1 }}>
               <input type="checkbox" checked={favActive} disabled={loggedIn && !hasFavs} onChange={(e) => { if (loggedIn && hasFavs) setFavOnly(e.target.checked); }} style={{ accentColor: "#D97706", width: 16, height: 16 }} />
               <Star size={15} fill={favActive ? "#D97706" : "none"} color={favActive ? "#D97706" : C.amber} />
-              <span style={{ fontSize: 13, fontWeight: 600, color: favActive ? "#B45309" : C.text }}>Solo preferiti</span>
+              <span style={{ fontSize: 13, fontWeight: 600, color: favActive ? "#B45309" : C.text }}>Preferiti</span>
             </label>
 
             {/* pool attivo */}
-            <label style={{ display: "flex", alignItems: "center", gap: 9, padding: "10px 12px", border: `1px solid ${poolOnly ? "#0EA5E9" : C.border}`, borderRadius: 10, cursor: "pointer", background: poolOnly ? "#EFF6FF" : "#fff", marginBottom: 18 }}>
+            <label style={{ display: "flex", alignItems: "center", gap: 9, padding: "10px 12px", border: `1px solid ${poolOnly ? "#0EA5E9" : C.border}`, borderRadius: 10, cursor: "pointer", background: poolOnly ? "#EFF6FF" : "#fff", marginBottom: 10 }}>
               <input type="checkbox" checked={poolOnly} onChange={(e) => setPoolOnly(e.target.checked)} style={{ accentColor: C.blue, width: 16, height: 16 }} />
               <Flame size={15} color={poolOnly ? C.blue : C.amber} />
-              <span style={{ fontSize: 13, fontWeight: 600, color: poolOnly ? "#0369A1" : C.text }}>Solo con asta attiva</span>
+              <span style={{ fontSize: 13, fontWeight: 600, color: poolOnly ? "#0369A1" : C.text }}>Aste attive</span>
             </label>
 
-            {/* prezzo */}
-            <div style={{ marginBottom: 18 }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 8 }}>Prezzo €/kg <span style={{ fontWeight: 400, textTransform: "none" }}>· IVA escl.</span></div>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <input type="number" value={minP} onChange={(e) => setMinP(e.target.value)} placeholder="min" style={{ width: "100%", padding: "8px 10px", border: `1px solid ${C.border}`, borderRadius: 8, fontSize: 13, outline: "none", fontFamily: "Inter,system-ui" }} />
-                <span style={{ color: C.muted }}>–</span>
-                <input type="number" value={maxP} onChange={(e) => setMaxP(e.target.value)} placeholder="max" style={{ width: "100%", padding: "8px 10px", border: `1px solid ${C.border}`, borderRadius: 8, fontSize: 13, outline: "none", fontFamily: "Inter,system-ui" }} />
-              </div>
-            </div>
+            {/* prezzo disponibile — sostituisce il vecchio range min/max €/kg:
+                mostra solo i prodotti con almeno un prezzo pubblicato da un
+                fornitore verificato (le altre card riportano "da €—/kg") */}
+            <label style={{ display: "flex", alignItems: "center", gap: 9, padding: "10px 12px", border: `1px solid ${priceOnly ? "#0EA5E9" : C.border}`, borderRadius: 10, cursor: "pointer", background: priceOnly ? "#EFF6FF" : "#fff", marginBottom: 18 }}>
+              <input type="checkbox" checked={priceOnly} onChange={(e) => setPriceOnly(e.target.checked)} style={{ accentColor: C.blue, width: 16, height: 16 }} />
+              <Tag size={15} color={priceOnly ? C.blue : C.muted} />
+              <span style={{ fontSize: 13, fontWeight: 600, color: priceOnly ? "#0369A1" : C.text }}>Prezzo disponibile</span>
+            </label>
 
-            {/* macro-aree + settori — un'unica tendina "Aree", stesso pattern
-                delle sotto-sezioni di "Tipo di sostanza" (chiusa di default) */}
+            {/* macro-aree + settori — un'unica tendina "Settore", stesso pattern
+                delle tendine Famiglia chimica / Tipo di materiale (chiusa di default) */}
             <div onClick={() => setOpenAree(v => !v)}
               style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 10px", borderRadius: 8, cursor: "pointer", fontSize: 12.5, fontWeight: 700, color: C.text }}>
-              <span style={{ flex: 1 }}>Aree</span>
+              <span style={{ flex: 1 }}>Settore</span>
               <ChevronRight size={14} color={C.muted} style={{ transform: openAree ? "rotate(90deg)" : "none", transition: "transform 0.15s" }} />
             </div>
             {openAree && (
@@ -313,11 +311,11 @@ export default function CatalogPage() {
             </div>
             )}
 
-            {/* tipo di sostanza (tassonomia chimica) — 2 gruppi collassabili,
-                multi-selezione con semantica OR. Indipendente dalle Aree. */}
+            {/* tassonomia chimica — 2 tendine (Famiglia chimica / Tipo di
+                materiale) senza intestazione di sezione, allo stesso livello
+                della tendina Settore. Multi-selezione con semantica OR. */}
             {chemGroups.length > 0 && (
-              <div style={{ marginTop: 22 }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 8 }}>Tipo di sostanza</div>
+              <div>
                 {chemGroups.map(g => {
                   const gopen = openChemGroups.has(g.slug);
                   return (
