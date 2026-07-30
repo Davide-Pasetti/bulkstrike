@@ -6,7 +6,7 @@
 // arriva qui con type=producer|distributor|importer)
 import { useState, useEffect, useMemo } from "react";
 import { Search, Star, ShieldCheck, ChevronRight, X, SlidersHorizontal, Package, Layers, Award, ArrowRight } from "lucide-react";
-import { getSuppliersDirectory, getMacroAreas, getMyFollowedSectors, getMyFollowedSuppliers, followSector, unfollowSector, getSession } from "@/lib/api";
+import { getSuppliersDirectory, getMacroAreas, getMyFollowedSectors, getMyFollowedSuppliers, followSector, unfollowSector, followSupplier, unfollowSupplier, getSession } from "@/lib/api";
 import BulkStrikeNav from "@/components/BulkStrikeNav";
 import LoginGate from "@/components/BulkStrikeLoginGate";
 import { BSIcon } from "@/components/BSLogo";
@@ -148,6 +148,20 @@ export default function SuppliersDirectory() {
         setFollowedSupplierIds(prevSuppliers);
         window.location.href = "/auth/login";
       });
+  };
+  // Stella sulla card fornitore: stesso comportamento della stella prodotto
+  // (aggiornamento ottimistico, rollback + login se la RPC fallisce).
+  const toggleSupplierFollow = (e, supplierId) => {
+    e.stopPropagation();
+    const wasOn = !!(followedSupplierIds && followedSupplierIds.has(supplierId));
+    const flip = (on) => setFollowedSupplierIds(prev => {
+      const n = new Set(prev || []); on ? n.add(supplierId) : n.delete(supplierId); return n;
+    });
+    flip(!wasOn);
+    (wasOn ? unfollowSupplier(supplierId) : followSupplier(supplierId)).catch(() => {
+      flip(wasOn);
+      window.location.href = "/auth/login"; // i preferiti richiedono un account
+    });
   };
   const toggleCert = (c) => setCertSel(prev => prev.includes(c) ? prev.filter(x => x !== c) : [...prev, c]);
   const toggleType = (v) => setTypeSel(prev => prev.includes(v) ? prev.filter(x => x !== v) : [...prev, v]);
@@ -343,6 +357,7 @@ export default function SuppliersDirectory() {
                   const initials = (f.name || "?").split(/\s+/).slice(0,2).map(w => w[0]).join("").toUpperCase();
                   const topSectors = (f.sector_names || []).slice(0, 3);
                   const more = Math.max(0, (f.sector_names || []).length - 3);
+                  const favSup = !!(followedSupplierIds && followedSupplierIds.has(f.id));
                   return (
                     <div key={f.id} className="dir-card" onClick={() => { window.location.href = `/fornitore?id=${f.id}`; }} style={{ cursor:"pointer" }}>
                       <div style={{ display:"flex", gap:12, alignItems:"center" }}>
@@ -351,6 +366,13 @@ export default function SuppliersDirectory() {
                             ? <img src={f.logo_url} alt={f.name} style={{ width:"100%", height:"100%", objectFit:"contain" }}/>
                             : <span style={{ fontSize:17, fontWeight:900, color:C.blue }}>{initials}</span>}
                         </div>
+                        {/* stella preferito — stesso stile compatto della stella
+                            sulle card prodotto, in alto accanto a logo/nome */}
+                        <button onClick={(e) => toggleSupplierFollow(e, f.id)} aria-pressed={favSup}
+                          title={favSup ? "Rimuovi dai fornitori preferiti" : "Aggiungi ai fornitori preferiti"}
+                          style={{ order:2, marginLeft:"auto", alignSelf:"flex-start", display:"inline-flex", alignItems:"center", justifyContent:"center", width:32, height:32, borderRadius:8, background:favSup ? "#FEF3C7" : "#fff", border:`1.5px solid ${favSup ? "#FDE68A" : C.border}`, cursor:"pointer", flexShrink:0, padding:0 }}>
+                          <Star size={15} fill={favSup ? "#D97706" : "none"} color={favSup ? "#D97706" : C.muted} />
+                        </button>
                         <div style={{ minWidth:0 }}>
                           {/* Bandiera e nome restano nello stesso flusso: se il nome
                               va a capo, la bandiera lo segue invece di restare da sola
