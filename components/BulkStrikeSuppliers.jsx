@@ -6,7 +6,7 @@
 // arriva qui con type=producer|distributor|importer)
 import { useState, useEffect, useMemo } from "react";
 import { Search, Star, ShieldCheck, ChevronRight, X, SlidersHorizontal, Package, Layers, Award, ArrowRight } from "lucide-react";
-import { getSuppliersDirectory, getMacroAreas, getMyFollowedSectors, followSector, unfollowSector, getSession } from "@/lib/api";
+import { getSuppliersDirectory, getMacroAreas, getMyFollowedSectors, getMyFollowedSuppliers, followSector, unfollowSector, getSession } from "@/lib/api";
 import BulkStrikeNav from "@/components/BulkStrikeNav";
 import LoginGate from "@/components/BulkStrikeLoginGate";
 import { BSIcon } from "@/components/BSLogo";
@@ -48,6 +48,17 @@ export default function SuppliersDirectory() {
   // Settori preferiti (sector_follows): stesso stato condiviso con il pannello
   // filtri del catalogo — la stella messa di là si ritrova accesa anche qui.
   const [followedSectorIds, setFollowedSectorIds] = useState(null); // Set | null
+  // Fornitori preferiti (supplier_follows): include anche i fornitori
+  // "ereditati" da un settore preferito (cascata lato DB in follow_sector).
+  const [followedSupplierIds, setFollowedSupplierIds] = useState(null); // Set | null
+  const [favOnly, setFavOnly] = useState(true); // default: solo preferiti (se ne ha)
+  // Tendina "Settore": chiusa di default, si apre al click o da deep-link.
+  const [openSettore, setOpenSettore] = useState(false);
+
+  const refetchFollowedSuppliers = () =>
+    getMyFollowedSuppliers()
+      .then(list => setFollowedSupplierIds(new Set((list || []).map(x => x.id))))
+      .catch(() => setFollowedSupplierIds(prev => prev || new Set()));
 
   useEffect(() => {
     (async () => {
@@ -61,10 +72,13 @@ export default function SuppliersDirectory() {
       getMyFollowedSectors()
         .then(list => setFollowedSectorIds(new Set((list || []).map(x => x.sector_id))))
         .catch(() => setFollowedSectorIds(new Set()));
+      refetchFollowedSuppliers();
     })();
     const sp = new URLSearchParams(window.location.search);
     if (sp.get("macro")) setActiveMacro(sp.get("macro"));
     if (sp.get("sector")) setActiveSector(sp.get("sector"));
+    // Filtro preselezionato da URL → la tendina che lo contiene parte aperta.
+    if (sp.get("macro") || sp.get("sector")) setOpenSettore(true);
     // country/type accettano deep-link sia a valore singolo che a lista
     // separata da virgole (?country=Italia,Francia&type=producer,distributor),
     // per restare compatibili con eventuali link già in giro con un solo valore.
@@ -79,10 +93,14 @@ export default function SuppliersDirectory() {
   const countries = useMemo(() => [...new Set(all.map(s => s.country).filter(Boolean))].sort(), [all]);
   const allCerts = useMemo(() => [...new Set(all.flatMap(s => s.certifications || []))].sort(), [all]);
 
+  const hasFavs = !!(followedSupplierIds && followedSupplierIds.size > 0);
+  const favActive = hasFavs && favOnly; // la pagina è già riservata ai loggati
+
   const filtered = useMemo(() => {
     let list = all;
     const s = q.trim().toLowerCase();
     if (s) list = list.filter(f => (f.name || "").toLowerCase().includes(s));
+    if (favActive) list = list.filter(f => followedSupplierIds.has(f.id));
     if (countrySel.length) list = list.filter(f => countrySel.includes(f.country));
     // Un'azienda può avere più ruoli (company_supplier_roles, es. produttore E
     // distributore): filtriamo su f.roles quando disponibile, con fallback al
@@ -97,7 +115,7 @@ export default function SuppliersDirectory() {
     else if (sort === "products") list.sort((a, b) => (b.product_count || 0) - (a.product_count || 0));
     else list.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
     return list;
-  }, [all, q, countrySel, typeSel, minRating, certSel, activeMacro, activeSector, sort]);
+  }, [all, q, countrySel, typeSel, minRating, certSel, activeMacro, activeSector, sort, favActive, followedSupplierIds]);
 
   const activeMacroObj = macrosTax.find(m => m.slug === activeMacro);
   const activeSectorObj = (activeMacroObj?.sub_areas || []).find(s => s.slug === activeSector);
@@ -105,17 +123,31 @@ export default function SuppliersDirectory() {
   const activeCount = countrySel.length+typeSel.length+(minRating?1:0)+certSel.length+(activeMacro?1:0)+(activeSector?1:0);
   // Stella settore: aggiornamento ottimistico con rollback + login se la RPC
   // fallisce — identico al pannello filtri del catalogo (stesso sector_follows).
-  const toggleSectorFollow = (e, sectorId) => {
+  // La cascata lato DB propaga il follow anche ai FORNITORI del settore
+  // (supplier_follows): merge ottimistico via f.sectors e refetch autoritativo
+  // di get_my_followed_suppliers al successo, così il filtro "Preferiti" è
+  // aggiornato subito, senza refresh (stesso pattern DAV-49 sui prodotti).
+  const toggleSectorFollow = (e, sector) => {
     e.stopPropagation();
-    const wasOn = !!(followedSectorIds && followedSectorIds.has(sectorId));
+    const wasOn = !!(followedSectorIds && followedSectorIds.has(sector.id));
     const flip = (on) => setFollowedSectorIds(prev => {
-      const n = new Set(prev || []); on ? n.add(sectorId) : n.delete(sectorId); return n;
+      const n = new Set(prev || []); on ? n.add(sector.id) : n.delete(sector.id); return n;
     });
+    const sectorSupplierIds = all.filter(f => (f.sectors || []).includes(sector.slug)).map(f => f.id);
+    const prevSuppliers = followedSupplierIds; // snapshot per il rollback
     flip(!wasOn);
-    (wasOn ? unfollowSector(sectorId) : followSector(sectorId)).catch(() => {
-      flip(wasOn);
-      window.location.href = "/auth/login";
+    setFollowedSupplierIds(prev => {
+      const n = new Set(prev || []);
+      sectorSupplierIds.forEach(id => { wasOn ? n.delete(id) : n.add(id); });
+      return n;
     });
+    (wasOn ? unfollowSector(sector.id) : followSector(sector.id))
+      .then(refetchFollowedSuppliers)
+      .catch(() => {
+        flip(wasOn);
+        setFollowedSupplierIds(prevSuppliers);
+        window.location.href = "/auth/login";
+      });
   };
   const toggleCert = (c) => setCertSel(prev => prev.includes(c) ? prev.filter(x => x !== c) : [...prev, c]);
   const toggleType = (v) => setTypeSel(prev => prev.includes(v) ? prev.filter(x => x !== v) : [...prev, v]);
@@ -196,6 +228,17 @@ export default function SuppliersDirectory() {
               {activeCount > 0 && <span onClick={clearFilters} style={{ fontSize:12, color:C.blue, fontWeight:700, cursor:"pointer" }}>Azzera ({activeCount})</span>}
             </div>
 
+            {/* preferiti — stesso stile del checkbox in cima ai filtri del
+                catalogo (DAV-48): mostra solo i fornitori seguiti, inclusi
+                quelli ereditati dai settori preferiti (cascata lato DB). */}
+            <label
+              title={!hasFavs ? "Segui un fornitore o un settore per usare questo filtro" : favActive ? "Mostra tutti i fornitori" : "Mostra solo i preferiti"}
+              style={{ display:"flex", alignItems:"center", gap:9, padding:"10px 12px", border:`1px solid ${favActive ? "#FDE68A" : C.border}`, borderRadius:10, cursor:hasFavs ? "pointer" : "not-allowed", background:favActive ? "#FEF3C7" : "#fff", margin:"12px 0 4px", opacity:hasFavs ? 1 : 0.55 }}>
+              <input type="checkbox" checked={favActive} disabled={!hasFavs} onChange={(e) => { if (hasFavs) setFavOnly(e.target.checked); }} style={{ accentColor:"#D97706", width:16, height:16 }} />
+              <Star size={15} fill={favActive ? "#D97706" : "none"} color={favActive ? "#D97706" : C.amber} />
+              <span style={{ fontSize:13, fontWeight:600, color:favActive ? "#B45309" : C.text }}>Preferiti</span>
+            </label>
+
             <FilterTitle>Tipo fornitore</FilterTitle>
             {TYPE_OPTIONS.map(([v,l]) => (
               <Opt key={v} on={typeSel.includes(v)} onClick={() => toggleType(v)}>{l}</Opt>
@@ -220,7 +263,14 @@ export default function SuppliersDirectory() {
               ))}
             </div>
 
-            <FilterTitle>Aree merceologiche</FilterTitle>
+            {/* settore — tendina chiusa di default (come nel catalogo, DAV-46);
+                si apre al click o se un filtro arriva dal deep-link URL. */}
+            <div onClick={() => setOpenSettore(v => !v)}
+              style={{ display:"flex", alignItems:"center", gap:8, margin:"18px 0 8px", cursor:"pointer" }}>
+              <span style={{ fontSize:12, fontWeight:700, color:C.muted, textTransform:"uppercase", letterSpacing:"0.04em", flex:1 }}>Settore</span>
+              <ChevronRight size={14} color={C.muted} style={{ transform:openSettore ? "rotate(90deg)" : "none", transition:"transform 0.15s" }}/>
+            </div>
+            {openSettore && (
             <div style={{ display:"flex", flexDirection:"column", gap:2, maxHeight:320, overflowY:"auto" }}>
               {macrosTax.map(m => {
                 const on = activeMacro === m.slug;
@@ -245,7 +295,7 @@ export default function SuppliersDirectory() {
                                  style={{ display:"flex", alignItems:"center", gap:6, padding:"5px 9px", borderRadius:7, cursor:"pointer", background:son?"#DBEAFE":"transparent", fontSize:12.5, fontWeight:son?700:500, color:son?"#0369A1":C.muted }}>
                               <span>{s.icon || "•"}</span>
                               <span style={{ flex:1 }}>{s.name}</span>
-                              <button onClick={(e) => toggleSectorFollow(e, s.id)} aria-pressed={fav}
+                              <button onClick={(e) => toggleSectorFollow(e, s)} aria-pressed={fav}
                                 title={fav ? "Rimuovi dai settori preferiti" : "Aggiungi ai settori preferiti"}
                                 style={{ display:"inline-flex", alignItems:"center", justifyContent:"center", background:"transparent", border:"none", cursor:"pointer", padding:2, flexShrink:0 }}>
                                 <Star size={13} fill={fav ? "#D97706" : "none"} color={fav ? "#D97706" : C.muted} />
@@ -259,6 +309,7 @@ export default function SuppliersDirectory() {
                 );
               })}
             </div>
+            )}
 
             <button className="dir-filter-toggle" onClick={() => setShowFilters(false)} style={{ marginTop:16, width:"100%", justifyContent:"center", padding:"12px", borderRadius:9, border:"none", background:C.blue, color:"#fff", fontSize:14, fontWeight:700, cursor:"pointer" }}>
               Mostra {filtered.length} fornitori
