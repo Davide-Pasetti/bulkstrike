@@ -216,6 +216,19 @@ export default function CatalogPage() {
               </div>
             </div>
 
+            {/* solo preferiti — il banner sopra la lista rimanda proprio a questo
+                controllo. Stessa posizione/stile di "solo con asta attiva", in
+                cima al pannello. Utente anonimo: click → login (come la stella
+                sulle card). Loggato senza preferiti: disabilitato, con invito. */}
+            <label
+              onClick={!loggedIn ? (e) => { e.preventDefault(); window.location.href = "/auth/login"; } : undefined}
+              title={!loggedIn ? "Accedi per filtrare i tuoi preferiti" : !hasFavs ? "Aggiungi preferiti con la stella ⭐ sulle card" : favOnly ? "Mostra tutte le materie prime" : "Mostra solo i preferiti"}
+              style={{ display: "flex", alignItems: "center", gap: 9, padding: "10px 12px", border: `1px solid ${favActive ? "#FDE68A" : C.border}`, borderRadius: 10, cursor: (loggedIn && !hasFavs) ? "not-allowed" : "pointer", background: favActive ? "#FEF3C7" : "#fff", marginBottom: 10, opacity: (loggedIn && !hasFavs) ? 0.55 : 1 }}>
+              <input type="checkbox" checked={favActive} disabled={loggedIn && !hasFavs} onChange={(e) => { if (loggedIn && hasFavs) setFavOnly(e.target.checked); }} style={{ accentColor: "#D97706", width: 16, height: 16 }} />
+              <Star size={15} fill={favActive ? "#D97706" : "none"} color={favActive ? "#D97706" : C.amber} />
+              <span style={{ fontSize: 13, fontWeight: 600, color: favActive ? "#B45309" : C.text }}>Solo preferiti</span>
+            </label>
+
             {/* pool attivo */}
             <label style={{ display: "flex", alignItems: "center", gap: 9, padding: "10px 12px", border: `1px solid ${poolOnly ? "#0EA5E9" : C.border}`, borderRadius: 10, cursor: "pointer", background: poolOnly ? "#EFF6FF" : "#fff", marginBottom: 18 }}>
               <input type="checkbox" checked={poolOnly} onChange={(e) => setPoolOnly(e.target.checked)} style={{ accentColor: C.blue, width: 16, height: 16 }} />
