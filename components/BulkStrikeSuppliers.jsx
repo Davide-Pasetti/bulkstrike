@@ -243,13 +243,13 @@ export default function SuppliersDirectory() {
                           return (
                             <div key={s.id} onClick={() => setActiveSector(son ? null : s.slug)}
                                  style={{ display:"flex", alignItems:"center", gap:6, padding:"5px 9px", borderRadius:7, cursor:"pointer", background:son?"#DBEAFE":"transparent", fontSize:12.5, fontWeight:son?700:500, color:son?"#0369A1":C.muted }}>
+                              <span>{s.icon || "•"}</span>
+                              <span style={{ flex:1 }}>{s.name}</span>
                               <button onClick={(e) => toggleSectorFollow(e, s.id)} aria-pressed={fav}
                                 title={fav ? "Rimuovi dai settori preferiti" : "Aggiungi ai settori preferiti"}
                                 style={{ display:"inline-flex", alignItems:"center", justifyContent:"center", background:"transparent", border:"none", cursor:"pointer", padding:2, flexShrink:0 }}>
                                 <Star size={13} fill={fav ? "#D97706" : "none"} color={fav ? "#D97706" : C.muted} />
                               </button>
-                              <span>{s.icon || "•"}</span>
-                              <span style={{ flex:1 }}>{s.name}</span>
                             </div>
                           );
                         })}
