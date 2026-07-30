@@ -1084,20 +1084,30 @@ export default function ProductPage() {
 
           {/* RIGHT COLUMN — sticky cards */}
           <div style={{ position:"sticky", top:80, display:"flex", flexDirection:"column", gap:16 }}>
-            {/* NESSUN FORNITORE QUOTATO / APRI ASTA — unica posizione in pagina:
-                in alto a destra, sopra il grafico prezzi. Mutuamente esclusivo
-                col box asta sottostante sullo stesso stato pool.exists: questo
-                compare SOLO se non c'è già un'asta attiva da aggregarsi. */}
-            {!featured && !pool.exists && (
+            {/* APRI ASTA — unica posizione in pagina: in alto a destra, sopra il
+                grafico prezzi. La scelta tra questo box e il router sottostante
+                si basa SOLO su pool.exists (tabella pools), MAI sulla presenza
+                di un prezzo pubblicato: un prodotto con prezzi ma senza un'asta
+                reale deve offrire "Apri un'asta", non "Vai alla pagina dell'asta"
+                (visto dal vivo con l'Acido citrico). Con 1 solo fornitore resta
+                il flusso Acquisto di gruppo (router sotto); col divieto di legge
+                resta il box normativo. */}
+            {!pool.exists && !auctionBlocked && !groupBuy && (
               <div style={{ border:`1px dashed ${C.border}`, borderRadius:14, padding:"22px 18px", textAlign:"center", color:C.muted }}>
                 <Beaker size={26} color={C.muted} style={{ marginBottom:8 }} />
-                <div style={{ fontSize:15, fontWeight:700, color:C.text, marginBottom:4 }}>Nessun fornitore quotato per questo prodotto</div>
+                <div style={{ fontSize:15, fontWeight:700, color:C.text, marginBottom:4 }}>
+                  {featured ? "Apri un'asta a ribasso" : "Nessun fornitore quotato per questo prodotto"}
+                </div>
                 {auctionRestricted ? (
                   <div style={{ fontSize:13, marginTop:6, lineHeight:1.55 }}>
                     La normativa italiana vieta l'acquisto di prodotti agricoli e alimentari tramite aste elettroniche a doppio ribasso, quindi non è possibile aprire un'asta a ribasso su questo prodotto. Resta disponibile solo con Acquisto Rapido, quando un fornitore è quotato.
                   </div>
                 ) : (<>
-                <div style={{ fontSize:13, marginBottom:14 }}>Puoi comunque aprire un'asta a ribasso: aggreghi la domanda e i fornitori certificati competono al ribasso.</div>
+                <div style={{ fontSize:13, marginBottom:14 }}>
+                  {featured
+                    ? "Non c'è ancora un'asta attiva per questo prodotto: aprila tu — aggreghi la domanda e i fornitori certificati competono al ribasso."
+                    : "Puoi comunque aprire un'asta a ribasso: aggreghi la domanda e i fornitori certificati competono al ribasso."}
+                </div>
                 {canOpenPool && (
                   <label style={{ display:"flex", gap:9, alignItems:"flex-start", background:"#fff", border:`1px solid ${C.border}`, borderRadius:9, padding:"10px 12px", marginBottom:14, cursor:"pointer", textAlign:"left" }}>
                     <input type="checkbox" checked={openAcceptTerms} onChange={e => setOpenAcceptTerms(e.target.checked)} style={{ marginTop:2, width:16, height:16, accentColor:C.purple, flexShrink:0 }}/>
@@ -1114,14 +1124,13 @@ export default function ProductPage() {
               </div>
             )}
 
-            {/* BOX ASTA — sopra "Andamento prezzo". Router verso la pagina
-                dell'asta: se un pool esiste ci si unisce lì, altrimenti si apre
-                lì una nuova asta (?product). Il bottone è disabilitato SOLO nel
-                caso "apri nuova" quando la quantità è sotto il minimo (1 pallet);
-                per aderire a un'asta attiva resta sempre attivo.
-                Se sopra è visibile il box "Apri un'asta" (nessun fornitore E
-                nessuna asta attiva) questo si nasconde: mai entrambi. */}
-            {(featured || pool.exists) && (auctionBlocked ? (
+            {/* BOX ASTA — sopra "Andamento prezzo". Mostrato SOLO quando esiste
+                davvero un pool (aggregazione: "attiva / Vai alla pagina"),
+                oppure per i casi speciali: divieto di legge (auctionBlocked) e
+                Acquisto di gruppo con 1 solo fornitore (groupBuy, dove il
+                router resta l'ingresso per aprirlo). Mai insieme al box
+                "Apri un'asta" qui sopra. */}
+            {(pool.exists || auctionBlocked || groupBuy) && (auctionBlocked ? (
               /* DIVIETO DI LEGGE — sostituisce il box asta per agricoli/alimentari grezzi
                  SOLO in asta competitiva (2+ fornitori). Con 1 fornitore mostra il box
                  "Acquisto di gruppo" (ramo else), che il divieto non vieta. */
