@@ -1085,9 +1085,10 @@ export default function ProductPage() {
           {/* RIGHT COLUMN — sticky cards */}
           <div style={{ position:"sticky", top:80, display:"flex", flexDirection:"column", gap:16 }}>
             {/* NESSUN FORNITORE QUOTATO / APRI ASTA — unica posizione in pagina:
-                in alto a destra, sopra il grafico prezzi. Stesso box che prima
-                stava nella colonna sinistra al posto della lista fornitori. */}
-            {!featured && (
+                in alto a destra, sopra il grafico prezzi. Mutuamente esclusivo
+                col box asta sottostante sullo stesso stato pool.exists: questo
+                compare SOLO se non c'è già un'asta attiva da aggregarsi. */}
+            {!featured && !pool.exists && (
               <div style={{ border:`1px dashed ${C.border}`, borderRadius:14, padding:"22px 18px", textAlign:"center", color:C.muted }}>
                 <Beaker size={26} color={C.muted} style={{ marginBottom:8 }} />
                 <div style={{ fontSize:15, fontWeight:700, color:C.text, marginBottom:4 }}>Nessun fornitore quotato per questo prodotto</div>
@@ -1113,12 +1114,14 @@ export default function ProductPage() {
               </div>
             )}
 
-            {/* BOX ASTA — sempre visibile, sopra "Andamento prezzo". Router verso la
-                pagina dell'asta: se un pool esiste ci si unisce lì, altrimenti si apre
-                lì una nuova asta (?product). Contenuto minimale: titolo + bottone. Il
-                bottone è disabilitato SOLO nel caso "apri nuova" quando la quantità è
-                sotto il minimo (1 pallet); per aderire a un'asta attiva resta sempre attivo. */}
-            {auctionBlocked ? (
+            {/* BOX ASTA — sopra "Andamento prezzo". Router verso la pagina
+                dell'asta: se un pool esiste ci si unisce lì, altrimenti si apre
+                lì una nuova asta (?product). Il bottone è disabilitato SOLO nel
+                caso "apri nuova" quando la quantità è sotto il minimo (1 pallet);
+                per aderire a un'asta attiva resta sempre attivo.
+                Se sopra è visibile il box "Apri un'asta" (nessun fornitore E
+                nessuna asta attiva) questo si nasconde: mai entrambi. */}
+            {(featured || pool.exists) && (auctionBlocked ? (
               /* DIVIETO DI LEGGE — sostituisce il box asta per agricoli/alimentari grezzi
                  SOLO in asta competitiva (2+ fornitori). Con 1 fornitore mostra il box
                  "Acquisto di gruppo" (ramo else), che il divieto non vieta. */
@@ -1162,7 +1165,7 @@ export default function ProductPage() {
                 </>);
               })()}
             </div>
-            )}
+            ))}
 
             {/* PRICE HISTORY */}
             <div style={{ border:`1px solid ${C.border}`, borderRadius:14, padding:18 }}>
