@@ -129,17 +129,34 @@ export default function CatalogPage() {
   // Stella settore: aggiornamento ottimistico; se la RPC fallisce (tipicamente
   // utente non loggato) si ripristina lo stato e si va al login, come per i
   // preferiti prodotto/fornitore.
-  const toggleSectorFollow = (e, sectorId) => {
+  // DAV-47: lato DB follow_sector/unfollow_sector propagano il follow a TUTTI i
+  // prodotti del settore (insert/delete su product_follows). La UI deve fare lo
+  // stesso subito: merge ottimistico delle stelle prodotto via p.sectors, poi
+  // refetch autoritativo di get_my_followed_products al successo della RPC
+  // (riconcilia eventuali differenze tra mappa client e product_sectors).
+  const toggleSectorFollow = (e, sector) => {
     e.stopPropagation();
-    const wasOn = !!(followedSectorIds && followedSectorIds.has(sectorId));
-    const flip = (on) => setFollowedSectorIds(prev => {
-      const n = new Set(prev || []); on ? n.add(sectorId) : n.delete(sectorId); return n;
+    const wasOn = !!(followedSectorIds && followedSectorIds.has(sector.id));
+    const flipSector = (on) => setFollowedSectorIds(prev => {
+      const n = new Set(prev || []); on ? n.add(sector.id) : n.delete(sector.id); return n;
     });
-    flip(!wasOn);
-    (wasOn ? unfollowSector(sectorId) : followSector(sectorId)).catch(() => {
-      flip(wasOn);
-      window.location.href = "/auth/login"; // i preferiti richiedono un account
+    const sectorProductIds = all.filter(p => (p.sectors || []).includes(sector.slug)).map(p => p.id);
+    const prevProducts = followedIds; // snapshot per il rollback
+    flipSector(!wasOn);
+    setFollowedIds(prev => {
+      const n = new Set(prev || []);
+      sectorProductIds.forEach(id => { wasOn ? n.delete(id) : n.add(id); });
+      return n;
     });
+    (wasOn ? unfollowSector(sector.id) : followSector(sector.id))
+      .then(() => getMyFollowedProducts()
+        .then(list => setFollowedIds(new Set((list || []).map(x => x.product_id))))
+        .catch(() => {}))
+      .catch(() => {
+        flipSector(wasOn);
+        setFollowedIds(prevProducts);
+        window.location.href = "/auth/login"; // i preferiti richiedono un account
+      });
   };
   const clearFilters = () => { setQ(""); setActiveMacro(null); setActiveSector(null); setActiveClasses(new Set()); setMinP(""); setMaxP(""); setPoolOnly(false); };
   const activeCount = (activeMacro ? 1 : 0) + (activeSector ? 1 : 0) + activeClasses.size + (poolOnly ? 1 : 0) + (minP ? 1 : 0) + (maxP ? 1 : 0);
@@ -277,7 +294,7 @@ export default function CatalogPage() {
                           return (
                             <div key={s.id} onClick={() => setActiveSector(son ? null : s.slug)}
                               style={{ display: "flex", alignItems: "center", gap: 7, padding: "6px 10px", borderRadius: 7, cursor: "pointer", background: son ? "#DBEAFE" : "transparent", fontSize: 12.5, fontWeight: son ? 700 : 500, color: son ? "#0369A1" : C.muted }}>
-                              <button onClick={(e) => toggleSectorFollow(e, s.id)} aria-pressed={fav}
+                              <button onClick={(e) => toggleSectorFollow(e, s)} aria-pressed={fav}
                                 title={fav ? "Rimuovi dai settori preferiti" : "Aggiungi ai settori preferiti"}
                                 style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", background: "transparent", border: "none", cursor: "pointer", padding: 2, flexShrink: 0 }}>
                                 <Star size={13} fill={fav ? "#D97706" : "none"} color={fav ? "#D97706" : C.muted} />
