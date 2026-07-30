@@ -1118,7 +1118,7 @@ export default function ProductPage() {
                 )}
                 {canOpenPool
                   ? <button onClick={handleOpenPool} disabled={busy || !openAcceptTerms} style={{ background:C.purple, color:"#fff", border:"none", borderRadius:9, padding:"12px 22px", fontSize:14, fontWeight:700, cursor:(busy||!openAcceptTerms)?"default":"pointer", opacity:(busy||!openAcceptTerms)?0.5:1, display:"inline-flex", alignItems:"center", gap:7, fontFamily:"Inter,system-ui" }}><Gavel size={16}/> Apri un'asta a ribasso con {(qty/1000).toLocaleString("it-IT")}t</button>
-                  : <div style={{ fontSize:12 }}>Imposta almeno {(palletKg/1000).toLocaleString("it-IT")}t (1 pallet) per aprire un'asta a ribasso.</div>}
+                  : <div style={{ fontSize:12, fontWeight:700, color:C.text }}>Quantità minima per aprire l'asta a ribasso: 1 pallet ({(palletKg/1000).toLocaleString("it-IT")}t).</div>}
                 {actionMsg && <div style={{ marginTop:8, fontSize:12, color:C.red, fontWeight:600 }}>{actionMsg}</div>}
                 </>)}
               </div>
