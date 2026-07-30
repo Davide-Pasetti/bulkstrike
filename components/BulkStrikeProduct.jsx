@@ -1093,7 +1093,9 @@ export default function ProductPage() {
                 il flusso Acquisto di gruppo (router sotto); col divieto di legge
                 resta il box normativo. */}
             {!pool.exists && !auctionBlocked && !groupBuy && (
-              <div style={{ border:`1px dashed ${C.border}`, borderRadius:14, padding:"22px 18px", textAlign:"center", color:C.muted }}>
+              /* Sfondo #FBF7FF: lo stesso rosino della palette viola gia' usato
+                 dal box asta ("Asta a ribasso disponibile") nella pagina aste. */
+              <div style={{ border:`1px dashed ${C.border}`, borderRadius:14, padding:"22px 18px", textAlign:"center", color:C.muted, background:"#FBF7FF" }}>
                 <Beaker size={26} color={C.muted} style={{ marginBottom:8 }} />
                 <div style={{ fontSize:15, fontWeight:700, color:C.text, marginBottom:4 }}>
                   {featured ? "Apri un'asta a ribasso" : "Nessun fornitore quotato per questo prodotto"}
@@ -1118,7 +1120,11 @@ export default function ProductPage() {
                 )}
                 {canOpenPool
                   ? <button onClick={handleOpenPool} disabled={busy || !openAcceptTerms} style={{ background:C.purple, color:"#fff", border:"none", borderRadius:9, padding:"12px 22px", fontSize:14, fontWeight:700, cursor:(busy||!openAcceptTerms)?"default":"pointer", opacity:(busy||!openAcceptTerms)?0.5:1, display:"inline-flex", alignItems:"center", gap:7, fontFamily:"Inter,system-ui" }}><Gavel size={16}/> Apri un'asta a ribasso con {(qty/1000).toLocaleString("it-IT")}t</button>
-                  : <div style={{ fontSize:12, fontWeight:700, color:C.text }}>Quantità minima per aprire l'asta a ribasso: 1 pallet ({(palletKg/1000).toLocaleString("it-IT")}t).</div>}
+                  : <div style={{ fontSize:12 }}>
+                      Quantità minima per aprire l'asta a ribasso:
+                      <div style={{ fontSize:15, fontWeight:800, color:C.text, margin:"3px 0" }}>1 pallet</div>
+                      ({(palletKg/1000).toLocaleString("it-IT")}t)
+                    </div>}
                 {actionMsg && <div style={{ marginTop:8, fontSize:12, color:C.red, fontWeight:600 }}>{actionMsg}</div>}
                 </>)}
               </div>
