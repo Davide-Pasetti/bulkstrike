@@ -834,31 +834,7 @@ export default function ProductPage() {
                 </div>
               ))}
             </div>
-            </>) : (
-              <div style={{ border:`1px dashed ${C.border}`, borderRadius:14, padding:"28px 24px", marginBottom:28, textAlign:"center", color:C.muted }}>
-                <Beaker size={26} color={C.muted} style={{ marginBottom:8 }} />
-                <div style={{ fontSize:15, fontWeight:700, color:C.text, marginBottom:4 }}>Nessun fornitore quotato per questo prodotto</div>
-                {auctionRestricted ? (
-                  <div style={{ fontSize:13, marginTop:6, lineHeight:1.55 }}>
-                    La normativa italiana vieta l'acquisto di prodotti agricoli e alimentari tramite aste elettroniche a doppio ribasso, quindi non è possibile aprire un'asta a ribasso su questo prodotto. Resta disponibile solo con Acquisto Rapido, quando un fornitore è quotato.
-                  </div>
-                ) : (<>
-                <div style={{ fontSize:13, marginBottom:14 }}>Puoi comunque aprire un'asta a ribasso: aggreghi la domanda e i fornitori certificati competono al ribasso.</div>
-                {canOpenPool && (
-                  <label style={{ display:"flex", gap:9, alignItems:"flex-start", background:"#fff", border:`1px solid ${C.border}`, borderRadius:9, padding:"10px 12px", marginBottom:14, cursor:"pointer", textAlign:"left" }}>
-                    <input type="checkbox" checked={openAcceptTerms} onChange={e => setOpenAcceptTerms(e.target.checked)} style={{ marginTop:2, width:16, height:16, accentColor:C.purple, flexShrink:0 }}/>
-                    <span style={{ fontSize:12, color:C.muted, lineHeight:1.5 }}>
-                      Aprendo l'asta accetto che la mia quantità entri nel volume aggregato e che il fornitore verrà scelto tra quelli certificati in base al prezzo più basso raggiunto alla chiusura.
-                    </span>
-                  </label>
-                )}
-                {canOpenPool
-                  ? <button onClick={handleOpenPool} disabled={busy || !openAcceptTerms} style={{ background:C.purple, color:"#fff", border:"none", borderRadius:9, padding:"12px 22px", fontSize:14, fontWeight:700, cursor:(busy||!openAcceptTerms)?"default":"pointer", opacity:(busy||!openAcceptTerms)?0.5:1, display:"inline-flex", alignItems:"center", gap:7, fontFamily:"Inter,system-ui" }}><Gavel size={16}/> Apri un'asta a ribasso con {(qty/1000).toLocaleString("it-IT")}t</button>
-                  : <div style={{ fontSize:12 }}>Imposta almeno {(palletKg/1000).toLocaleString("it-IT")}t (1 pallet) per aprire un'asta a ribasso.</div>}
-                {actionMsg && <div style={{ marginTop:8, fontSize:12, color:C.red, fontWeight:600 }}>{actionMsg}</div>}
-                </>)}
-              </div>
-            )}
+            </>) : null}
 
             {/* SEGNALA UN FORNITORE — solo quando il prodotto non ha alcun fornitore
                 attivo (getProduct filtra già active=true). Niente invio automatico:
@@ -1108,6 +1084,35 @@ export default function ProductPage() {
 
           {/* RIGHT COLUMN — sticky cards */}
           <div style={{ position:"sticky", top:80, display:"flex", flexDirection:"column", gap:16 }}>
+            {/* NESSUN FORNITORE QUOTATO / APRI ASTA — unica posizione in pagina:
+                in alto a destra, sopra il grafico prezzi. Stesso box che prima
+                stava nella colonna sinistra al posto della lista fornitori. */}
+            {!featured && (
+              <div style={{ border:`1px dashed ${C.border}`, borderRadius:14, padding:"22px 18px", textAlign:"center", color:C.muted }}>
+                <Beaker size={26} color={C.muted} style={{ marginBottom:8 }} />
+                <div style={{ fontSize:15, fontWeight:700, color:C.text, marginBottom:4 }}>Nessun fornitore quotato per questo prodotto</div>
+                {auctionRestricted ? (
+                  <div style={{ fontSize:13, marginTop:6, lineHeight:1.55 }}>
+                    La normativa italiana vieta l'acquisto di prodotti agricoli e alimentari tramite aste elettroniche a doppio ribasso, quindi non è possibile aprire un'asta a ribasso su questo prodotto. Resta disponibile solo con Acquisto Rapido, quando un fornitore è quotato.
+                  </div>
+                ) : (<>
+                <div style={{ fontSize:13, marginBottom:14 }}>Puoi comunque aprire un'asta a ribasso: aggreghi la domanda e i fornitori certificati competono al ribasso.</div>
+                {canOpenPool && (
+                  <label style={{ display:"flex", gap:9, alignItems:"flex-start", background:"#fff", border:`1px solid ${C.border}`, borderRadius:9, padding:"10px 12px", marginBottom:14, cursor:"pointer", textAlign:"left" }}>
+                    <input type="checkbox" checked={openAcceptTerms} onChange={e => setOpenAcceptTerms(e.target.checked)} style={{ marginTop:2, width:16, height:16, accentColor:C.purple, flexShrink:0 }}/>
+                    <span style={{ fontSize:12, color:C.muted, lineHeight:1.5 }}>
+                      Aprendo l'asta accetto che la mia quantità entri nel volume aggregato e che il fornitore verrà scelto tra quelli certificati in base al prezzo più basso raggiunto alla chiusura.
+                    </span>
+                  </label>
+                )}
+                {canOpenPool
+                  ? <button onClick={handleOpenPool} disabled={busy || !openAcceptTerms} style={{ background:C.purple, color:"#fff", border:"none", borderRadius:9, padding:"12px 22px", fontSize:14, fontWeight:700, cursor:(busy||!openAcceptTerms)?"default":"pointer", opacity:(busy||!openAcceptTerms)?0.5:1, display:"inline-flex", alignItems:"center", gap:7, fontFamily:"Inter,system-ui" }}><Gavel size={16}/> Apri un'asta a ribasso con {(qty/1000).toLocaleString("it-IT")}t</button>
+                  : <div style={{ fontSize:12 }}>Imposta almeno {(palletKg/1000).toLocaleString("it-IT")}t (1 pallet) per aprire un'asta a ribasso.</div>}
+                {actionMsg && <div style={{ marginTop:8, fontSize:12, color:C.red, fontWeight:600 }}>{actionMsg}</div>}
+                </>)}
+              </div>
+            )}
+
             {/* BOX ASTA — sempre visibile, sopra "Andamento prezzo". Router verso la
                 pagina dell'asta: se un pool esiste ci si unisce lì, altrimenti si apre
                 lì una nuova asta (?product). Contenuto minimale: titolo + bottone. Il
