@@ -1,12 +1,18 @@
-import { useState } from "react";
-import { registerCompany, signUpAccount, findClaimCandidates, requestCompanyClaim, completeClaimedCompany } from "@/lib/api";
-import { ShoppingCart, Factory, Truck, Check, ArrowRight, ArrowLeft, Mail, Lock, Building2, Globe, Phone, User, MapPin, Award, Boxes, Shield, X, Bell, Search, Plus, TrendingDown, Zap } from "lucide-react";
+import { useState, useEffect } from "react";
+import { registerCompany, signUpAccount, findClaimCandidates, requestCompanyClaim, completeClaimedCompany, getMacroAreas } from "@/lib/api";
+import { ShoppingCart, Factory, Truck, Check, ArrowRight, ArrowLeft, Mail, Lock, Building2, Globe, Phone, User, MapPin, Award, Boxes, Shield, X, Bell, Search, Plus, TrendingDown, Zap, ChevronRight } from "lucide-react";
 import BulkStrikeNav from "@/components/BulkStrikeNav";
 
 const C = { blue:"#0EA5E9", dark:"#0284C7", text:"#0F172A", muted:"#64748B", border:"#E2E8F0", bg:"#F8FAFE", green:"#059669", amber:"#D97706", purple:"#7C3AED" };
 
 const COUNTRIES = ["Italia","Francia","Spagna","Germania","Portogallo","Austria","Grecia","Polonia","Cina","Argentina","Turchia","Altro"];
-const SECTORS = ["Enologia / Vino","Alimentare","Chimica","Cosmetica","Farmaceutica","Mangimistica","Altro"];
+// I settori mostrati sono quelli VERI della tassonomia (get_taxonomy: 55
+// settori in 13 macro-aree, gli stessi del pannello filtri "Aree" del
+// catalogo). Gli id selezionati vanno in payload.sectors di register_company,
+// che li imposta come settori preferiti (+ prodotti, meccanismo DAV-47): il
+// nuovo utente apre il catalogo e vede di default solo i prodotti rilevanti.
+// SECTOR_PRODUCTS resta la mappa dei suggerimenti materiali, agganciata alle
+// macro-aree tramite sectorSuggestionKey.
 const SECTOR_PRODUCTS = {
   "Enologia / Vino": ["Acido tartarico","Acido malico","Acido lattico","Acido citrico","Acido metatartarico","Metabisolfito di potassio","Bentonite","Tannini enologici","Mannoproteine","Gomma arabica","CMC","Lieviti enologici","MCR (mosto concentrato rettificato)","Gas tecnici (N2/CO2/O2)"],
   "Alimentare": ["Acido citrico","Acido lattico","Acido malico","Saccarosio","Maltodestrine","Amido","Pectine","Acido ascorbico","Aromi","Conservanti"],
@@ -17,6 +23,18 @@ const SECTOR_PRODUCTS = {
   "Altro": [],
 };
 const ALL_MATERIALS = [...new Set(Object.values(SECTOR_PRODUCTS).flat())];
+
+// Da settore reale (slug + macro-area) alla chiave dei suggerimenti materiali.
+// I settori senza corrispondenza non mostrano suggerimenti: resta la ricerca.
+function sectorSuggestionKey(macroSlug, sectorSlug) {
+  if (sectorSlug === "enologia") return "Enologia / Vino";
+  if (macroSlug === "alimentare-bevande") return "Alimentare";
+  if (macroSlug === "chimica-solventi-gas") return "Chimica";
+  if (macroSlug === "cosmetica-detergenza-igiene") return "Cosmetica";
+  if (macroSlug === "farmaceutica-nutraceutica") return "Farmaceutica";
+  if (macroSlug === "mangimi-zootecnia") return "Mangimistica";
+  return null;
+}
 const CERTS = ["Food Grade","OIV","ISO 9001","ISO 22000","REACH","Kosher","Halal","Bio / Organic","FSSC 22000"];
 
 // per-material alert types, differ by account type
@@ -67,11 +85,19 @@ const chipStyle = (on) => ({ padding:"7px 13px", borderRadius:100, border:`1.5px
 
 function MaterialsPicker({ type, f, set }) {
   const [q, setQ] = useState("");
-  const sectors = f.sectors;
+  const sectors = f.sectors; // array di sector_id (uuid) della tassonomia reale
   const materials = f.materials;
   const defs = ALERT_DEFS[type];
 
-  const toggleSector = (s) => set("sectors", sectors.includes(s) ? sectors.filter(x=>x!==s) : [...sectors, s]);
+  // Tassonomia reale macro-aree → settori, la stessa del pannello "Aree".
+  const [taxonomy, setTaxonomy] = useState([]);
+  const [openMacros, setOpenMacros] = useState(() => new Set());
+  useEffect(() => { getMacroAreas().then(m => setTaxonomy(m || [])).catch(() => {}); }, []);
+
+  const toggleSector = (id) => set("sectors", sectors.includes(id) ? sectors.filter(x=>x!==id) : [...sectors, id]);
+  const toggleMacroOpen = (slug) => setOpenMacros(prev => {
+    const n = new Set(prev); n.has(slug) ? n.delete(slug) : n.add(slug); return n;
+  });
   const addMat = (m) => { if(!materials[m]) set("materials", { ...materials, [m]:{...DEFAULT_ALERTS[type]} }); };
   const removeMat = (m) => { const c={...materials}; delete c[m]; set("materials", c); };
   const toggleMat = (m) => materials[m] ? removeMat(m) : addMat(m);
@@ -81,17 +107,47 @@ function MaterialsPicker({ type, f, set }) {
   const searchHits = query ? ALL_MATERIALS.filter(m => m.toLowerCase().includes(query)) : [];
   const exact = query && ALL_MATERIALS.some(m => m.toLowerCase()===query);
   const selectedNames = Object.keys(materials);
+  // Chiavi dei suggerimenti materiali derivate dai settori reali selezionati.
+  const suggestionKeys = [...new Set(taxonomy.flatMap(m =>
+    (m.sub_areas || [])
+      .filter(s => sectors.includes(s.id))
+      .map(s => sectorSuggestionKey(m.slug, s.slug))
+  ).filter(Boolean))];
 
   return (
     <div style={{ marginBottom:18 }}>
-      {/* SECTORS */}
-      <div style={{ fontSize:13, fontWeight:600, marginBottom:8, display:"flex", alignItems:"center", gap:6 }}>
-        <Boxes size={14} color={C.muted}/> Settori {type==="supplier"?"in cui operi":"di interesse"} <span style={{ color:C.muted, fontWeight:400 }}>· seleziona uno o più</span>
+      {/* SECTORS — tassonomia reale, accordion per macro-area */}
+      <div style={{ fontSize:13, fontWeight:600, marginBottom:4, display:"flex", alignItems:"center", gap:6 }}>
+        <Boxes size={14} color={C.muted}/> In quali settori {type==="supplier"?"operi":"opera la tua azienda"}? <span style={{ color:C.muted, fontWeight:400 }}>· seleziona uno o più</span>
       </div>
-      <div style={{ display:"flex", flexWrap:"wrap", gap:8, marginBottom:16 }}>
-        {SECTORS.map(s => {
-          const on = sectors.includes(s);
-          return <button key={s} type="button" onClick={()=>toggleSector(s)} style={chipStyle(on)}>{on && <Check size={13}/>}{s}</button>;
+      <div style={{ fontSize:12, color:C.muted, marginBottom:8 }}>
+        Li impostiamo come preferiti: il catalogo ti mostrerà subito solo i prodotti dei tuoi settori (potrai sempre cambiare).
+      </div>
+      <div style={{ border:`1px solid ${C.border}`, borderRadius:12, padding:"8px 12px", marginBottom:16, maxHeight:280, overflowY:"auto" }}>
+        {taxonomy.length === 0 && <div style={{ fontSize:13, color:C.muted, padding:"6px 0" }}>Caricamento settori…</div>}
+        {taxonomy.map(m => {
+          const subs = m.sub_areas || [];
+          const selCount = subs.filter(s => sectors.includes(s.id)).length;
+          const open = openMacros.has(m.slug);
+          return (
+            <div key={m.id}>
+              <div onClick={() => toggleMacroOpen(m.slug)}
+                style={{ display:"flex", alignItems:"center", gap:8, padding:"7px 2px", cursor:"pointer", fontSize:13.5, fontWeight:600, color:C.text }}>
+                <span style={{ fontSize:15 }}>{m.icon || "📦"}</span>
+                <span style={{ flex:1 }}>{m.name}</span>
+                {selCount > 0 && <span style={{ fontSize:11.5, fontWeight:700, color:C.blue, background:"#EFF6FF", borderRadius:100, padding:"2px 8px" }}>{selCount}</span>}
+                <ChevronRight size={14} color={C.muted} style={{ transform: open ? "rotate(90deg)" : "none", transition:"transform 0.15s" }}/>
+              </div>
+              {open && (
+                <div style={{ display:"flex", flexWrap:"wrap", gap:8, padding:"4px 0 10px 26px" }}>
+                  {subs.map(s => {
+                    const on = sectors.includes(s.id);
+                    return <button key={s.id} type="button" onClick={()=>toggleSector(s.id)} style={chipStyle(on)}>{on && <Check size={13}/>}{s.icon} {s.name}</button>;
+                  })}
+                </div>
+              )}
+            </div>
+          );
         })}
       </div>
 
@@ -113,7 +169,7 @@ function MaterialsPicker({ type, f, set }) {
         </div>
       ) : sectors.length>0 ? (
         <div style={{ display:"flex", flexDirection:"column", gap:14, marginBottom:18 }}>
-          {sectors.filter(s => SECTOR_PRODUCTS[s] && SECTOR_PRODUCTS[s].length>0).map(s => (
+          {suggestionKeys.map(s => (
             <div key={s}>
               <div style={{ fontSize:11, fontWeight:700, color:C.muted, marginBottom:8, textTransform:"uppercase", letterSpacing:"0.05em" }}>{s}</div>
               <div style={{ display:"flex", flexWrap:"wrap", gap:8 }}>
@@ -121,8 +177,8 @@ function MaterialsPicker({ type, f, set }) {
               </div>
             </div>
           ))}
-          {sectors.every(s => !SECTOR_PRODUCTS[s] || SECTOR_PRODUCTS[s].length===0) && (
-            <div style={{ fontSize:13, color:C.muted }}>Per questo settore usa la ricerca qui sopra per aggiungere le materie prime.</div>
+          {suggestionKeys.length === 0 && (
+            <div style={{ fontSize:13, color:C.muted }}>Per i settori scelti usa la ricerca qui sopra per aggiungere le materie prime.</div>
           )}
         </div>
       ) : (
