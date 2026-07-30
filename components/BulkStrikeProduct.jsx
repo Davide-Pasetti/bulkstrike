@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { Search, ArrowRight, Check, Clock, ChevronDown, ChevronRight, ChevronUp, Star, Shield, Truck, FileText, Download, Plus, Minus, Beaker, TrendingDown, Users, Gavel, Info, ShoppingCart, Factory, ExternalLink, MessageSquare } from "lucide-react";
-import { getProduct, getOpenPoolForProduct, getPriceReference, getProductBreadcrumb, getSession, openPool, upsertCartItem, poolErrorMessage, searchProducts, getCart, isFollowingProduct, getMarketPriceSeries, getMarketIndexSeries, getProductSpecs, getProductCandidateSuppliers, getMyCompany } from "@/lib/api";
+import { getProduct, getOpenPoolForProduct, getPriceReference, getProductBreadcrumb, getSession, upsertCartItem, poolErrorMessage, searchProducts, getCart, isFollowingProduct, getMarketPriceSeries, getMarketIndexSeries, getProductSpecs, getProductCandidateSuppliers, getMyCompany } from "@/lib/api";
 import PriceSourceNote from "@/components/PriceSourceNote";
 import CountryFlag from "@/components/CountryFlag";
 import { ytdChange } from "@/lib/priceTrend";
@@ -274,7 +274,6 @@ export default function ProductPage() {
   const [loading, setLoading] = useState(true);
   const [crumb, setCrumb] = useState(null); // { macro, sector } reali del prodotto
   const [busy, setBusy] = useState(false);
-  const [openAcceptTerms, setOpenAcceptTerms] = useState(false); // disclaimer da accettare prima di aprire davvero un'asta
   const [cartOk, setCartOk] = useState(false);
   const [actionMsg, setActionMsg] = useState("");
   const [searchQ, setSearchQ] = useState("");
@@ -488,18 +487,13 @@ export default function ProductPage() {
     if (!session) { window.location.href = "/registrati"; return false; }
     return true;
   }
-  async function handleOpenPool() {
+  // Il bottone del box "Apri un'asta" NON crea più il pool sul posto: porta
+  // alla pagina di preparazione (/pool?product=...), dove il riepilogo è
+  // visibile e l'apertura vera avviene solo con un'azione esplicita separata.
+  function goToOpenAuction() {
     if (!productId) { window.location.href = "/registrati"; return; }
     if (pool.exists && pool.id) { window.location.href = `/pool?id=${pool.id}`; return; } // esiste già → unisciti
-    if (!(await requireAuth())) return;
-    setBusy(true); setActionMsg("");
-    try {
-      const newId = await openPool(productId, qty, true);
-      window.location.href = `/pool?id=${newId}`;
-    } catch (e) {
-      if (pool.id) { window.location.href = `/pool?id=${pool.id}`; return; } // POOL_ALREADY_OPEN
-      setActionMsg(poolErrorMessage(e));
-    } finally { setBusy(false); }
+    window.location.href = `/pool?product=${productId}`;
   }
   async function handleBuyNow() {
     if (!productId) { window.location.href = "/registrati"; return; }
@@ -1110,22 +1104,13 @@ export default function ProductPage() {
                     ? "Non c'è ancora un'asta attiva per questo prodotto: aprila tu — aggreghi la domanda e i fornitori certificati competono al ribasso."
                     : "Puoi comunque aprire un'asta a ribasso: aggreghi la domanda e i fornitori certificati competono al ribasso."}
                 </div>
-                {canOpenPool && (
-                  <label style={{ display:"flex", gap:9, alignItems:"flex-start", background:"#fff", border:`1px solid ${C.border}`, borderRadius:9, padding:"10px 12px", marginBottom:14, cursor:"pointer", textAlign:"left" }}>
-                    <input type="checkbox" checked={openAcceptTerms} onChange={e => setOpenAcceptTerms(e.target.checked)} style={{ marginTop:2, width:16, height:16, accentColor:C.purple, flexShrink:0 }}/>
-                    <span style={{ fontSize:12, color:C.muted, lineHeight:1.5 }}>
-                      Aprendo l'asta accetto che la mia quantità entri nel volume aggregato e che il fornitore verrà scelto tra quelli certificati in base al prezzo più basso raggiunto alla chiusura.
-                    </span>
-                  </label>
-                )}
                 {canOpenPool
-                  ? <button onClick={handleOpenPool} disabled={busy || !openAcceptTerms} style={{ background:C.purple, color:"#fff", border:"none", borderRadius:9, padding:"12px 22px", fontSize:14, fontWeight:700, cursor:(busy||!openAcceptTerms)?"default":"pointer", opacity:(busy||!openAcceptTerms)?0.5:1, display:"inline-flex", alignItems:"center", gap:7, fontFamily:"Inter,system-ui" }}><Gavel size={16}/> Apri un'asta a ribasso con {(qty/1000).toLocaleString("it-IT")}t</button>
+                  ? <button onClick={goToOpenAuction} style={{ background:C.purple, color:"#fff", border:"none", borderRadius:9, padding:"12px 22px", fontSize:14, fontWeight:700, cursor:"pointer", display:"inline-flex", alignItems:"center", gap:7, fontFamily:"Inter,system-ui" }}><Gavel size={16}/> Prosegui per aprire l'asta <ArrowRight size={15}/></button>
                   : <div style={{ fontSize:12 }}>
                       Quantità minima per aprire l'asta a ribasso:
                       <div style={{ fontSize:15, fontWeight:800, color:C.text, margin:"3px 0" }}>1 pallet</div>
                       ({(palletKg/1000).toLocaleString("it-IT")}t)
                     </div>}
-                {actionMsg && <div style={{ marginTop:8, fontSize:12, color:C.red, fontWeight:600 }}>{actionMsg}</div>}
                 </>)}
               </div>
             )}
