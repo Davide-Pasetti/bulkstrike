@@ -71,10 +71,11 @@ export default function PoolAuctionPage() {
   const [poolId, setPoolId] = useState(null);
   const [joining, setJoining] = useState(false);
   const [joinMsg, setJoinMsg] = useState(null);
-  const [confirmOpen, setConfirmOpen] = useState(false); // pop-up di conferma vincolante (adesione/apertura)
+  // Azione in attesa di conferma nel pop-up (joinTheAuction o joinAtTarget), o
+  // null se il pop-up è chiuso. È l'unico punto di accettazione T&C.
+  const [pendingConfirm, setPendingConfirm] = useState(null);
   const [userQty, setUserQty] = useState(2000);
   const [format, setFormat] = useState("pallet"); // formato di vendita selezionato: sacco | pallet | container | kg (liberi)
-  const [acceptTerms, setAcceptTerms] = useState(false);
   const [secs, setSecs] = useState(pool.secondsLeft);
   const [joined, setJoined] = useState(false);
   const [realPalletKg, setRealPalletKg] = useState(null); // kg di 1 pallet per il prodotto reale, se noto
@@ -757,14 +758,8 @@ export default function PoolAuctionPage() {
                   <div style={{ fontSize:11, color:C.muted, marginTop:4 }}>{groupBuy ? "Il prezzo scende solo sbloccando scaglioni di volume più alti — non ci sono ribassi da altri fornitori." : "Il prezzo finale può solo scendere fino alla chiusura."}</div>
                 </div>
 
-                <label style={{ display:"flex", gap:10, alignItems:"flex-start", background:"#FFF7ED", border:`1px solid ${C.amber}44`, borderRadius:9, padding:"11px 12px", marginBottom:14, cursor:"pointer" }}>
-                  <input type="checkbox" checked={acceptTerms} onChange={e => setAcceptTerms(e.target.checked)} style={{ marginTop:2, width:16, height:16, accentColor:C.purple, flexShrink:0 }}/>
-                  <span style={{ fontSize:12, color:"#7C2D12", lineHeight:1.5 }}>
-                    {groupBuy
-                      ? "Partecipando all'acquisto di gruppo accetto l'acquisto della specifica materia prima dall'unico fornitore quotato, al prezzo dello scaglione di volume raggiunto alla chiusura."
-                      : "Partecipando all'asta accetto l'acquisto della specifica materia prima dal fornitore che offrirà il prezzo più basso tra quelli certificati allo standard sopra indicato."}
-                  </span>
-                </label>
+                {/* L'accettazione dei termini è stata spostata nel pop-up di
+                    conferma (unico flag finale): qui niente più checkbox. */}
 
                 {showTargetInput && (
                   <div style={{ border:`1px solid ${C.border}`, borderRadius:10, padding:12, marginBottom:12, background:C.bg }}>
@@ -779,16 +774,17 @@ export default function PoolAuctionPage() {
                 )}
 
                 {/* Il click NON esegue più direttamente: apre il pop-up di conferma
-                    vincolante (accettazione T&C), che poi chiama joinTheAuction. */}
-                <button onClick={() => setConfirmOpen(true)} className="bs-btn" style={{ width:"100%", marginBottom:8 }} disabled={!acceptTerms || joining || mustOpenWithPallet}>{joining ? "Adesione in corso…" : <>{myQty > 0 ? (groupBuy ? "Aggiungi questo quantitativo al gruppo" : "Aggiungi questo quantitativo all'asta in corso") : (groupBuy ? (isExistingAuction ? "Unisciti al gruppo d'acquisto" : "Avvia l'acquisto di gruppo") : (isExistingAuction ? "Partecipa all'asta a ribasso all'attuale prezzo" : "Apri un'asta a ribasso all'attuale prezzo"))} <ArrowRight size={18}/></>}</button>
+                    vincolante (unico flag T&C), che poi chiama joinTheAuction. */}
+                <button onClick={() => setPendingConfirm(() => joinTheAuction)} className="bs-btn" style={{ width:"100%", marginBottom:8 }} disabled={joining || mustOpenWithPallet}>{joining ? "Adesione in corso…" : <>{myQty > 0 ? (groupBuy ? "Aggiungi questo quantitativo al gruppo" : "Aggiungi questo quantitativo all'asta in corso") : (groupBuy ? (isExistingAuction ? "Unisciti al gruppo d'acquisto" : "Avvia l'acquisto di gruppo") : (isExistingAuction ? "Partecipa all'asta a ribasso all'attuale prezzo" : "Apri un'asta a ribasso all'attuale prezzo"))} <ArrowRight size={18}/></>}</button>
                 {/* Adesione a soglia di prezzo: solo in asta (dipende dal ribasso dei
                     fornitori). Nell'acquisto di gruppo il prezzo non dipende da offerte,
-                    quindi non ha senso — nascosta. */}
+                    quindi non ha senso — nascosta. Il click di conferma passa dallo
+                    stesso pop-up (unico flag finale). */}
                 {!groupBuy && (
                 <button
-                  onClick={() => { if (showTargetInput) joinAtTarget(); else setShowTargetInput(true); }}
-                  style={{ width:"100%", background:"transparent", color:C.purple, border:`1.5px solid ${C.purple}`, borderRadius:10, padding:"12px", fontSize:14, fontWeight:700, cursor:(!acceptTerms||joining||mustOpenWithPallet)?"default":"pointer", opacity:(!acceptTerms||joining||mustOpenWithPallet)?0.5:1, fontFamily:"Inter,system-ui", display:"flex", alignItems:"center", justifyContent:"center", gap:6, textAlign:"center" }}
-                  disabled={!acceptTerms || joining || mustOpenWithPallet}
+                  onClick={() => { if (showTargetInput) setPendingConfirm(() => joinAtTarget); else setShowTargetInput(true); }}
+                  style={{ width:"100%", background:"transparent", color:C.purple, border:`1.5px solid ${C.purple}`, borderRadius:10, padding:"12px", fontSize:14, fontWeight:700, cursor:(joining||mustOpenWithPallet)?"default":"pointer", opacity:(joining||mustOpenWithPallet)?0.5:1, fontFamily:"Inter,system-ui", display:"flex", alignItems:"center", justifyContent:"center", gap:6, textAlign:"center" }}
+                  disabled={joining || mustOpenWithPallet}
                 >
                   {joining ? "Attivazione in corso…" : showTargetInput ? "Conferma soglia e attiva adesione" : (myQty > 0 ? "Aggiungi altro quantitativo quando il prezzo raggiunge una cifra stabilita" : (isExistingAuction ? "Partecipa all'asta a ribasso quando il prezzo raggiunge una cifra stabilita" : "Apri un'asta a ribasso quando il prezzo raggiunge una cifra stabilita"))}
                 </button>
@@ -949,14 +945,14 @@ export default function PoolAuctionPage() {
           productMode l'azione è l'apertura del pool (openNewAuction, richiamata
           da joinTheAuction), altrimenti l'adesione a quello esistente. */}
       <BulkStrikeAuctionConfirm
-        open={confirmOpen}
+        open={!!pendingConfirm}
         mode={productMode ? "open" : "join"}
         groupBuy={groupBuy}
         productName={pool.product || "questo prodotto"}
         quantityKg={userQty}
         busy={joining}
-        onCancel={() => setConfirmOpen(false)}
-        onConfirm={async () => { try { await joinTheAuction(); } finally { setConfirmOpen(false); } }}
+        onCancel={() => setPendingConfirm(null)}
+        onConfirm={async () => { const run = pendingConfirm; try { if (run) await run(); } finally { setPendingConfirm(null); } }}
       />
     </div>
   );

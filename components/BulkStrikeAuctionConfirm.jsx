@@ -79,7 +79,16 @@ export default function BulkStrikeAuctionConfirm({
             Potrai seguire l'andamento dell'{kind} nella sezione <b style={{ color: C.text }}>«Aste personali»</b> del tuo profilo.
           </div>
 
-          {/* accettazione T&C obbligatoria: "termini e condizioni" è un link */}
+          {/* Cosa si accetta concretamente (prima era la checkbox del pannello):
+              qui è l'unico punto di accettazione, spostato nel pop-up. */}
+          <div style={{ fontSize: 12.5, lineHeight: 1.5, color: C.muted }}>
+            {groupBuy
+              ? "Partecipando all'acquisto di gruppo accetti l'acquisto della specifica materia prima dall'unico fornitore quotato, al prezzo dello scaglione di volume raggiunto alla chiusura."
+              : "Partecipando all'asta accetti l'acquisto della specifica materia prima dal fornitore che offrirà il prezzo più basso tra quelli certificati allo standard richiesto."}
+          </div>
+
+          {/* accettazione T&C obbligatoria — unico flag finale: "termini e
+              condizioni" è un link alla pagina T&C del sito */}
           <label style={{ display: "flex", gap: 10, alignItems: "flex-start", cursor: "pointer", fontSize: 13.5, color: C.text }}>
             <input type="checkbox" checked={ack} onChange={(e) => setAck(e.target.checked)}
               style={{ marginTop: 2, width: 16, height: 16, accentColor: accent, cursor: "pointer", flexShrink: 0 }} />
