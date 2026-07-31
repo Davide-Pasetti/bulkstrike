@@ -55,7 +55,7 @@ const CHART = [
   {t:"Mag",v:2.61},{t:"Giu",v:2.55},{t:"Lug",v:2.49},{t:"Ago",v:2.42},
 ];
 
-const SEED_POOL = { exists:true, id:null, bestPrice:1.68, current:13800, companies:8, suppliers:4, closesIn:"4g 9h", myQuantityKg:0 };  // pool/asta attiva su questo prodotto
+const SEED_POOL = { exists:true, id:null, bestPrice:1.68, hasOffers:true, current:13800, companies:8, suppliers:4, closesIn:"4g 9h", closesAt:null, finalPhaseEndsAt:null, status:"open", myQuantityKg:0 };  // pool/asta attiva su questo prodotto
 
 const SEED_QA = [
   { q:"È adatto alla stabilizzazione tartarica a freddo?", a:"Sì, l'acido tartarico L(+) è impiegato per la correzione dell'acidità del mosto e del vino. Per la stabilizzazione a freddo si abbina spesso a bitartrato di potassio." },
@@ -223,15 +223,24 @@ function quoteRequestMailto({ email, productName, qty, unit, buyerCompanyName })
 
 // da getOpenPoolForProduct() → shape SEED_POOL
 function mapDbPool(pool) {
-  if (!pool) return { exists:false, id:null, bestPrice:0, current:0, companies:0, suppliers:0, closesIn:"", myQuantityKg:0 };
+  if (!pool) return { exists:false, id:null, bestPrice:0, hasOffers:false, current:0, companies:0, suppliers:0, closesIn:"", closesAt:null, finalPhaseEndsAt:null, status:null, myQuantityKg:0 };
   return {
     exists: true,
     id: pool.id,
+    // best_price_per_kg è NULL finché nessun fornitore ha offerto: teniamo il
+    // flag separato dal numero (bestPrice=0) per distinguere "nessuna offerta"
+    // da un prezzo reale nel mini-widget del box asta.
+    hasOffers: pool.best_price_per_kg != null,
     bestPrice: pool.best_price_per_kg != null ? Number(pool.best_price_per_kg) : 0,
     current: Number(pool.total_volume_kg) || 0,
     companies: Number(pool.participants) || 0,
     suppliers: Number(pool.num_bids) || 0,
     closesIn: untilLabel(pool.status === "final_phase" ? pool.final_phase_ends_at : pool.closes_at),
+    // Timestamp grezzi per il countdown live: closes_at, o final_phase_ends_at
+    // quando l'asta è nella fase finale delle contro-offerte.
+    closesAt: pool.closes_at || null,
+    finalPhaseEndsAt: pool.final_phase_ends_at || null,
+    status: pool.status || "open",
     myQuantityKg: pool.my_quantity_kg != null ? Number(pool.my_quantity_kg) : 0,
   };
 }
@@ -243,6 +252,21 @@ function untilLabel(iso) {
   const h = Math.floor(ms / 3600000);
   const d = Math.floor(h / 24);
   return d > 0 ? `${d}g ${h % 24}h` : `${h}h`;
+}
+// Countdown esteso "Chiude tra 6 giorni e 9 ore" per il box asta. nowMs è lo
+// stato che ticchetta (ogni minuto): passato esplicitamente così il testo si
+// aggiorna da solo. Torna null se manca il timestamp o non è ancora montato
+// il tick lato client (evita mismatch di hydration con Date.now() nell'SSR).
+function auctionCountdown(iso, nowMs) {
+  if (!iso || nowMs == null) return null;
+  const ms = new Date(iso).getTime() - nowMs;
+  if (ms <= 0) return "In chiusura";
+  const d = Math.floor(ms / 86400000);
+  const h = Math.floor((ms % 86400000) / 3600000);
+  const m = Math.floor((ms % 3600000) / 60000);
+  if (d > 0) return `Chiude tra ${d} ${d === 1 ? "giorno" : "giorni"} e ${h} ${h === 1 ? "ora" : "ore"}`;
+  if (h > 0) return `Chiude tra ${h} ${h === 1 ? "ora" : "ore"} e ${m} min`;
+  return `Chiude tra ${m} min`;
 }
 
 // ─── MAIN ─────────────────────────────────────────────────────────────────────
@@ -265,6 +289,7 @@ export default function ProductPage() {
   const [specs, setSpecs] = useState([]); // specifiche tecniche reali (product_specs)
   const [suppliers, setSuppliers] = useState(SEED_SUPPLIERS);
   const [pool, setPool] = useState(SEED_POOL);
+  const [nowMs, setNowMs] = useState(null); // orologio per il countdown del box asta (null finché non montato lato client)
   const [qa, setQa] = useState(SEED_QA);
   const [productId, setProductId] = useState(null);
   const [followingProduct, setFollowingProduct] = useState(false);
@@ -304,6 +329,15 @@ export default function ProductPage() {
     })();
   }, []);
   const consolidatedWith = (companyId) => companyId && cartSupplierIds.has(companyId);
+
+  // Orologio del countdown nel box asta: parte al mount (client-only) e ticchetta
+  // ogni minuto — al secondo non serve. Init a Date.now() dentro l'effect, non
+  // nello stato iniziale, per non divergere dall'SSR.
+  useEffect(() => {
+    setNowMs(Date.now());
+    const t = setInterval(() => setNowMs(Date.now()), 60000);
+    return () => clearInterval(t);
+  }, []);
 
   // carica il prodotto reale da ?id=
   useEffect(() => {
@@ -1149,6 +1183,56 @@ export default function ProductPage() {
                   ? (pool.exists ? "Acquisto di gruppo attivo" : "Acquisto di gruppo disponibile")
                   : (pool.exists ? "Asta a ribasso attiva" : "Asta a ribasso disponibile")}</span>
               </div>
+
+              {/* MINI-WIDGET asta attiva (solo asta a ribasso, non acquisto di
+                  gruppo): barra scaglioni di formato con quota raggiunta in viola
+                  e residuo in blu, prezzo migliore attuale (o attesa offerte) e
+                  countdown alla chiusura. Solo token colore già in uso. */}
+              {pool.exists && !groupBuy && (() => {
+                const fmts = productFormats; // ascendenti: sacco < pallet < container (solo valorizzati)
+                const maxKg = fmts.length ? fmts[fmts.length - 1].size_kg : 0;
+                const reached = pool.current || 0;
+                const pct = maxKg > 0 ? Math.min(100, (reached / maxKg) * 100) : 0;
+                const timerIso = pool.status === "final_phase" ? pool.finalPhaseEndsAt : pool.closesAt;
+                const timer = auctionCountdown(timerIso, nowMs) || (pool.closesIn ? `Chiude tra ${pool.closesIn}` : null);
+                const kgLabel = (kg) => kg >= 1000 ? `${(kg / 1000).toLocaleString("it-IT", { maximumFractionDigits: 1 })}t` : `${kg.toLocaleString("it-IT")}kg`;
+                return (
+                  <div style={{ marginBottom:14 }}>
+                    {maxKg > 0 && (
+                      <div style={{ marginBottom:12 }}>
+                        {/* barra: sfondo blu (residuo) + riempimento viola (raggiunto) + tacche di formato */}
+                        <div style={{ position:"relative", height:10, borderRadius:100, background:C.blue, overflow:"hidden" }}>
+                          <div style={{ position:"absolute", left:0, top:0, bottom:0, width:`${pct}%`, background:C.purple }}/>
+                          {fmts.map((f,i) => {
+                            const left = Math.min(100, (f.size_kg / maxKg) * 100);
+                            if (left >= 99.5) return null; // la tacca finale coincide col bordo destro
+                            return <div key={i} style={{ position:"absolute", left:`${left}%`, top:0, bottom:0, width:2, background:"rgba(255,255,255,0.7)" }}/>;
+                          })}
+                        </div>
+                        {/* etichette dei formati sotto le tacche */}
+                        <div style={{ position:"relative", height:14, marginTop:4 }}>
+                          {fmts.map((f,i) => {
+                            const left = Math.min(100, (f.size_kg / maxKg) * 100);
+                            const anchor = left >= 98 ? { right:0 } : left <= 2 ? { left:0 } : { left:`${left}%`, transform:"translateX(-50%)" };
+                            return (
+                              <span key={i} style={{ position:"absolute", ...anchor, fontSize:9.5, fontWeight:600, color:C.muted, whiteSpace:"nowrap" }}>
+                                {f.label} {kgLabel(f.size_kg)}
+                              </span>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                    <div style={{ display:"flex", flexWrap:"wrap", justifyContent:"space-between", alignItems:"center", gap:6, fontSize:12.5 }}>
+                      {pool.hasOffers
+                        ? <span style={{ color:C.text }}>Prezzo attuale: <b style={{ color:C.purple }}>{eurKg(pool.bestPrice)}/kg</b></span>
+                        : <span style={{ color:C.muted, fontStyle:"italic" }}>In attesa delle prime offerte dei fornitori</span>}
+                      {timer && <span style={{ color:C.muted, display:"inline-flex", alignItems:"center", gap:4 }}><Clock size={12}/> {timer}</span>}
+                    </div>
+                  </div>
+                );
+              })()}
+
               {(() => {
                 const canGo = pool.exists || canOpenPool;
                 const target = pool.exists ? (pool.id ? `/pool?id=${pool.id}` : null) : (productId ? `/pool?product=${productId}` : null);
