@@ -568,6 +568,36 @@ export default function PoolAuctionPage() {
                 ))}
               </div>
             )}
+
+            {/* Scaglioni di volume — spostati qui dalla sezione a due colonne più
+                in basso: riempiono lo spazio della colonna sinistra (vuoto quando
+                non ci sono ancora offerte) e mostrano subito, senza scrollare, a
+                quale scaglione/prezzo tetto ci si trova. Logica invariata: cerchio
+                verde sugli scaglioni raggiunti, evidenza dello scaglione attuale,
+                testo groupBuy vs asta competitiva. Stile allineato al box offerte
+                (bianco, bordo sottile) per stare bene nella colonna più stretta. */}
+            <div style={{ background:"#fff", border:`1px solid ${C.border}`, borderRadius:12, padding:16, marginTop:16 }}>
+              <div style={{ fontSize:15, fontWeight:700, marginBottom:4 }}>Scaglioni di volume (prezzo tetto)</div>
+              <div style={{ fontSize:12.5, color:C.muted, marginBottom:12, lineHeight:1.5 }}>{groupBuy ? "Prezzo garantito per fascia di volume, fissato dall'unico fornitore quotato. Aggregando la domanda si sblocca lo scaglione successivo." : "Prezzo massimo automatico garantito per fascia di volume. N.B. I fornitori possono comunque ribassare sotto questi valori in asta."}</div>
+              <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                {TIERS.map((t,i) => {
+                  const reached = pool.current >= (i===0?0:TIERS[i-1].max);
+                  const isCurrent = t.max===currentTier.max;
+                  return (
+                    <div key={i} style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 12px", borderRadius:10, border:`1px solid ${isCurrent?C.purple:C.border}`, background:isCurrent?"#FBF7FF":"#fff" }}>
+                      <div style={{ width:26, height:26, borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center", background:reached?C.green:"#F1F5F9", flexShrink:0 }}>
+                        {reached ? <Check size={14} color="#fff"/> : <span style={{ fontSize:12, fontWeight:700, color:C.muted }}>{i+1}</span>}
+                      </div>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <span style={{ fontSize:13.5, fontWeight:600 }}>{t.label}</span>
+                        {isCurrent && <span className="bs-chip" style={{ background:C.purple, color:"#fff", marginLeft:8 }}>Scaglione attuale</span>}
+                      </div>
+                      <span className="bs-num" style={{ fontSize:16, fontWeight:800, color:isCurrent?C.purple:C.text, whiteSpace:"nowrap" }}>{eurKg(t.price)}<span style={{ fontSize:11, fontWeight:400, color:C.muted }}>/kg tetto</span></span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           </div>
 
           {/* RIGHT: join */}
@@ -781,29 +811,9 @@ export default function PoolAuctionPage() {
 
           {/* LEFT */}
           <div>
-            <div className="bs-card" style={{ marginBottom:20 }}>
-              <div style={{ fontSize:16, fontWeight:700, marginBottom:4 }}>Scaglioni di volume (prezzo tetto)</div>
-              <div style={{ fontSize:13, color:C.muted, marginBottom:14 }}>{groupBuy ? "Prezzo garantito per fascia di volume, fissato dall'unico fornitore quotato. Aggregando la domanda si sblocca lo scaglione successivo." : "Prezzo massimo automatico garantito per fascia di volume. N.B. I fornitori possono comunque ribassare sotto questi valori in asta."}</div>
-              <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-                {TIERS.map((t,i) => {
-                  const reached = pool.current >= (i===0?0:TIERS[i-1].max);
-                  const isCurrent = t.max===currentTier.max;
-                  return (
-                    <div key={i} style={{ display:"flex", alignItems:"center", gap:12, padding:"12px 14px", borderRadius:10, border:`1px solid ${isCurrent?C.purple:C.border}`, background:isCurrent?"#FBF7FF":"#fff" }}>
-                      <div style={{ width:28, height:28, borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center", background:reached?C.green:"#F1F5F9", flexShrink:0 }}>
-                        {reached ? <Check size={15} color="#fff"/> : <span style={{ fontSize:12, fontWeight:700, color:C.muted }}>{i+1}</span>}
-                      </div>
-                      <div style={{ flex:1 }}>
-                        <span style={{ fontSize:14, fontWeight:600 }}>{t.label}</span>
-                        {isCurrent && <span className="bs-chip" style={{ background:C.purple, color:"#fff", marginLeft:8 }}>Scaglione attuale</span>}
-                      </div>
-                      <span className="bs-num" style={{ fontSize:18, fontWeight:800, color:isCurrent?C.purple:C.text }}>{eurKg(t.price)}<span style={{ fontSize:11, fontWeight:400, color:C.muted }}>/kg tetto</span></span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
+            {/* "Scaglioni di volume" è stato spostato nel box asta in evidenza
+                (colonna sinistra, sotto le offerte live). Qui parte direttamente
+                da "Chi ha aderito". */}
             <div className="bs-card" style={{ marginBottom:20 }}>
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
                 <div style={{ fontSize:16, fontWeight:700 }}>Chi ha aderito</div>
