@@ -4,6 +4,7 @@ import BulkStrikeNav from "@/components/BulkStrikeNav";
 import SupplierName from "@/components/BulkStrikeSupplierName";
 import ProductFollowButton from "@/components/BulkStrikeProductFollow";
 import BulkStrikeAuctionConfirm from "@/components/BulkStrikeAuctionConfirm";
+import BulkStrikeTierProgress from "@/components/BulkStrikeTierProgress";
 import { TIERS, tierIndexFor, tierFor, tierCeiling } from "@/lib/tiers";
 import BulkStrikeChatWidget from "@/components/BulkStrikeChatWidget";
 import { BSIcon } from "@/components/BSLogo";
@@ -282,7 +283,6 @@ export default function PoolAuctionPage() {
   // barra lo supera, così bar e prezzo si aggiornano insieme. È distinto dal "Miglior
   // prezzo attuale" (l'offerta più bassa dei fornitori), che può scendere ancora sotto.
   const ceilingProjected = projectedTier.price;
-  const crossesTier = projectedTier.max !== currentTier.max;
   // Fascia che la barra sta RIEMPIENDO: il confine subito sopra il volume REALE
   // attuale. La quantità in sospeso avanza alla fascia successiva solo quando SUPERA
   // (strettamente) quel confine: se lo raggiunge ESATTAMENTE (es. "Chiudi scaglione"
@@ -294,7 +294,6 @@ export default function PoolAuctionPage() {
   let barIdx = tierIndexFor(pool.current);
   while (TIERS[barIdx].max !== Infinity && projected > TIERS[barIdx].max) barIdx++;
   const barTarget = TIERS[barIdx].max === Infinity ? null : TIERS[barIdx].max;
-  const toNext = barTarget ? Math.max(0, barTarget - projected) : 0;
   const aloneCeiling = tierCeiling(userQty);
   const savings = Math.max(0, (aloneCeiling - ceilingProjected) * userQty);
   // min 1 kg (i sacchi possono essere piccoli), max 100 t (più container).
@@ -520,24 +519,9 @@ export default function PoolAuctionPage() {
 
             {!concluded && (barTarget ? (
               <div style={{ marginBottom:20 }}>
-                <div style={{ display:"flex", justifyContent:"space-between", fontSize:12, marginBottom:6 }}>
-                  <span style={{ color:C.muted }}>Prossimo scaglione: <b style={{ color:C.text }}>{kg(barTarget)} kg → tetto {eurKg(tierFor(barTarget).price)}/kg</b></span>
-                  <span className="bs-num" style={{ color:C.purple, fontWeight:700 }}>{kg(Math.min(projected, barTarget))} / {kg(barTarget)}</span>
-                </div>
-                <div style={{ height:16, background:"#EDE4F7", borderRadius:100, overflow:"hidden", display:"flex" }}>
-                  <div style={{ width:`${Math.min(pool.current, barTarget)/barTarget*100}%`, height:"100%", background:`linear-gradient(90deg,${C.purple},#A855F7)`, animation:"fill 1s ease" }}/>
-                  {userQty>0 && (
-                    <div style={{ width:`${Math.max(0, Math.min((projected-pool.current)/barTarget*100, 100 - Math.min(pool.current, barTarget)/barTarget*100))}%`, height:"100%", background:`repeating-linear-gradient(45deg,${C.blue},${C.blue} 6px,#38BDF8 6px,#38BDF8 12px)` }}/>
-                  )}
-                </div>
-                <div style={{ fontSize:12, color:C.muted, marginTop:6 }}>
-                  {toNext > 0 ? (
-                    <>Mancano <b className="bs-num" style={{ color:C.purple }}>{kg(toNext)} kg</b> per abbassare il tetto a {eurKg(tierFor(barTarget).price)}/kg.
-                    {crossesTier && <span style={{ color:C.blue, fontWeight:600 }}> Con la tua quantità sblocchi un tetto più basso! 🎉</span>}</>
-                  ) : (
-                    <span style={{ color:C.blue, fontWeight:600 }}>🎉 Scaglione completato: tetto abbassato a {eurKg(tierFor(barTarget).price)}/kg.</span>
-                  )}
-                </div>
+                {/* barra "prossimo scaglione" — componente condiviso con il
+                    mini-widget della pagina prodotto (unica fonte del calcolo). */}
+                <BulkStrikeTierProgress currentKg={pool.current} addedKg={userQty} />
               </div>
             ) : (
               <div style={{ marginBottom:20, fontSize:12.5, color:C.blue, fontWeight:600, background:"#EFF6FF", border:`1px solid #BFDBFE`, borderRadius:10, padding:"10px 12px" }}>

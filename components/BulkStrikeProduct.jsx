@@ -6,6 +6,7 @@ import PriceSourceNote from "@/components/PriceSourceNote";
 import CountryFlag from "@/components/CountryFlag";
 import { ytdChange } from "@/lib/priceTrend";
 import ProductFollowButton from "@/components/BulkStrikeProductFollow";
+import BulkStrikeTierProgress from "@/components/BulkStrikeTierProgress";
 import BulkStrikeNav from "@/components/BulkStrikeNav";
 import SupplierName, { SupplierLoginHint } from "@/components/BulkStrikeSupplierName";
 import BulkStrikeChatWidget from "@/components/BulkStrikeChatWidget";
@@ -55,7 +56,7 @@ const CHART = [
   {t:"Mag",v:2.61},{t:"Giu",v:2.55},{t:"Lug",v:2.49},{t:"Ago",v:2.42},
 ];
 
-const SEED_POOL = { exists:true, id:null, bestPrice:1.68, hasOffers:true, current:13800, companies:8, suppliers:4, closesIn:"4g 9h", closesAt:null, finalPhaseEndsAt:null, status:"open", myQuantityKg:0 };  // pool/asta attiva su questo prodotto
+const SEED_POOL = { exists:true, id:null, bestPrice:1.68, current:13800, companies:8, suppliers:4, closesIn:"4g 9h", closesAt:null, finalPhaseEndsAt:null, status:"open", myQuantityKg:0 };  // pool/asta attiva su questo prodotto
 
 const SEED_QA = [
   { q:"È adatto alla stabilizzazione tartarica a freddo?", a:"Sì, l'acido tartarico L(+) è impiegato per la correzione dell'acidità del mosto e del vino. Per la stabilizzazione a freddo si abbina spesso a bitartrato di potassio." },
@@ -223,14 +224,13 @@ function quoteRequestMailto({ email, productName, qty, unit, buyerCompanyName })
 
 // da getOpenPoolForProduct() → shape SEED_POOL
 function mapDbPool(pool) {
-  if (!pool) return { exists:false, id:null, bestPrice:0, hasOffers:false, current:0, companies:0, suppliers:0, closesIn:"", closesAt:null, finalPhaseEndsAt:null, status:null, myQuantityKg:0 };
+  if (!pool) return { exists:false, id:null, bestPrice:0, current:0, companies:0, suppliers:0, closesIn:"", closesAt:null, finalPhaseEndsAt:null, status:null, myQuantityKg:0 };
   return {
     exists: true,
     id: pool.id,
-    // best_price_per_kg è NULL finché nessun fornitore ha offerto: teniamo il
-    // flag separato dal numero (bestPrice=0) per distinguere "nessuna offerta"
-    // da un prezzo reale nel mini-widget del box asta.
-    hasOffers: pool.best_price_per_kg != null,
+    // Un'asta aperta ha SEMPRE un prezzo (di partenza da listino, poi il miglior
+    // rilancio): best_price_per_kg dalla RPC è sempre valorizzato. num_bids
+    // (suppliers) distingue "prezzo di partenza" da "prezzo attuale".
     bestPrice: pool.best_price_per_kg != null ? Number(pool.best_price_per_kg) : 0,
     current: Number(pool.total_volume_kg) || 0,
     companies: Number(pool.participants) || 0,
@@ -1185,48 +1185,22 @@ export default function ProductPage() {
               </div>
 
               {/* MINI-WIDGET asta attiva (solo asta a ribasso, non acquisto di
-                  gruppo): barra scaglioni di formato con quota raggiunta in viola
-                  e residuo in blu, prezzo migliore attuale (o attesa offerte) e
-                  countdown alla chiusura. Solo token colore già in uso. */}
+                  gruppo): stessa barra "prossimo scaglione" della pagina asta
+                  (componente condiviso, compact), prezzo sempre valorizzato e
+                  countdown alla chiusura. */}
               {pool.exists && !groupBuy && (() => {
-                const fmts = productFormats; // ascendenti: sacco < pallet < container (solo valorizzati)
-                const maxKg = fmts.length ? fmts[fmts.length - 1].size_kg : 0;
-                const reached = pool.current || 0;
-                const pct = maxKg > 0 ? Math.min(100, (reached / maxKg) * 100) : 0;
                 const timerIso = pool.status === "final_phase" ? pool.finalPhaseEndsAt : pool.closesAt;
                 const timer = auctionCountdown(timerIso, nowMs) || (pool.closesIn ? `Chiude tra ${pool.closesIn}` : null);
-                const kgLabel = (kg) => kg >= 1000 ? `${(kg / 1000).toLocaleString("it-IT", { maximumFractionDigits: 1 })}t` : `${kg.toLocaleString("it-IT")}kg`;
+                // Un'asta aperta ha sempre un prezzo: prezzo di partenza (listino)
+                // finché non ci sono rilanci, prezzo attuale col primo rilancio.
+                const priceLabel = pool.suppliers > 0 ? "Prezzo attuale" : "Prezzo di partenza";
                 return (
                   <div style={{ marginBottom:14 }}>
-                    {maxKg > 0 && (
-                      <div style={{ marginBottom:12 }}>
-                        {/* barra: sfondo blu (residuo) + riempimento viola (raggiunto) + tacche di formato */}
-                        <div style={{ position:"relative", height:10, borderRadius:100, background:C.blue, overflow:"hidden" }}>
-                          <div style={{ position:"absolute", left:0, top:0, bottom:0, width:`${pct}%`, background:C.purple }}/>
-                          {fmts.map((f,i) => {
-                            const left = Math.min(100, (f.size_kg / maxKg) * 100);
-                            if (left >= 99.5) return null; // la tacca finale coincide col bordo destro
-                            return <div key={i} style={{ position:"absolute", left:`${left}%`, top:0, bottom:0, width:2, background:"rgba(255,255,255,0.7)" }}/>;
-                          })}
-                        </div>
-                        {/* etichette dei formati sotto le tacche */}
-                        <div style={{ position:"relative", height:14, marginTop:4 }}>
-                          {fmts.map((f,i) => {
-                            const left = Math.min(100, (f.size_kg / maxKg) * 100);
-                            const anchor = left >= 98 ? { right:0 } : left <= 2 ? { left:0 } : { left:`${left}%`, transform:"translateX(-50%)" };
-                            return (
-                              <span key={i} style={{ position:"absolute", ...anchor, fontSize:9.5, fontWeight:600, color:C.muted, whiteSpace:"nowrap" }}>
-                                {f.label} {kgLabel(f.size_kg)}
-                              </span>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
+                    <div style={{ marginBottom:12 }}>
+                      <BulkStrikeTierProgress currentKg={pool.current} compact />
+                    </div>
                     <div style={{ display:"flex", flexWrap:"wrap", justifyContent:"space-between", alignItems:"center", gap:6, fontSize:12.5 }}>
-                      {pool.hasOffers
-                        ? <span style={{ color:C.text }}>Prezzo attuale: <b style={{ color:C.purple }}>{eurKg(pool.bestPrice)}/kg</b></span>
-                        : <span style={{ color:C.muted, fontStyle:"italic" }}>In attesa delle prime offerte dei fornitori</span>}
+                      <span style={{ color:C.text }}>{priceLabel}: <b style={{ color:C.purple }}>{eurKg(pool.bestPrice)}/kg</b></span>
                       {timer && <span style={{ color:C.muted, display:"inline-flex", alignItems:"center", gap:4 }}><Clock size={12}/> {timer}</span>}
                     </div>
                   </div>
