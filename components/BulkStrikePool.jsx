@@ -3,6 +3,7 @@ import { getPoolDetail, getPoolBids, getPoolParticipants, getPoolTargetJoins, jo
 import BulkStrikeNav from "@/components/BulkStrikeNav";
 import SupplierName from "@/components/BulkStrikeSupplierName";
 import ProductFollowButton from "@/components/BulkStrikeProductFollow";
+import BulkStrikeAuctionConfirm from "@/components/BulkStrikeAuctionConfirm";
 import { TIERS, tierIndexFor, tierFor, tierCeiling } from "@/lib/tiers";
 import BulkStrikeChatWidget from "@/components/BulkStrikeChatWidget";
 import { BSIcon } from "@/components/BSLogo";
@@ -70,6 +71,7 @@ export default function PoolAuctionPage() {
   const [poolId, setPoolId] = useState(null);
   const [joining, setJoining] = useState(false);
   const [joinMsg, setJoinMsg] = useState(null);
+  const [confirmOpen, setConfirmOpen] = useState(false); // pop-up di conferma vincolante (adesione/apertura)
   const [userQty, setUserQty] = useState(2000);
   const [format, setFormat] = useState("pallet"); // formato di vendita selezionato: sacco | pallet | container | kg (liberi)
   const [acceptTerms, setAcceptTerms] = useState(false);
@@ -776,7 +778,9 @@ export default function PoolAuctionPage() {
                   </div>
                 )}
 
-                <button onClick={joinTheAuction} className="bs-btn" style={{ width:"100%", marginBottom:8 }} disabled={!acceptTerms || joining || mustOpenWithPallet}>{joining ? "Adesione in corso…" : <>{myQty > 0 ? (groupBuy ? "Aggiungi questo quantitativo al gruppo" : "Aggiungi questo quantitativo all'asta in corso") : (groupBuy ? (isExistingAuction ? "Unisciti al gruppo d'acquisto" : "Avvia l'acquisto di gruppo") : (isExistingAuction ? "Partecipa all'asta a ribasso all'attuale prezzo" : "Apri un'asta a ribasso all'attuale prezzo"))} <ArrowRight size={18}/></>}</button>
+                {/* Il click NON esegue più direttamente: apre il pop-up di conferma
+                    vincolante (accettazione T&C), che poi chiama joinTheAuction. */}
+                <button onClick={() => setConfirmOpen(true)} className="bs-btn" style={{ width:"100%", marginBottom:8 }} disabled={!acceptTerms || joining || mustOpenWithPallet}>{joining ? "Adesione in corso…" : <>{myQty > 0 ? (groupBuy ? "Aggiungi questo quantitativo al gruppo" : "Aggiungi questo quantitativo all'asta in corso") : (groupBuy ? (isExistingAuction ? "Unisciti al gruppo d'acquisto" : "Avvia l'acquisto di gruppo") : (isExistingAuction ? "Partecipa all'asta a ribasso all'attuale prezzo" : "Apri un'asta a ribasso all'attuale prezzo"))} <ArrowRight size={18}/></>}</button>
                 {/* Adesione a soglia di prezzo: solo in asta (dipende dal ribasso dei
                     fornitori). Nell'acquisto di gruppo il prezzo non dipende da offerte,
                     quindi non ha senso — nascosta. */}
@@ -939,6 +943,21 @@ export default function PoolAuctionPage() {
 
       {/* CHATBOT */}
       <BulkStrikeChatWidget accent={C.purple} />
+
+      {/* POP-UP di conferma vincolante: ultimo passaggio prima di aderire/aprire
+          davvero. Solo dopo l'accettazione dei T&C esegue l'azione reale. In
+          productMode l'azione è l'apertura del pool (openNewAuction, richiamata
+          da joinTheAuction), altrimenti l'adesione a quello esistente. */}
+      <BulkStrikeAuctionConfirm
+        open={confirmOpen}
+        mode={productMode ? "open" : "join"}
+        groupBuy={groupBuy}
+        productName={pool.product || "questo prodotto"}
+        quantityKg={userQty}
+        busy={joining}
+        onCancel={() => setConfirmOpen(false)}
+        onConfirm={async () => { try { await joinTheAuction(); } finally { setConfirmOpen(false); } }}
+      />
     </div>
   );
 }
