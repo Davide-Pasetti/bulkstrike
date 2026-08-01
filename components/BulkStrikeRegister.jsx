@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { registerCompany, signUpAccount, findClaimCandidates, requestCompanyClaim, completeClaimedCompany, getMacroAreas } from "@/lib/api";
-import { ShoppingCart, Factory, Truck, Check, ArrowRight, ArrowLeft, Mail, Lock, Building2, Globe, Phone, User, MapPin, Award, Boxes, Shield, X, Bell, Search, Plus, TrendingDown, Zap, ChevronRight } from "lucide-react";
+import { ShoppingCart, Factory, Truck, Check, ArrowRight, ArrowLeft, Mail, Lock, Building2, Globe, Phone, User, MapPin, Award, Boxes, Shield, X, Bell, Search, Plus, TrendingDown, Zap, ChevronRight, Eye, EyeOff } from "lucide-react";
 import BulkStrikeNav from "@/components/BulkStrikeNav";
 
 const C = { blue:"#0EA5E9", dark:"#0284C7", text:"#0F172A", muted:"#64748B", border:"#E2E8F0", bg:"#F8FAFE", green:"#059669", amber:"#D97706", purple:"#7C3AED" };
@@ -297,6 +297,8 @@ export default function RegisterPage() {
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
+  const [showPass, setShowPass] = useState(false);   // occhiolino campo Password
+  const [showPass2, setShowPass2] = useState(false);  // occhiolino campo Conferma password
 
   // ── Rivendicazione azienda ────────────────────────────────────────────────
   // claimState: "choose" = mostriamo le aziende trovate | "form" = inserimento
@@ -479,9 +481,11 @@ export default function RegisterPage() {
 
           <div style={{ background:"#fff", border:`1px solid ${C.border}`, borderRadius:18, padding:28 }}>
 
-            {/* STEP 1 — type + access */}
+            {/* STEP 1 — type + access. È avvolto in un vero <form>: senza,
+                Chrome non riconosceva la coppia "nuova password / conferma" e
+                compilava solo il primo campo con la password generata. */}
             {step===1 && (
-              <>
+              <form id="reg-step1" onSubmit={(e) => { e.preventDefault(); goToCompanyStep(); }}>
                 <div style={{ fontSize:15, fontWeight:700, marginBottom:14 }}>Che tipo di account vuoi aprire?</div>
                 <div className="bs-typecards" style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12, marginBottom:24 }}>
                   {[
@@ -508,10 +512,22 @@ export default function RegisterPage() {
                       <input style={inputStyle} type="email" name="email" id="reg-email" autoComplete="email" placeholder="nome@azienda.it" value={f.email} onChange={e=>set("email",e.target.value)}/>
                     </Field>
                     <Field icon={<Lock size={14} color={C.muted}/>} label="Password" required half>
-                      <input style={inputStyle} type="password" name="new-password" id="reg-password" autoComplete="new-password" placeholder="Almeno 12 caratteri" value={f.pass} onChange={e=>set("pass",e.target.value)}/>
+                      <div style={{ position:"relative" }}>
+                        <input style={{ ...inputStyle, paddingRight:40 }} type={showPass ? "text" : "password"} name="new-password" id="reg-password" autoComplete="new-password" placeholder="Almeno 12 caratteri" value={f.pass} onChange={e=>set("pass",e.target.value)}/>
+                        <button type="button" onClick={()=>setShowPass(v=>!v)} aria-label={showPass ? "Nascondi password" : "Mostra password"}
+                          style={{ position:"absolute", right:12, top:"50%", transform:"translateY(-50%)", background:"none", border:"none", padding:0, cursor:"pointer", color:C.muted, display:"flex" }}>
+                          {showPass ? <EyeOff size={17}/> : <Eye size={17}/>}
+                        </button>
+                      </div>
                     </Field>
                     <Field icon={<Lock size={14} color={C.muted}/>} label="Conferma password" required half>
-                      <input style={inputStyle} type="password" name="confirm-new-password" id="reg-password-confirm" autoComplete="new-password" placeholder="Ripeti la password" value={f.pass2} onChange={e=>set("pass2",e.target.value)}/>
+                      <div style={{ position:"relative" }}>
+                        <input style={{ ...inputStyle, paddingRight:40 }} type={showPass2 ? "text" : "password"} name="confirm-new-password" id="reg-password-confirm" autoComplete="new-password" placeholder="Ripeti la password" value={f.pass2} onChange={e=>set("pass2",e.target.value)}/>
+                        <button type="button" onClick={()=>setShowPass2(v=>!v)} aria-label={showPass2 ? "Nascondi password" : "Mostra password"}
+                          style={{ position:"absolute", right:12, top:"50%", transform:"translateY(-50%)", background:"none", border:"none", padding:0, cursor:"pointer", color:C.muted, display:"flex" }}>
+                          {showPass2 ? <EyeOff size={17}/> : <Eye size={17}/>}
+                        </button>
+                      </div>
                     </Field>
                   </div>
 
@@ -541,7 +557,7 @@ export default function RegisterPage() {
                     {error === EMAIL_TAKEN_MSG && <> <a href="/auth/login" style={{ color:C.blue, fontWeight:700, textDecoration:"underline" }}>Accedi</a></>}
                   </div>
                 )}
-              </>
+              </form>
             )}
 
             {/* STEP 2 — company. Se la nostra ricerca di mercato ha gia' censito
@@ -784,7 +800,9 @@ export default function RegisterPage() {
                 ? <button className="bs-btn-out" onClick={()=>setStep(step-1)}><ArrowLeft size={16}/> Indietro</button>
                 : <span/>}
               {step<3
-                ? <button className="bs-btn" disabled={!canProceed} onClick={()=> step===1 ? goToCompanyStep() : setStep(step+1)}>Continua <ArrowRight size={16}/></button>
+                ? <button className="bs-btn" disabled={!canProceed}
+                    type={step===1 ? "submit" : "button"} form={step===1 ? "reg-step1" : undefined}
+                    onClick={step===1 ? undefined : ()=> setStep(step+1)}>Continua <ArrowRight size={16}/></button>
                 : <button className="bs-btn" disabled={!canProceed || submitting} onClick={submitRegistration}>{submitting ? "Invio in corso…" : <>Completa registrazione <Check size={16}/></>}</button>}
             </div>
             {!canProceed && <p style={{ fontSize:12, color:C.muted, textAlign:"right", marginTop:8 }}>Compila i campi obbligatori <span style={{ color:C.blue }}>*</span> per continuare.</p>}
