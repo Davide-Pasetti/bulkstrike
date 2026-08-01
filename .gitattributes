@@ -1,0 +1,15 @@
+# Tratta i binari come binari: mai conversione di fine riga (CRLF/LF), che su
+# Windows con core.autocrlf=true corromperebbe questi file (es. le favicon).
+*.png binary
+*.ico binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.avif binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.otf binary
+*.eot binary
+*.pdf binary
