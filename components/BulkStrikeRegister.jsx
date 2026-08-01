@@ -319,6 +319,8 @@ export default function RegisterPage() {
         const msg = String(e?.message || e);
         setError(/already|registered|exists/i.test(msg)
           ? "Questa email risulta già registrata. Accedi invece di registrarti."
+          : /password/i.test(msg)
+          ? "La password non soddisfa i requisiti: usa almeno 12 caratteri."
           : "Non è stato possibile creare l'account. Riprova.");
         setStep(1);
         return;
@@ -497,14 +499,30 @@ export default function RegisterPage() {
                   <div style={{ fontSize:15, fontWeight:700, marginBottom:14 }}>Dati di accesso</div>
                   <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"0 16px" }} className="bs-grid2">
                     <Field icon={<Mail size={14} color={C.muted}/>} label="Email aziendale" required>
-                      <input style={inputStyle} type="email" placeholder="nome@azienda.it" value={f.email} onChange={e=>set("email",e.target.value)}/>
+                      <input style={inputStyle} type="email" name="email" id="reg-email" autoComplete="email" placeholder="nome@azienda.it" value={f.email} onChange={e=>set("email",e.target.value)}/>
                     </Field>
                     <Field icon={<Lock size={14} color={C.muted}/>} label="Password" required half>
-                      <input style={inputStyle} type="password" placeholder="Almeno 12 caratteri" value={f.pass} onChange={e=>set("pass",e.target.value)}/>
+                      <input style={inputStyle} type="password" name="new-password" id="reg-password" autoComplete="new-password" placeholder="Almeno 12 caratteri" value={f.pass} onChange={e=>set("pass",e.target.value)}/>
                     </Field>
                     <Field icon={<Lock size={14} color={C.muted}/>} label="Conferma password" required half>
-                      <input style={inputStyle} type="password" placeholder="Ripeti la password" value={f.pass2} onChange={e=>set("pass2",e.target.value)}/>
+                      <input style={inputStyle} type="password" name="confirm-new-password" id="reg-password-confirm" autoComplete="new-password" placeholder="Ripeti la password" value={f.pass2} onChange={e=>set("pass2",e.target.value)}/>
                     </Field>
+                  </div>
+
+                  {/* Requisiti password — checklist live, allineata alla policy REALE
+                      di Supabase Auth (solo lunghezza minima 12, nessuna classe di
+                      caratteri obbligatoria): l'utente sa se la password va bene PRIMA
+                      del submit, incluse quelle generate dai password manager. */}
+                  <div style={{ marginTop:2, display:"flex", flexDirection:"column", gap:6 }}>
+                    {[
+                      { label: "Almeno 12 caratteri", ok: f.pass.length >= 12 },
+                      { label: "Le due password coincidono", ok: f.pass.length > 0 && f.pass === f.pass2 },
+                    ].map((r,i) => (
+                      <div key={i} style={{ display:"flex", alignItems:"center", gap:8, fontSize:12.5, color: r.ok ? C.green : C.muted }}>
+                        {r.ok ? <Check size={14} color={C.green}/> : <X size={13} color={C.muted}/>}
+                        <span>{r.label}</span>
+                      </div>
+                    ))}
                   </div>
                 </div>
               </>
