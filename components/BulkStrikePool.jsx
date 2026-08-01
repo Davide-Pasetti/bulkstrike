@@ -4,6 +4,7 @@ import BulkStrikeNav from "@/components/BulkStrikeNav";
 import SupplierName from "@/components/BulkStrikeSupplierName";
 import ProductFollowButton from "@/components/BulkStrikeProductFollow";
 import BulkStrikeAuctionConfirm from "@/components/BulkStrikeAuctionConfirm";
+import BulkStrikeAuctionSuccess from "@/components/BulkStrikeAuctionSuccess";
 import BulkStrikeTierProgress from "@/components/BulkStrikeTierProgress";
 import { TIERS, tierIndexFor, tierFor, tierCeiling } from "@/lib/tiers";
 import BulkStrikeChatWidget from "@/components/BulkStrikeChatWidget";
@@ -72,9 +73,11 @@ export default function PoolAuctionPage() {
   const [poolId, setPoolId] = useState(null);
   const [joining, setJoining] = useState(false);
   const [joinMsg, setJoinMsg] = useState(null);
-  // Azione in attesa di conferma nel pop-up (joinTheAuction o joinAtTarget), o
-  // null se il pop-up è chiuso. È l'unico punto di accettazione T&C.
+  // Azione in attesa di conferma nel pop-up 1 (joinTheAuction o joinAtTarget), o
+  // null se è chiuso. È l'unico punto di accettazione T&C.
   const [pendingConfirm, setPendingConfirm] = useState(null);
+  const [confirmError, setConfirmError] = useState(null);   // errore mostrato dentro il pop-up 1 (l'azione non chiude il pop-up)
+  const [successInfo, setSuccessInfo] = useState(null);      // pop-up 2: { mode, quantityKg, closeHref } quando l'azione è andata a buon fine
   const [userQty, setUserQty] = useState(2000);
   const [format, setFormat] = useState("pallet"); // formato di vendita selezionato: sacco | pallet | container | kg (liberi)
   const [secs, setSecs] = useState(pool.secondsLeft);
@@ -161,22 +164,28 @@ export default function PoolAuctionPage() {
     }
   }
 
-  // Apre davvero l'asta per il prodotto (dalla modalità productMode), poi porta
-  // alla pagina del pool appena creato.
+  // Apre davvero l'asta per il prodotto (dalla modalità productMode). Non naviga
+  // più subito: torna lo stato d'esito così il pop-up 2 (conferma di apertura)
+  // gestisce l'uscita — "Chiudi" porta al pool appena creato, "Vai alle aste
+  // personali" al profilo.
   async function openNewAuction() {
-    if (!productId) return;
+    if (!productId) return { status: "noop" };
     setJoining(true); setJoinMsg(null);
     try {
-      const newId = await openPool(productId, userQty, true);
-      window.location.href = `/pool?id=${newId}`;
+      const qty = userQty;
+      const newId = await openPool(productId, qty, true);
+      setJoining(false);
+      return { status: "success", mode: "open", quantityKg: qty, closeHref: `/pool?id=${newId}` };
     } catch (e) {
       // se nel frattempo qualcuno l'ha aperta, vai su quella
       try {
         const op = await getOpenPoolForProduct(productId);
-        if (op && op.id) { window.location.href = `/pool?id=${op.id}`; return; }
+        if (op && op.id) { window.location.href = `/pool?id=${op.id}`; return { status: "noop" }; }
       } catch (_) { /* ignore */ }
-      setJoinMsg(poolErrorMessage(e));
+      const m = poolErrorMessage(e);
+      setJoinMsg(m);
       setJoining(false);
+      return { status: "error", message: m };
     }
   }
 
@@ -221,15 +230,19 @@ export default function PoolAuctionPage() {
 
   async function joinTheAuction() {
     if (productMode) { return openNewAuction(); }
-    if (!poolId) { setJoinMsg("Questa è l'asta dimostrativa: per partecipare apri un'asta a ribasso reale dalla pagina di un prodotto."); return; }
+    if (!poolId) { const m = "Questa è l'asta dimostrativa: per partecipare apri un'asta a ribasso reale dalla pagina di un prodotto."; setJoinMsg(m); return { status: "error", message: m }; }
     setJoining(true); setJoinMsg(null);
     try {
-      await joinPool(poolId, userQty, true);
+      const qty = userQty;
+      await joinPool(poolId, qty, true);
       setJoinMsg("✓ Adesione registrata: la tua quantità è nel volume aggregato.");
       setJoined(true);
       loadPool(poolId);
+      return { status: "success", mode: "join", quantityKg: qty, closeHref: null };
     } catch (e) {
-      setJoinMsg(poolErrorMessage(e));
+      const m = poolErrorMessage(e);
+      setJoinMsg(m);
+      return { status: "error", message: m };
     } finally {
       setJoining(false);
     }
@@ -241,20 +254,27 @@ export default function PoolAuctionPage() {
     if (productMode) { return openNewAuction(); }
     if (!poolId) { setJoinMsg("Questa è l'asta dimostrativa: per partecipare apri un'asta a ribasso reale dalla pagina di un prodotto."); return; }
     const price = parseFloat(String(targetPrice).replace(",", "."));
-    if (!price || price <= 0) { setJoinMsg("Inserisci un prezzo soglia valido."); return; }
+    if (!price || price <= 0) { const m = "Inserisci un prezzo soglia valido."; setJoinMsg(m); return { status: "error", message: m }; }
     setJoining(true); setJoinMsg(null);
     try {
-      const res = await joinPoolAtTarget(poolId, userQty, price, true);
+      const qty = userQty;
+      const res = await joinPoolAtTarget(poolId, qty, price, true);
       if (res?.status === "joined_now") {
         setJoinMsg("✓ Adesione registrata: sei nell'asta.");
         setJoined(true);
-      } else {
-        setTargetJoin({ quantity_kg: userQty, target_price_per_kg: price });
-        setShowTargetInput(false);
+        loadPool(poolId);
+        return { status: "success", mode: "join", quantityKg: qty, closeHref: null };
       }
+      // Soglia programmata: non è un'adesione immediata → nessun pop-up 2, il
+      // pannello mostra lo stato "adesione in attesa".
+      setTargetJoin({ quantity_kg: qty, target_price_per_kg: price });
+      setShowTargetInput(false);
       loadPool(poolId);
+      return { status: "scheduled" };
     } catch (e) {
-      setJoinMsg(poolErrorMessage(e));
+      const m = poolErrorMessage(e);
+      setJoinMsg(m);
+      return { status: "error", message: m };
     } finally {
       setJoining(false);
     }
@@ -759,14 +779,14 @@ export default function PoolAuctionPage() {
 
                 {/* Il click NON esegue più direttamente: apre il pop-up di conferma
                     vincolante (unico flag T&C), che poi chiama joinTheAuction. */}
-                <button onClick={() => setPendingConfirm(() => joinTheAuction)} className="bs-btn" style={{ width:"100%", marginBottom:8 }} disabled={joining || mustOpenWithPallet}>{joining ? "Adesione in corso…" : <>{myQty > 0 ? (groupBuy ? "Aggiungi questo quantitativo al gruppo" : "Aggiungi questo quantitativo all'asta in corso") : (groupBuy ? (isExistingAuction ? "Unisciti al gruppo d'acquisto" : "Avvia l'acquisto di gruppo") : (isExistingAuction ? "Partecipa all'asta a ribasso all'attuale prezzo" : "Apri un'asta a ribasso all'attuale prezzo"))} <ArrowRight size={18}/></>}</button>
+                <button onClick={() => { setConfirmError(null); setPendingConfirm(() => joinTheAuction); }} className="bs-btn" style={{ width:"100%", marginBottom:8 }} disabled={joining || mustOpenWithPallet}>{joining ? "Adesione in corso…" : <>{myQty > 0 ? (groupBuy ? "Aggiungi questo quantitativo al gruppo" : "Aggiungi questo quantitativo all'asta in corso") : (groupBuy ? (isExistingAuction ? "Unisciti al gruppo d'acquisto" : "Avvia l'acquisto di gruppo") : (isExistingAuction ? "Partecipa all'asta a ribasso all'attuale prezzo" : "Apri un'asta a ribasso all'attuale prezzo"))} <ArrowRight size={18}/></>}</button>
                 {/* Adesione a soglia di prezzo: solo in asta (dipende dal ribasso dei
                     fornitori). Nell'acquisto di gruppo il prezzo non dipende da offerte,
                     quindi non ha senso — nascosta. Il click di conferma passa dallo
                     stesso pop-up (unico flag finale). */}
                 {!groupBuy && (
                 <button
-                  onClick={() => { if (showTargetInput) setPendingConfirm(() => joinAtTarget); else setShowTargetInput(true); }}
+                  onClick={() => { if (showTargetInput) { setConfirmError(null); setPendingConfirm(() => joinAtTarget); } else setShowTargetInput(true); }}
                   style={{ width:"100%", background:"transparent", color:C.purple, border:`1.5px solid ${C.purple}`, borderRadius:10, padding:"12px", fontSize:14, fontWeight:700, cursor:(joining||mustOpenWithPallet)?"default":"pointer", opacity:(joining||mustOpenWithPallet)?0.5:1, fontFamily:"Inter,system-ui", display:"flex", alignItems:"center", justifyContent:"center", gap:6, textAlign:"center" }}
                   disabled={joining || mustOpenWithPallet}
                 >
@@ -935,8 +955,38 @@ export default function PoolAuctionPage() {
         productName={pool.product || "questo prodotto"}
         quantityKg={userQty}
         busy={joining}
-        onCancel={() => setPendingConfirm(null)}
-        onConfirm={async () => { const run = pendingConfirm; try { if (run) await run(); } finally { setPendingConfirm(null); } }}
+        error={confirmError}
+        onCancel={() => { setPendingConfirm(null); setConfirmError(null); }}
+        onConfirm={async () => {
+          const run = pendingConfirm;
+          if (!run) return;
+          const res = await run();
+          // Solo se l'azione va a buon fine chiudiamo il pop-up 1 e apriamo il 2.
+          if (res?.status === "success") {
+            setConfirmError(null);
+            setPendingConfirm(null);
+            setSuccessInfo({ mode: res.mode, quantityKg: res.quantityKg, closeHref: res.closeHref });
+          } else if (res?.status === "scheduled" || res?.status === "noop") {
+            setConfirmError(null);
+            setPendingConfirm(null);
+          } else {
+            // errore: il pop-up 1 resta aperto e mostra il messaggio
+            setConfirmError(res?.message || "Operazione non riuscita. Riprova.");
+          }
+        }}
+      />
+
+      {/* POP-UP 2 — conferma di avvenuta partecipazione (appare solo dopo il
+          successo). "Vai alle aste personali" porta al profilo; "Chiudi" resta
+          dove si è (per l'apertura: va al pool appena creato via closeHref). */}
+      <BulkStrikeAuctionSuccess
+        open={!!successInfo}
+        mode={successInfo?.mode || "join"}
+        groupBuy={groupBuy}
+        productName={pool.product || "questo prodotto"}
+        quantityKg={successInfo?.quantityKg ?? userQty}
+        onGoToPersonal={() => { window.location.href = "/dashboard?section=pools"; }}
+        onClose={() => { const href = successInfo?.closeHref; setSuccessInfo(null); if (href) window.location.href = href; }}
       />
     </div>
   );

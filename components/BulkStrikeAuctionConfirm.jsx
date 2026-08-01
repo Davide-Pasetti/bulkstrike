@@ -25,7 +25,7 @@ const kg = (n) => Number(n ?? 0).toLocaleString("it-IT");
 
 export default function BulkStrikeAuctionConfirm({
   open, mode = "join", groupBuy = false, productName = "questo prodotto",
-  quantityKg = 0, busy = false, onConfirm, onCancel,
+  quantityKg = 0, busy = false, error = null, onConfirm, onCancel,
 }) {
   const [ack, setAck] = useState(false);
 
@@ -35,7 +35,6 @@ export default function BulkStrikeAuctionConfirm({
   if (!open) return null;
 
   const accent = groupBuy ? C.blue : C.purple;
-  const kind = groupBuy ? "acquisto di gruppo" : "asta";
   // Frase principale: verbo diverso per apertura vs adesione, asta vs gruppo.
   const verb = mode === "open"
     ? (groupBuy ? "avviare un acquisto di gruppo" : "aprire un'asta")
@@ -75,10 +74,6 @@ export default function BulkStrikeAuctionConfirm({
             Stai per {verb} per <b>{productName}</b> con <b className="bs-num">{kg(quantityKg)} kg</b>. La scelta è <b style={{ color: accent }}>vincolante</b>.
           </p>
 
-          <div style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 10, padding: "11px 13px", fontSize: 13, lineHeight: 1.5, color: C.muted }}>
-            Potrai seguire l'andamento dell'{kind} nella sezione <b style={{ color: C.text }}>«Aste personali»</b> del tuo profilo.
-          </div>
-
           {/* Cosa si accetta concretamente (prima era la checkbox del pannello):
               qui è l'unico punto di accettazione, spostato nel pop-up. */}
           <div style={{ fontSize: 12.5, lineHeight: 1.5, color: C.muted }}>
@@ -101,6 +96,13 @@ export default function BulkStrikeAuctionConfirm({
               </a>
             </span>
           </label>
+
+          {/* Errore dell'azione reale: il pop-up resta aperto per riprovare. */}
+          {error && (
+            <div style={{ background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 10, padding: "10px 12px", fontSize: 13, lineHeight: 1.45, color: "#B91C1C" }}>
+              {error}
+            </div>
+          )}
         </div>
 
         {/* footer */}
