@@ -99,7 +99,7 @@ function OwnerActions({ companyId, companyName }) {
       ) : (
         <>
           <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
-            <a href="/registrati" style={{ display:"inline-flex", alignItems:"center", gap:6, background:C.blue, color:"#fff", borderRadius:8, padding:"8px 14px", fontSize:12.5, fontWeight:700, textDecoration:"none" }}>
+            <a href="/registrati" style={{ display:"inline-flex", alignItems:"center", gap:6, background:"#0369A1", color:"#fff", borderRadius:8, padding:"8px 14px", fontSize:12.5, fontWeight:700, textDecoration:"none" }}>
               <ShieldCheck size={14}/> Rivendica il profilo
             </a>
             <button onClick={() => setOpen(o => !o)}
@@ -302,7 +302,7 @@ export default function SupplierPage() {
         <BSIcon size={40} uid="nf" />
         <div style={{ fontSize:17, fontWeight:700, color:C.text }}>Fornitore non trovato</div>
         <div style={{ fontSize:14, color:C.muted, maxWidth:380 }}>Il profilo richiesto non esiste o non è ancora verificato.</div>
-        <button onClick={() => { window.location.href = "/fornitori"; }} style={{ marginTop:6, background:C.blue, color:"#fff", border:"none", borderRadius:9, padding:"11px 22px", fontSize:14, fontWeight:700, cursor:"pointer", fontFamily:"Inter,system-ui" }}>Vai all'anagrafica fornitori</button>
+        <button onClick={() => { window.location.href = "/fornitori"; }} style={{ marginTop:6, background:"#0369A1", color:"#fff", border:"none", borderRadius:9, padding:"11px 22px", fontSize:14, fontWeight:700, cursor:"pointer", fontFamily:"Inter,system-ui" }}>Vai all'anagrafica fornitori</button>
       </div>
     );
   }
@@ -378,7 +378,7 @@ export default function SupplierPage() {
                   una email di cortesia al suo support_email, senza contatti del
                   mittente). Storico su /messaggi. Accanto: Segui/Non seguire. */}
               <div style={{ flexShrink:0, display:"flex", gap:8, flexWrap:"wrap" }}>
-                <a href={`/messaggi?to=${profile.id}`} style={{ display:"inline-flex", alignItems:"center", gap:7, background:C.blue, color:"#fff", border:"none", borderRadius:9, padding:"10px 18px", fontSize:13.5, fontWeight:700, textDecoration:"none" }}>
+                <a href={`/messaggi?to=${profile.id}`} style={{ display:"inline-flex", alignItems:"center", gap:7, background:"#0369A1", color:"#fff", border:"none", borderRadius:9, padding:"10px 18px", fontSize:13.5, fontWeight:700, textDecoration:"none" }}>
                   <MessageSquare size={15}/> Contatta il fornitore
                 </a>
                 <FollowButton supplierId={profile.id} />
@@ -506,7 +506,7 @@ export default function SupplierPage() {
                                    className="sup-num" style={{ width:84, padding:"7px 8px", border:`1.5px solid ${C.border}`, borderRadius:8, fontSize:12.5, outline:"none", textAlign:"right" }} />
                             <span style={{ fontSize:11, color:C.muted }}>kg</span>
                             <button onClick={() => handleOrder(p)} disabled={st.busy}
-                                    style={{ background:C.blue, color:"#fff", border:"none", borderRadius:8, padding:"8px 13px", fontSize:12.5, fontWeight:700, cursor:st.busy?"default":"pointer", opacity:st.busy?0.6:1, display:"inline-flex", alignItems:"center", gap:5, fontFamily:"Inter,system-ui" }}>
+                                    style={{ background:"#0369A1", color:"#fff", border:"none", borderRadius:8, padding:"8px 13px", fontSize:12.5, fontWeight:700, cursor:st.busy?"default":"pointer", opacity:st.busy?0.6:1, display:"inline-flex", alignItems:"center", gap:5, fontFamily:"Inter,system-ui" }}>
                               {st.busy ? "…" : <>Ordina <ArrowRight size={13}/></>}
                             </button>
                             <button onClick={() => handleAddToCart(p)} disabled={st.busy} title="Aggiungi al carrello"
@@ -561,7 +561,7 @@ export default function SupplierPage() {
                             rows={3} style={{ width:"100%", padding:"10px 12px", border:`1.5px solid ${C.border}`, borderRadius:8, fontSize:13, outline:"none", resize:"vertical", fontFamily:"Inter,system-ui", marginBottom:10 }} />
                   <div style={{ display:"flex", alignItems:"center", gap:12 }}>
                     <button onClick={handleSubmitReview} disabled={reviewState.busy || reviewRating < 1}
-                            style={{ background:C.blue, color:"#fff", border:"none", borderRadius:8, padding:"9px 18px", fontSize:13, fontWeight:700, cursor:(reviewState.busy||reviewRating<1)?"default":"pointer", opacity:(reviewState.busy||reviewRating<1)?0.6:1, display:"inline-flex", alignItems:"center", gap:6, fontFamily:"Inter,system-ui" }}>
+                            style={{ background:"#0369A1", color:"#fff", border:"none", borderRadius:8, padding:"9px 18px", fontSize:13, fontWeight:700, cursor:(reviewState.busy||reviewRating<1)?"default":"pointer", opacity:(reviewState.busy||reviewRating<1)?0.6:1, display:"inline-flex", alignItems:"center", gap:6, fontFamily:"Inter,system-ui" }}>
                       <Send size={13}/> {reviewState.busy ? "Invio…" : "Pubblica recensione"}
                     </button>
                     {reviewState.ok && <span style={{ fontSize:12.5, color:C.green, fontWeight:700, display:"flex", alignItems:"center", gap:4 }}><Check size={13}/> Recensione pubblicata</span>}

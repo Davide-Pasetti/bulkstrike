@@ -155,14 +155,14 @@ export default function MessagesPage({ inShell = false }) {
         ) : needLogin ? (
           <div style={{ padding: "40px 20px", textAlign: "center", border: `1px solid ${C.border}`, borderRadius: 14 }}>
             <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 12 }}>Accedi per vedere i tuoi messaggi</div>
-            <button onClick={() => { window.location.href = "/auth/login"; }} style={{ background: C.blue, color: "#fff", border: "none", borderRadius: 9, padding: "11px 24px", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "Inter,system-ui" }}>Accedi</button>
+            <button onClick={() => { window.location.href = "/auth/login"; }} style={{ background: "#0369A1", color: "#fff", border: "none", borderRadius: 9, padding: "11px 24px", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "Inter,system-ui" }}>Accedi</button>
           </div>
         ) : threads.length === 0 ? (
           <div style={{ padding: "48px 20px", textAlign: "center", border: `1px solid ${C.border}`, borderRadius: 14 }}>
             <MessageSquare size={30} color={C.border} style={{ marginBottom: 10 }} />
             <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>Nessuna conversazione</div>
             <div style={{ fontSize: 13, color: C.muted, marginBottom: 16 }}>Contatta un fornitore dal suo profilo nella directory per iniziare.</div>
-            <button onClick={() => { window.location.href = "/fornitori"; }} style={{ background: C.blue, color: "#fff", border: "none", borderRadius: 9, padding: "11px 24px", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "Inter,system-ui" }}>Vai ai fornitori</button>
+            <button onClick={() => { window.location.href = "/fornitori"; }} style={{ background: "#0369A1", color: "#fff", border: "none", borderRadius: 9, padding: "11px 24px", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "Inter,system-ui" }}>Vai ai fornitori</button>
           </div>
         ) : (
           <div className="msg-grid">
@@ -193,7 +193,7 @@ export default function MessagesPage({ inShell = false }) {
                           {t.last_message_mine ? "Tu: " : ""}{t.last_message || "…"}
                         </span>
                         {t.unread > 0 && (
-                          <span style={{ minWidth: 18, height: 18, padding: "0 5px", borderRadius: 100, background: C.blue, color: "#fff", fontSize: 10.5, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{t.unread > 99 ? "99+" : t.unread}</span>
+                          <span style={{ minWidth: 18, height: 18, padding: "0 5px", borderRadius: 100, background: "#0369A1", color: "#fff", fontSize: 10.5, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{t.unread > 99 ? "99+" : t.unread}</span>
                         )}
                       </span>
                     </span>
@@ -269,7 +269,7 @@ export default function MessagesPage({ inShell = false }) {
                       onClick={handleSend}
                       disabled={sending || !draft.trim()}
                       aria-label="Invia messaggio"
-                      style={{ background: C.blue, color: "#fff", border: "none", borderRadius: 10, width: 46, height: 46, display: "flex", alignItems: "center", justifyContent: "center", cursor: sending || !draft.trim() ? "default" : "pointer", opacity: sending || !draft.trim() ? 0.5 : 1, flexShrink: 0 }}
+                      style={{ background: "#0369A1", color: "#fff", border: "none", borderRadius: 10, width: 46, height: 46, display: "flex", alignItems: "center", justifyContent: "center", cursor: sending || !draft.trim() ? "default" : "pointer", opacity: sending || !draft.trim() ? 0.5 : 1, flexShrink: 0 }}
                     >
                       <Send size={17} />
                     </button>

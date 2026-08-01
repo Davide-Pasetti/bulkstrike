@@ -170,7 +170,7 @@ export default function BulkStrikeProductDocs({ productId, productName }) {
           </label>
           {certFile && <button onClick={() => setCertFile(null)} title="Rimuovi file scelto" style={{ background:"none", border:"none", cursor:"pointer", color:C.muted, display:"inline-flex" }}><X size={15}/></button>}
           <button onClick={handleAddCert} disabled={busy === "cert" || !certFile}
-                  style={{ background:C.blue, color:"#fff", border:"none", borderRadius:8, padding:"9px 16px", fontSize:12.5, fontWeight:700, cursor:(busy === "cert" || !certFile) ? "default" : "pointer", opacity:(busy === "cert" || !certFile) ? 0.5 : 1, display:"inline-flex", alignItems:"center", gap:6, fontFamily:"'Inter',system-ui" }}>
+                  style={{ background:"#0369A1", color:"#fff", border:"none", borderRadius:8, padding:"9px 16px", fontSize:12.5, fontWeight:700, cursor:(busy === "cert" || !certFile) ? "default" : "pointer", opacity:(busy === "cert" || !certFile) ? 0.5 : 1, display:"inline-flex", alignItems:"center", gap:6, fontFamily:"'Inter',system-ui" }}>
             {busy === "cert" ? "Aggiunta…" : <><Plus size={14}/> Aggiungi certificato</>}
           </button>
         </div>

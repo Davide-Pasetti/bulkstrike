@@ -243,13 +243,13 @@ export default function OrderPage() {
         ) : needLogin ? (
           <div style={{ padding:"50px 20px", textAlign:"center", border:`1px solid ${C.border}`, borderRadius:14 }}>
             <div style={{ fontSize:16, fontWeight:700, marginBottom:12 }}>Accedi per vedere l'ordine</div>
-            <button onClick={() => { window.location.href = "/login"; }} style={{ background:C.blue, color:"#fff", border:"none", borderRadius:9, padding:"11px 24px", fontSize:14, fontWeight:700, cursor:"pointer", fontFamily:"Inter,system-ui" }}>Accedi</button>
+            <button onClick={() => { window.location.href = "/login"; }} style={{ background:"#0369A1", color:"#fff", border:"none", borderRadius:9, padding:"11px 24px", fontSize:14, fontWeight:700, cursor:"pointer", fontFamily:"Inter,system-ui" }}>Accedi</button>
           </div>
         ) : notFound || !order ? (
           <div style={{ padding:"50px 20px", textAlign:"center", border:`1px solid ${C.border}`, borderRadius:14 }}>
             <div style={{ fontSize:16, fontWeight:700, marginBottom:6 }}>Ordine non trovato</div>
             <div style={{ fontSize:14, color:C.muted, marginBottom:16 }}>L'ordine non esiste o non appartiene alla tua azienda.</div>
-            <button onClick={() => { window.location.href = "/ordini"; }} style={{ background:C.blue, color:"#fff", border:"none", borderRadius:9, padding:"11px 24px", fontSize:14, fontWeight:700, cursor:"pointer", fontFamily:"Inter,system-ui" }}>Vai ai miei ordini</button>
+            <button onClick={() => { window.location.href = "/ordini"; }} style={{ background:"#0369A1", color:"#fff", border:"none", borderRadius:9, padding:"11px 24px", fontSize:14, fontWeight:700, cursor:"pointer", fontFamily:"Inter,system-ui" }}>Vai ai miei ordini</button>
           </div>
         ) : (
           <>
@@ -322,7 +322,7 @@ export default function OrderPage() {
                           Il fornitore lo incassa solo dopo la tua conferma di consegna conforme. Se qualcosa va storto, l'importo torna a te.
                         </p>
                         <button onClick={startEscrowPayment} disabled={payinBusy}
-                                style={{ background:C.blue, color:"#fff", border:"none", borderRadius:10, padding:"13px 24px", fontSize:14, fontWeight:700, cursor:payinBusy?"default":"pointer", opacity:payinBusy?0.6:1, display:"inline-flex", alignItems:"center", gap:8, fontFamily:"Inter,system-ui" }}>
+                                style={{ background:"#0369A1", color:"#fff", border:"none", borderRadius:10, padding:"13px 24px", fontSize:14, fontWeight:700, cursor:payinBusy?"default":"pointer", opacity:payinBusy?0.6:1, display:"inline-flex", alignItems:"center", gap:8, fontFamily:"Inter,system-ui" }}>
                           {payinBusy ? "Preparazione…" : <>Paga {eur(order.grand_total ?? order.goods_subtotal)} in garanzia <ArrowRight size={15}/></>}
                         </button>
                       </>
@@ -347,7 +347,7 @@ export default function OrderPage() {
                       L'acquirente ha versato <b className="od-num" style={{ color:C.text }}>{eur(order.goods_subtotal)}</b> in escrow. Quando la merce parte, segna l'ordine come spedito: l'acquirente riceverà una notifica.
                     </p>
                     <button onClick={() => doAction(markOrderShipped, "Ordine segnato come spedito. L'acquirente è stato avvisato.")} disabled={acting}
-                            style={{ background:C.blue, color:"#fff", border:"none", borderRadius:10, padding:"13px 24px", fontSize:14, fontWeight:700, cursor:acting?"default":"pointer", opacity:acting?0.6:1, display:"inline-flex", alignItems:"center", gap:8, fontFamily:"Inter,system-ui" }}>
+                            style={{ background:"#0369A1", color:"#fff", border:"none", borderRadius:10, padding:"13px 24px", fontSize:14, fontWeight:700, cursor:acting?"default":"pointer", opacity:acting?0.6:1, display:"inline-flex", alignItems:"center", gap:8, fontFamily:"Inter,system-ui" }}>
                       {acting ? "Aggiornamento…" : <>Segna come spedito <Truck size={15}/></>}
                     </button>
                   </div>
@@ -468,7 +468,7 @@ export default function OrderPage() {
                     <div style={{ fontSize:13, fontWeight:800, textTransform:"uppercase", letterSpacing:"0.05em", color:C.muted, marginBottom:10, display:"flex", alignItems:"center", gap:7 }}><QrCode size={14}/> Etichetta QR</div>
                     <p style={{ fontSize:13, color:C.muted, lineHeight:1.6, marginBottom:12 }}>Applica questa etichetta sul DDT di spedizione.</p>
                     <button onClick={downloadQr} disabled={qrLoading}
-                            style={{ background:C.blue, color:"#fff", border:"none", borderRadius:10, padding:"11px 20px", fontSize:13.5, fontWeight:700, cursor:qrLoading?"default":"pointer", opacity:qrLoading?0.6:1, display:"inline-flex", alignItems:"center", gap:8, fontFamily:"Inter,system-ui" }}>
+                            style={{ background:"#0369A1", color:"#fff", border:"none", borderRadius:10, padding:"11px 20px", fontSize:13.5, fontWeight:700, cursor:qrLoading?"default":"pointer", opacity:qrLoading?0.6:1, display:"inline-flex", alignItems:"center", gap:8, fontFamily:"Inter,system-ui" }}>
                       <Download size={15}/> {qrLoading ? "Preparazione…" : "Scarica etichetta QR"}
                     </button>
                     {qrErr && <div style={{ fontSize:12.5, color:C.red, marginTop:10 }}>{qrErr}</div>}
@@ -485,7 +485,7 @@ export default function OrderPage() {
                       <input value={lot} onChange={e => setLot(e.target.value)} placeholder="Es. L2026-0142"
                              style={{ flex:"1 1 200px", minWidth:160, border:`1.5px solid ${C.border}`, borderRadius:8, padding:"10px 12px", fontSize:13.5, outline:"none", fontFamily:"Inter,system-ui" }}/>
                       <button onClick={saveLot} disabled={lotSaving}
-                              style={{ background:C.blue, color:"#fff", border:"none", borderRadius:10, padding:"11px 20px", fontSize:13.5, fontWeight:700, cursor:lotSaving?"default":"pointer", opacity:lotSaving?0.6:1, display:"inline-flex", alignItems:"center", gap:7, fontFamily:"Inter,system-ui" }}>
+                              style={{ background:"#0369A1", color:"#fff", border:"none", borderRadius:10, padding:"11px 20px", fontSize:13.5, fontWeight:700, cursor:lotSaving?"default":"pointer", opacity:lotSaving?0.6:1, display:"inline-flex", alignItems:"center", gap:7, fontFamily:"Inter,system-ui" }}>
                         {lotSaving ? "Salvataggio…" : "Salva lotto"}
                       </button>
                       {lotSaved && <span style={{ fontSize:13, color:C.green, fontWeight:700, display:"inline-flex", alignItems:"center", gap:5 }}><Check size={15}/> Salvato</span>}
@@ -545,7 +545,7 @@ export default function OrderPage() {
                               I dati bancari del fornitore sono visibili solo qui, in area riservata, e solo a te acquirente dell'ordine.
                             </p>
                             <button onClick={revealIban} disabled={ibanLoading}
-                                    style={{ background:C.blue, color:"#fff", border:"none", borderRadius:10, padding:"11px 20px", fontSize:13.5, fontWeight:700, cursor:ibanLoading?"default":"pointer", opacity:ibanLoading?0.6:1, display:"inline-flex", alignItems:"center", gap:7, fontFamily:"Inter,system-ui" }}>
+                                    style={{ background:"#0369A1", color:"#fff", border:"none", borderRadius:10, padding:"11px 20px", fontSize:13.5, fontWeight:700, cursor:ibanLoading?"default":"pointer", opacity:ibanLoading?0.6:1, display:"inline-flex", alignItems:"center", gap:7, fontFamily:"Inter,system-ui" }}>
                               <Lock size={14}/> {ibanLoading ? "Carico…" : "Mostra IBAN del fornitore"}
                             </button>
                             {ibanErr && <div style={{ fontSize:12.5, color:C.red, marginTop:10 }}>{ibanErr}</div>}

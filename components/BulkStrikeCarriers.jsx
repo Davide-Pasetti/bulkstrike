@@ -221,7 +221,7 @@ export default function CarriersPage() {
             </div>
 
             <button className="cr-filter-toggle" onClick={() => setShowFilters(false)}
-              style={{ marginTop:16, width:"100%", justifyContent:"center", padding:"12px", borderRadius:9, border:"none", background:C.blue, color:"#fff", fontSize:14, fontWeight:700, cursor:"pointer" }}>
+              style={{ marginTop:16, width:"100%", justifyContent:"center", padding:"12px", borderRadius:9, border:"none", background:"#0369A1", color:"#fff", fontSize:14, fontWeight:700, cursor:"pointer" }}>
               Mostra {filtered.length} {filtered.length === 1 ? "corriere" : "corrieri"}
             </button>
           </aside>
@@ -319,7 +319,7 @@ export default function CarriersPage() {
             Registrati e carica il tuo listino (anche in PDF, lo interpreta l'AI): riceverai le spedizioni dei fornitori BulkStrike sulle tratte che copri. La gestione delle tariffe è nel tuo profilo, alla voce Listino.
           </p>
           <div style={{ display:"flex", gap:10, justifyContent:"center", flexWrap:"wrap" }}>
-            <button onClick={() => { window.location.href = "/corriere"; }} style={{ background:C.blue, color:"#fff", border:"none", borderRadius:10, padding:"13px 24px", fontSize:15, fontWeight:700, cursor:"pointer", display:"inline-flex", alignItems:"center", gap:8, fontFamily:"'Inter',system-ui" }}>
+            <button onClick={() => { window.location.href = "/corriere"; }} style={{ background:"#0369A1", color:"#fff", border:"none", borderRadius:10, padding:"13px 24px", fontSize:15, fontWeight:700, cursor:"pointer", display:"inline-flex", alignItems:"center", gap:8, fontFamily:"'Inter',system-ui" }}>
               Gestisci il tuo listino corriere <ArrowRight size={16}/>
             </button>
             <button onClick={() => { window.location.href = "/registrati"; }} style={{ background:"transparent", color:C.blue, border:`1.5px solid ${C.blue}`, borderRadius:10, padding:"12px 24px", fontSize:15, fontWeight:600, cursor:"pointer", fontFamily:"'Inter',system-ui" }}>

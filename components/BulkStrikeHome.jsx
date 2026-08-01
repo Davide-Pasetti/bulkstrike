@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef } from "react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
-import { Bot, ArrowRight, Check, Clock, ChevronRight, TrendingDown, ChevronDown } from "lucide-react";
+import { Bot, ArrowRight, ArrowUp, Check, Clock, ChevronRight, TrendingDown, ChevronDown, Flame, Wine, Beef, Pill, SprayCan, FlaskConical, Palette, Recycle, Cog, Building2, Package, Shirt, Fuel, Sprout } from "lucide-react";
 import { getMacroAreas, getMacroAreasCached, getSectorProducts, getActivePools, getMyFollowedProducts, getSession, getProductsWithMarketPrices, getMarketPriceSeries, getMarketIndexSectors, getHomepageStats } from "@/lib/api";
 import { ytdChange } from "@/lib/priceTrend";
-import { TIERS, tierIndexFor } from "@/lib/tiers";
+import { TIERS, tierIndexFor, tierFor } from "@/lib/tiers";
 import BulkStrikeNav from "@/components/BulkStrikeNav";
 import PriceSourceNote from "@/components/PriceSourceNote";
 import PresentationVideo from "@/components/PresentationVideo";
@@ -12,30 +12,29 @@ import { BSIcon } from "@/components/BSLogo";
 
 // ─── DATA ───────────────────────────────────────────────────────────────────
 
-// icona + colori per i settori reali (chiave = slug dal DB)
-const SECTOR_ICONS = {
-  "additivi-alimentari":        { icon:"🧂", bg:"#FEFCE8", border:"#FEF08A" },
-  "adesivi-sigillanti":         { icon:"🩹", bg:"#FFF7ED", border:"#FED7AA" },
-  "alimentare":                 { icon:"🍞", bg:"#FEFCE8", border:"#FDE68A" },
-  "carta-cellulosa":            { icon:"📄", bg:"#F8FAFC", border:"#E2E8F0" },
-  "chimica-base":               { icon:"🧪", bg:"#EFF6FF", border:"#BFDBFE" },
-  "coloranti-pigmenti-vernici": { icon:"🎨", bg:"#FDF4FF", border:"#F5D0FE" },
-  "cosmetica-cura-personale":   { icon:"💄", bg:"#FFF1F2", border:"#FECDD3" },
-  "detergenti-tensioattivi":    { icon:"🧼", bg:"#ECFEFF", border:"#A5F3FC" },
-  "enologia":                   { icon:"🍷", bg:"#FDF2F8", border:"#FBCFE8" },
-  "fertilizzanti-agrochimica":  { icon:"🌾", bg:"#F0FDF4", border:"#BBF7D0" },
-  "gas-tecnici":                { icon:"⚗️", bg:"#EFF6FF", border:"#BAE6FD" },
-  "metalli-leghe":              { icon:"⚙️", bg:"#F1F5F9", border:"#CBD5E1" },
-  "plastiche-polimeri":         { icon:"🧴", bg:"#FEF2F2", border:"#FECACA" },
-  "sanificazione":              { icon:"🦠", bg:"#F0FDFA", border:"#99F6E4" },
-  "solventi-intermedi":         { icon:"🧫", bg:"#F5F3FF", border:"#DDD6FE" },
-  "trattamento-acque":          { icon:"💧", bg:"#EFF6FF", border:"#BFDBFE" },
+// Icone Lucide per le macro-aree (chiave = slug dal DB). Niente emoji: rendering
+// identico su ogni OS e allineamento tipografico corretto (DAV-68).
+const MACRO_ICONS = {
+  "alimentare-bevande":              Wine,
+  "mangimi-zootecnia":               Beef,
+  "farmaceutica-nutraceutica":       Pill,
+  "cosmetica-detergenza-igiene":     SprayCan,
+  "chimica-solventi-gas":            FlaskConical,
+  "vernici-inchiostri-rivestimenti": Palette,
+  "plastiche-gomma-compositi":       Recycle,
+  "metalli-metalmeccanica":          Cog,
+  "edilizia-ceramica-vetro":         Building2,
+  "carta-imballaggio":               Package,
+  "tessile-concia-cuoio":            Shirt,
+  "energia-lubrificanti":            Fuel,
+  "agricoltura-ambiente":            Sprout,
 };
-const SECTOR_FALLBACK = { icon:"📦", bg:"#F1F5F9", border:"#E2E8F0" };
 
 // ─── FORMATTER + LOGICA ASTA IN EVIDENZA ─────────────────────────────────────
 const eurKg = (n) => "€" + Number(n).toLocaleString("it-IT", { minimumFractionDigits:2, maximumFractionDigits:2 });
 const kgFmt = (n) => Number(n || 0).toLocaleString("it-IT");
+const fmt1 = (n) => Number(n).toLocaleString("it-IT", { minimumFractionDigits:1, maximumFractionDigits:1 });
+const fmt2 = (n) => Number(n).toLocaleString("it-IT", { minimumFractionDigits:2, maximumFractionDigits:2 });
 
 // Tempo rimanente alla chiusura, forma compatta ("4g 9h", "3h 12m"). Copiata da
 // BulkStrikePoolList per coerenza con la pagina "Aste attive".
@@ -64,7 +63,13 @@ function deriveFeatured(fp) {
   const savingsPct = Math.max(0, Math.round(((quick - effective) / quick) * 100));
   const almost = !!barTarget && pct >= 85;                                   // "Quasi completo": ≥85% verso il prossimo scaglione
   const closeIso = fp.status === "final_phase" && fp.final_phase_ends_at ? fp.final_phase_ends_at : fp.closes_at;
-  return { vol, barTarget, pct, toNext, effective, quick, savingsPct, almost, closeIso };
+  // Badge scaglione a 3 stati (DAV-68):
+  //  A = esiste uno scaglione successivo → gap + prezzo target + barra
+  //  B = scala multi-scaglione tutta sbloccata → prezzo bloccato, countdown primario
+  //  C = nessuna scala di scaglioni → solo prezzo + countdown, MAI la parola "scaglione"
+  const nextPrice = barTarget ? tierFor(barTarget).price : null;
+  const state = barTarget ? "A" : (TIERS.length > 1 ? "B" : "C");
+  return { vol, barTarget, pct, toNext, nextPrice, state, effective, quick, savingsPct, almost, closeIso };
 }
 
 const TICKER = [
@@ -115,11 +120,11 @@ function CookieBanner() {
   return (
     <div style={{ position:"fixed", left:16, right:16, bottom:16, zIndex:200, maxWidth:720, margin:"0 auto", background:"#fff", border:"1px solid #E2E8F0", borderRadius:14, boxShadow:"0 12px 40px rgba(0,0,0,0.18)", padding:"16px 18px", display:"flex", flexWrap:"wrap", alignItems:"center", gap:12 }}>
       <div style={{ flex:1, minWidth:220, fontSize:13, color:"#334155", lineHeight:1.5 }}>
-        Usiamo cookie tecnici necessari al funzionamento del sito e, previo consenso, cookie di misurazione. Dettagli nella <a href="/legale#cookie" style={{ color:"#0EA5E9", fontWeight:600 }}>Cookie Policy</a>.
+        Usiamo cookie tecnici necessari al funzionamento del sito e, previo consenso, cookie di misurazione. Dettagli nella <a href="/legale#cookie" style={{ color:"#0369A1", fontWeight:600 }}>Cookie Policy</a>.
       </div>
       <div style={{ display:"flex", gap:8 }}>
         <button onClick={() => decide("rejected")} style={{ padding:"9px 16px", borderRadius:9, border:"1.5px solid #CBD5E1", background:"#fff", color:"#334155", fontSize:13, fontWeight:600, cursor:"pointer" }}>Rifiuta</button>
-        <button onClick={() => decide("accepted")} style={{ padding:"9px 16px", borderRadius:9, border:"none", background:"#0EA5E9", color:"#fff", fontSize:13, fontWeight:700, cursor:"pointer" }}>Accetta</button>
+        <button onClick={() => decide("accepted")} style={{ padding:"9px 16px", borderRadius:9, border:"none", background:"#0369A1", color:"#fff", fontSize:13, fontWeight:700, cursor:"pointer" }}>Accetta</button>
       </div>
     </div>
   );
@@ -182,9 +187,12 @@ export default function BulkStrikeLight() {
       let step = 0;
       timer = setInterval(() => {
         step++; const e = 1 - Math.pow(1 - step/60, 3);
+        // Mai mostrare "0" per un valore reale positivo: il conta-su parte da 1
+        // (per "1 asta attiva" il primo frame direbbe "0 aste" — DAV-68).
+        const shown = (t) => t > 0 ? Math.max(1, Math.round(t*e)) : 0;
         setCount({
-          pools: Math.round(targets.pools*e), materials: Math.round(targets.materials*e),
-          suppliers: Math.round(targets.suppliers*e), countries: Math.round(targets.countries*e),
+          pools: shown(targets.pools), materials: shown(targets.materials),
+          suppliers: shown(targets.suppliers), countries: shown(targets.countries),
         });
         if (step >= 60) { clearInterval(timer); setCount(targets); }
       }, 1800/60);
@@ -208,11 +216,15 @@ export default function BulkStrikeLight() {
   // Seleziona un settore indice (serie già inclusa nel payload).
   const selectIndexSector = (sec) => { setMarketSel(null); setMarketData(null); setIndexSel(sec); };
 
-  // Default: primo agri reale se disponibile, altrimenti primo settore indice.
+  // Default: Grano duro (la commodity più rappresentativa, con fonte CUN citata
+  // nel copy) invece del primo in ordine alfabetico (era "Avena" — DAV-68);
+  // fallback: primo agri reale, poi primo settore indice.
   useEffect(() => {
     if (marketSel || indexSel) return;
-    if (marketProducts.length) selectMarketProduct(marketProducts[0]);
-    else if (indexSectors.length) selectIndexSector(indexSectors[0]);
+    if (marketProducts.length) {
+      const pref = marketProducts.find(p => /grano duro/i.test(p.name || "")) || marketProducts[0];
+      selectMarketProduct(pref);
+    } else if (indexSectors.length) selectIndexSector(indexSectors[0]);
   }, [marketProducts, indexSectors]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Carica le aste attive UNA volta. get_active_pools() torna già ordinato per
@@ -308,48 +320,53 @@ export default function BulkStrikeLight() {
   const lastPrice = showingIndex
     ? (indexPts.length ? indexPts[indexPts.length - 1].v : null)
     : (showingReal ? (realSeries.length ? realSeries[realSeries.length - 1].v : null) : null);
-  // Variazione "da gennaio" (da inizio anno) sul dato REALE, coerente ovunque.
-  const marketYtd = showingIndex
-    ? ytdChange(indexSel.series || [], "index")
-    : (showingReal ? ytdChange(marketData?.series || [], "v") : null);
-  // Etichette brevi per i tab dei settori indice.
-  const NACE_SHORT = { C241: "Siderurgici", C244: "Metalli non ferrosi", C2016: "Plastiche", C20: "Chimica" };
+  // Variazione "da gennaio" (da inizio anno) sul prezzo REALE €/kg.
+  const marketYtd = showingReal ? ytdChange(marketData?.series || [], "v") : null;
+  // Per gli INDICI la variazione è anno su anno: il campo pct della serie è già
+  // il confronto con lo stesso mese dell'anno precedente (Eurostat).
+  const indexYoY = showingIndex
+    ? (() => { const pts = (indexSel.series || []).filter(p => p.index != null && p.pct != null); return pts.length ? Number(pts[pts.length - 1].pct) : null; })()
+    : null;
+  // Etichetta chip dal nace_label del DB (parte prima del trattino lungo);
+  // niente più mappa hardcoded né codici grezzi (DAV-68).
+  const naceChipLabel = (sec) => (String(sec.nace_label || "").split("—")[0].trim()) || sec.nace_code;
 
   return (
-    <div style={{ backgroundColor:"#FFFFFF", color:C.text, fontFamily:"'Inter',system-ui,sans-serif", minHeight:"100vh", overflowX:"hidden", colorScheme:"light" }}>
+    <div style={{ backgroundColor:"#FFFFFF", color:C.text, minHeight:"100vh", overflowX:"hidden", colorScheme:"light" }}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap');
         * { box-sizing:border-box; }
-        .bs-ticker-wrap { overflow:hidden; width:100%; }
+        .bs-ticker-wrap { overflow:hidden; width:100%; -webkit-mask-image:linear-gradient(to right,transparent,#000 80px,#000 calc(100% - 80px),transparent); mask-image:linear-gradient(to right,transparent,#000 80px,#000 calc(100% - 80px),transparent); }
         .bs-ticker { display:flex; width:max-content; animation:tick 45s linear infinite; }
         .bs-ticker:hover { animation-play-state:paused; }
         @keyframes tick { 0%{transform:translateX(0)} 100%{transform:translateX(-50%)} }
         .bs-num { font-family:'JetBrains Mono',monospace; }
         .bs-cats { display:flex; gap:12px; overflow-x:auto; padding:20px 24px; scrollbar-width:none; }
         .bs-cats::-webkit-scrollbar { display:none; }
-        .bs-cat { display:flex; flex-direction:column; align-items:center; gap:8px; cursor:pointer; flex-shrink:0; width:76px; transition:transform 0.15s; }
+        .bs-cat { display:flex; flex-direction:column; align-items:center; gap:8px; cursor:pointer; flex-shrink:0; width:88px; transition:transform 0.15s; }
         .bs-cat:hover { transform:translateY(-2px); }
-        .bs-cat-label { text-align:center; line-height:1.25; }
-        .bs-cat-icon { width:56px; height:56px; border-radius:14px; display:flex; align-items:center; justify-content:center; font-size:26px; border:1.5px solid; transition:all 0.15s; }
-        .bs-cat.active .bs-cat-icon { outline:2px solid #0EA5E9; outline-offset:2px; }
+        .bs-cat-label { text-align:center; line-height:1.25; display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden; }
+        .bs-cat-icon { width:56px; height:56px; border-radius:14px; display:flex; align-items:center; justify-content:center; border:1.5px solid; transition:all 0.15s; }
+        .bs-cat.active .bs-cat-icon { outline:2px solid #0369A1; outline-offset:2px; }
         .bs-section { max-width:1280px; margin:0 auto; padding:64px 24px; }
         .bs-card { background:#FFFFFF; border:1px solid ${C.border}; border-radius:16px; padding:24px; transition:box-shadow 0.2s,transform 0.2s; }
         .bs-card:hover { box-shadow:0 8px 32px rgba(14,165,233,0.10); transform:translateY(-2px); }
-        .bs-btn { background:#0EA5E9; color:#fff; border:none; border-radius:10px; padding:13px 24px; font-size:15px; font-weight:700; cursor:pointer; display:inline-flex; align-items:center; gap:8px; transition:all 0.2s; font-family:'Inter',system-ui; }
-        .bs-btn:hover { background:#0284C7; transform:translateY(-1px); box-shadow:0 6px 20px rgba(14,165,233,0.3); }
-        .bs-btn-out { background:transparent; color:#0EA5E9; border:1.5px solid #0EA5E9; border-radius:10px; padding:12px 24px; font-size:15px; font-weight:600; cursor:pointer; display:inline-flex; align-items:center; gap:8px; font-family:'Inter',system-ui; transition:all 0.2s; }
+        .bs-btn { background:#0369A1; color:#fff; border:none; border-radius:10px; padding:13px 24px; font-size:15px; font-weight:700; cursor:pointer; display:inline-flex; align-items:center; gap:8px; transition:all 0.2s; font-family:inherit; }
+        .bs-btn:hover { background:#075985; transform:translateY(-1px); box-shadow:0 6px 20px rgba(3,105,161,0.3); }
+        .bs-btn-out { background:transparent; color:#0369A1; border:1.5px solid #0369A1; border-radius:10px; padding:12px 24px; font-size:15px; font-weight:600; cursor:pointer; display:inline-flex; align-items:center; gap:8px; font-family:inherit; transition:all 0.2s; }
         .bs-btn-out:hover { background:#EFF6FF; }
-        .bs-pool-btn { width:100%; background:transparent; color:#0EA5E9; border:1.5px solid #E2E8F0; border-radius:8px; padding:10px; font-size:14px; font-weight:600; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px; font-family:'Inter',system-ui; transition:all 0.2s; }
-        .bs-pool-btn:hover { border-color:#0EA5E9; background:#EFF6FF; }
-        .bs-tab { padding:9px 22px; border-radius:100px; font-size:14px; font-weight:600; cursor:pointer; border:1.5px solid; transition:all 0.2s; font-family:'Inter',system-ui; }
-        .bs-chart-tab { padding:7px 14px; border-radius:8px; font-size:13px; font-weight:600; border:1px solid; cursor:pointer; transition:all 0.2s; font-family:'Inter',system-ui; }
-        .bs-label { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.1em; color:#0EA5E9; margin-bottom:8px; }
+        .bs-pool-btn { width:100%; background:transparent; color:#0369A1; border:1.5px solid #E2E8F0; border-radius:8px; padding:10px; font-size:14px; font-weight:600; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px; font-family:inherit; transition:all 0.2s; }
+        .bs-pool-btn:hover { border-color:#0369A1; background:#EFF6FF; }
+        .bs-tab { padding:9px 22px; border-radius:100px; font-size:14px; font-weight:600; cursor:pointer; border:1.5px solid; transition:all 0.2s; font-family:inherit; }
+        .bs-chart-tab { padding:7px 14px; border-radius:8px; font-size:13px; font-weight:600; border:1px solid; cursor:pointer; transition:all 0.2s; font-family:inherit; }
+        .bs-label { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.1em; color:#0369A1; margin-bottom:8px; }
         .bs-h2 { font-size:34px; font-weight:800; letter-spacing:-0.02em; }
         .bs-progress { height:6px; background:#E2E8F0; border-radius:100px; overflow:hidden; }
         .bs-progress-bar { height:100%; border-radius:100px; transition:width 1.2s ease; }
+        @keyframes bs-pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
         .bs-chatbot { position:fixed; bottom:24px; right:24px; z-index:1000; }
         .bs-chatbot-panel { position:absolute; bottom:70px; right:0; width:300px; background:#fff; border-radius:16px; border:1px solid #E2E8F0; box-shadow:0 20px 60px rgba(0,0,0,0.15); overflow:hidden; }
-        .bs-chatbot-btn { width:56px; height:56px; border-radius:50%; background:#0EA5E9; border:3px solid #fff; cursor:pointer; display:flex; align-items:center; justify-content:center; box-shadow:0 4px 20px rgba(14,165,233,0.4); transition:transform 0.2s; }
+        .bs-chatbot-btn { width:56px; height:56px; border-radius:50%; background:#0369A1; border:3px solid #fff; cursor:pointer; display:flex; align-items:center; justify-content:center; box-shadow:0 4px 20px rgba(3,105,161,0.4); transition:transform 0.2s; }
         .bs-chatbot-btn:hover { transform:scale(1.08); }
         .bs-hamburger-btn { display:none; background:none; border:none; cursor:pointer; padding:6px; margin:-6px; flex-shrink:0; }
         .bs-search-mobile-row { display:none; }
@@ -374,8 +391,8 @@ export default function BulkStrikeLight() {
           .bs-cats { flex-wrap:wrap !important; overflow:hidden !important; max-height:140px; gap:8px !important; padding:16px 16px 0 16px !important; }
           .bs-cats.expanded { max-height:none !important; }
           .bs-cat { width:calc((100% - 24px) / 4) !important; }
-          .bs-cat-icon { width:100% !important; height:auto !important; aspect-ratio:1/1; font-size:38px !important; border-radius:12px !important; }
-          .bs-cat-label { font-size:10.5px !important; display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden; }
+          .bs-cat-icon { width:100% !important; height:auto !important; aspect-ratio:1/1; border-radius:12px !important; }
+          .bs-cat-label { font-size:12px !important; }
           .bs-cats-expand-btn { display:flex !important; align-items:center; justify-content:center; width:100%; background:none; border:none; border-top:1px solid ${C.border}; padding:8px 0; cursor:pointer; }
         }
       `}</style>
@@ -408,13 +425,14 @@ export default function BulkStrikeLight() {
           <div className={`bs-cats${sectorsExpanded ? " expanded" : ""}`}>
             {macros.map(m => {
               const on = activeMacro?.id === m.id;
+              const Ico = MACRO_ICONS[m.slug] || Package;
               return (
                 <div key={m.id} className={`bs-cat${on?" active":""}`}
                      onClick={() => { const next = on ? null : m; setActiveMacro(next); setActiveSector(null); setSectorProducts([]); }}>
-                  <div className="bs-cat-icon" style={{ background:on?"#EFF6FF":"#F1F5F9", borderColor:on?"#0EA5E9":"#E2E8F0" }}>
-                    {m.icon || "📦"}
+                  <div className="bs-cat-icon" style={{ background:on?"#EFF6FF":"#F1F5F9", borderColor:on?"#0369A1":"#E2E8F0" }}>
+                    <Ico size={24} strokeWidth={1.8} color={on?"#0369A1":"#475569"} />
                   </div>
-                  <span className="bs-cat-label" style={{ fontSize:11, color:on?"#0EA5E9":C.muted, textAlign:"center", lineHeight:1.2, fontWeight:on?700:400 }}>
+                  <span className="bs-cat-label" style={{ fontSize:12.5, color:on?"#0369A1":"#334155", textAlign:"center", fontWeight:on?700:500 }}>
                     {m.name}
                   </span>
                 </div>
@@ -434,11 +452,10 @@ export default function BulkStrikeLight() {
                 return (
                   <div key={s.id} onClick={() => openSector(s)}
                        style={{ display:"inline-flex", alignItems:"center", gap:7, padding:"8px 14px", borderRadius:100, cursor:"pointer",
-                                border:`1.5px solid ${on?"#0EA5E9":C.border}`, background:on?"#EFF6FF":"#fff",
+                                border:`1.5px solid ${on?"#0369A1":C.border}`, background:on?"#EFF6FF":"#fff",
                                 fontSize:13, fontWeight:on?700:500, color:on?"#0369A1":C.text, whiteSpace:"nowrap" }}>
-                    <span style={{ fontSize:15 }}>{s.icon || "📦"}</span>
                     {s.name}
-                    <span style={{ fontSize:11, color:on?"#0EA5E9":C.muted, background:on?"#DBEAFE":"#F1F5F9", borderRadius:100, padding:"1px 7px", fontWeight:700 }}>{s.product_count}</span>
+                    <span style={{ fontSize:11, color:on?"#0369A1":C.muted, background:on?"#DBEAFE":"#F1F5F9", borderRadius:100, padding:"1px 7px", fontWeight:700 }}>{s.product_count}</span>
                   </div>
                 );
               })}
@@ -478,8 +495,9 @@ export default function BulkStrikeLight() {
             <div style={{ display:"inline-flex", alignItems:"center", gap:8, background:"#EFF6FF", border:"1px solid #BFDBFE", borderRadius:100, padding:"6px 14px", marginBottom:20 }}>
               <div style={{ width:8, height:8, borderRadius:"50%", background:C.green, boxShadow:`0 0 6px ${C.green}` }} />
               <span style={{ fontSize:13, color:"#1D4ED8", fontWeight:600 }}>
+                {/* valore reale diretto, non il conta-su: mai un "0 aste attive" transitorio */}
                 {stats && stats.active_pools > 0
-                  ? `${count.pools} ${count.pools === 1 ? "asta attiva" : "aste attive"} in questo momento`
+                  ? `${Number(stats.active_pools)} ${Number(stats.active_pools) === 1 ? "asta attiva" : "aste attive"} in questo momento`
                   : "Aste a ribasso in tempo reale"}
               </span>
             </div>
@@ -496,8 +514,10 @@ export default function BulkStrikeLight() {
               <button className="bs-btn-out" onClick={() => { window.location.href = "/registrati"; }}>Diventa fornitore</button>
             </div>
             <div style={{ display:"flex", gap:20, marginTop:20, flexWrap:"wrap" }}>
-              {["✓ Registrazione gratuita","✓ Nessun abbonamento","✓ Asta senza impegno"].map(t => (
-                <span key={t} style={{ fontSize:13, color:C.muted }}>{t}</span>
+              {["Registrazione gratuita","Nessun abbonamento","Asta senza impegno"].map(t => (
+                <span key={t} style={{ display:"inline-flex", alignItems:"center", gap:6, fontSize:13, color:C.muted }}>
+                  <Check size={14} color={C.green} strokeWidth={2.5} />{t}
+                </span>
               ))}
             </div>
           </div>
@@ -521,7 +541,7 @@ export default function BulkStrikeLight() {
               // Box con dati reali
               <div style={{ background:"#fff", border:`1px solid ${C.border}`, borderRadius:16, padding:24, boxShadow:"0 4px 24px rgba(14,165,233,0.08)", position:"relative" }}>
                 {box.almost && (
-                  <div style={{ position:"absolute", top:-12, right:16, background:C.red, borderRadius:100, padding:"4px 12px", fontSize:12, fontWeight:700, color:"#fff" }}>🔥 Quasi completo</div>
+                  <div style={{ position:"absolute", top:-12, right:16, background:C.red, borderRadius:100, padding:"4px 12px", fontSize:12, fontWeight:700, color:"#fff", display:"inline-flex", alignItems:"center", gap:5 }}><Flame size={12} /> Quasi completo</div>
                 )}
                 <div style={{ marginBottom:16 }}>
                   <div style={{ fontSize:11, color:C.muted, marginBottom:4 }}>Asta più vicina alla chiusura</div>
@@ -529,7 +549,10 @@ export default function BulkStrikeLight() {
                   <div style={{ fontSize:13, color:C.muted }}>
                     {[
                       fp.product_enum,
-                      `${fp.num_bids} ${Number(fp.num_bids) === 1 ? "fornitore" : "fornitori"} in gara`,
+                      // mai "0 fornitori in gara": con zero offerte mostra il volume aggregato
+                      Number(fp.num_bids) > 0
+                        ? `${fp.num_bids} ${Number(fp.num_bids) === 1 ? "fornitore" : "fornitori"} in gara`
+                        : `${kgFmt(box.vol)} kg già aggregati`,
                       box.closeIso ? `chiude tra ${timeLeft(box.closeIso)}` : null,
                     ].filter(Boolean).join(" · ")}
                   </div>
@@ -545,7 +568,8 @@ export default function BulkStrikeLight() {
                     <div style={{ fontSize:11, color:C.muted }}>vs {eurKg(box.quick)}/kg singolo</div>
                   </div>
                 </div>
-                {box.barTarget ? (
+                {box.state === "A" ? (
+                  // STATO A: c'è uno scaglione successivo → la leva è il volume
                   <div style={{ marginBottom:16 }}>
                     <div style={{ display:"flex", justifyContent:"space-between", marginBottom:6 }}>
                       <span style={{ fontSize:13, color:C.muted }}>Volume raccolto</span>
@@ -556,12 +580,20 @@ export default function BulkStrikeLight() {
                     </div>
                     <div style={{ display:"flex", justifyContent:"space-between", marginTop:5 }}>
                       <span style={{ fontSize:12, color: box.pct >= 80 ? C.amber : C.muted, fontWeight:600 }}>{box.pct}%{box.almost ? " — quasi pieno!" : ""}</span>
-                      <span style={{ fontSize:12, color:C.muted }}>Mancano {kgFmt(box.toNext)} kg</span>
+                      <span style={{ fontSize:12, color:C.muted }}>Mancano {kgFmt(box.toNext)} kg → {eurKg(box.nextPrice)}/kg</span>
                     </div>
                   </div>
                 ) : (
-                  <div style={{ marginBottom:16, fontSize:12.5, color:C.blue, fontWeight:600, background:"#EFF6FF", border:`1px solid #BFDBFE`, borderRadius:10, padding:"10px 12px" }}>
-                    🎉 Scaglione massimo raggiunto: miglior tetto già sbloccato.
+                  // STATO B/C: niente più da sbloccare → niente celebrazione, la leva
+                  // è la scadenza: countdown protagonista, prezzo garantito sotto.
+                  <div style={{ marginBottom:16, background:"#F0F9FF", border:"1px solid #BAE6FD", borderRadius:10, padding:"12px 14px", display:"flex", alignItems:"center", gap:10 }}>
+                    <Clock size={20} color="#0369A1" />
+                    <div>
+                      <div style={{ fontSize:15, fontWeight:800, color:C.text }}>{box.closeIso ? `Chiusura tra ${timeLeft(box.closeIso)}` : "In chiusura"}</div>
+                      <div style={{ fontSize:12.5, color:C.muted }}>
+                        {box.state === "B" ? `Prezzo bloccato ${eurKg(box.effective)}/kg — non può più peggiorare` : `Prezzo ${eurKg(box.effective)}/kg`}
+                      </div>
+                    </div>
                   </div>
                 )}
                 <button className="bs-btn" onClick={() => { window.location.href = `/pool?id=${fp.id}`; }} style={{ width:"100%", justifyContent:"center" }}>Visualizza l'asta a ribasso <ArrowRight size={16} /></button>
@@ -595,7 +627,12 @@ export default function BulkStrikeLight() {
               { label:"Paesi coperti",      val:count.countries, suffix:"",  color:C.green },
             ].map(({ label, val, suffix, color }) => (
               <div key={label} style={{ textAlign:"center" }}>
-                <div className="bs-num" style={{ fontSize:40, fontWeight:800, color, letterSpacing:"-0.02em" }}>{val.toLocaleString("it-IT")}{suffix}</div>
+                {stats == null ? (
+                  // Skeleton pulsante finché i contatori reali non arrivano: mai "0"
+                  <div style={{ height:48, width:96, maxWidth:"80%", margin:"0 auto", background:"#E2E8F0", borderRadius:10, animation:"bs-pulse 1.2s ease-in-out infinite" }} />
+                ) : (
+                  <div className="bs-num" style={{ fontSize:40, fontWeight:800, color, letterSpacing:"-0.02em" }}>{val.toLocaleString("it-IT")}{suffix}</div>
+                )}
                 <div style={{ fontSize:13, color:C.muted, marginTop:4 }}>{label}</div>
               </div>
             ))}
@@ -611,7 +648,7 @@ export default function BulkStrikeLight() {
             <h2 className="bs-h2">Aste attive ora</h2>
             <p style={{ fontSize:15, color:C.muted, marginTop:8 }}>Risparmia fino al 20% rispetto ai prezzi singoli</p>
           </div>
-          <button onClick={() => { window.location.href = "/pool"; }} style={{ display:"flex", alignItems:"center", gap:6, color:C.blue, background:"none", border:"none", fontSize:14, fontWeight:600, cursor:"pointer" }}>
+          <button onClick={() => { window.location.href = "/pool"; }} style={{ display:"flex", alignItems:"center", gap:6, color:"#0369A1", background:"none", border:"none", fontSize:14, fontWeight:600, cursor:"pointer" }}>
             Vedi tutti <ChevronRight size={16} />
           </button>
         </div>
@@ -632,14 +669,16 @@ export default function BulkStrikeLight() {
             ))}
           </div>
         ) : top3.length === 0 ? (
-          // Nessuna asta attiva in piattaforma
+          // Stato vuoto: nessuna asta aperta → invito ad aprirne una
           <div style={{ border:`1px dashed ${C.border}`, borderRadius:16, padding:"40px 24px", textAlign:"center", color:C.muted }}>
-            <div style={{ fontSize:16, fontWeight:700, color:C.text, marginBottom:6 }}>Nessuna asta attiva in questo momento</div>
-            <div style={{ fontSize:14, marginBottom:16 }}>Apri tu la prossima asta a ribasso dalla pagina di un prodotto del catalogo.</div>
-            <button className="bs-btn" onClick={() => { window.location.href = "/catalogo"; }} style={{ display:"inline-flex" }}>Vai al catalogo <ArrowRight size={16} /></button>
+            <div style={{ fontSize:16, fontWeight:700, color:C.text, marginBottom:6 }}>Nessuna asta aperta in questo momento — proponi tu la prossima</div>
+            <div style={{ fontSize:14, marginBottom:16 }}>Apri un'asta a ribasso dalla pagina di un prodotto del catalogo: gli altri acquirenti potranno unirsi alla tua.</div>
+            <button className="bs-btn" onClick={() => { window.location.href = "/catalogo"; }} style={{ display:"inline-flex" }}>Apri la prossima asta <ArrowRight size={16} /></button>
           </div>
         ) : (
-          <div className="bs-grid-3" style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:20 }}>
+          // Griglia adattiva: con 1-2 aste le card si centrano e si allargano,
+          // niente colonne vuote (DAV-68).
+          <div className="bs-grid-3" style={{ display:"grid", gridTemplateColumns:`repeat(${Math.min(top3.length, 3)},minmax(0,1fr))`, gap:20, maxWidth: top3.length === 1 ? 560 : top3.length === 2 ? 940 : undefined, margin: top3.length < 3 ? "0 auto" : undefined }}>
             {top3.map(pool => {
               const b = deriveFeatured(pool);
               const cat = macroLabel(pool);
@@ -649,11 +688,16 @@ export default function BulkStrikeLight() {
                     <div>
                       <div style={{ display:"flex", gap:6, marginBottom:8, flexWrap:"wrap" }}>
                         {cat && <span style={{ background:"#EFF6FF", color:"#1D4ED8", borderRadius:4, padding:"2px 8px", fontSize:11, fontWeight:600 }}>{cat}</span>}
-                        {b.almost && <span style={{ background:"#FFF1F2", color:C.red, borderRadius:4, padding:"2px 8px", fontSize:11, fontWeight:600 }}>🔥 Quasi pieno</span>}
+                        {b.almost && <span style={{ background:"#FFF1F2", color:C.red, borderRadius:4, padding:"2px 8px", fontSize:11, fontWeight:600, display:"inline-flex", alignItems:"center", gap:4 }}><Flame size={11} /> Quasi pieno</span>}
                       </div>
                       <h3 style={{ fontSize:17, fontWeight:700, marginBottom:2, color:C.text }}>{pool.product_name}</h3>
-                      {/* niente grado/purezza inventati: solo il n° reale di fornitori in gara */}
-                      <p style={{ fontSize:13, color:C.muted }}>{pool.num_bids} {Number(pool.num_bids) === 1 ? "fornitore in gara" : "fornitori in gara"}</p>
+                      {/* niente grado/purezza inventati; mai "0 fornitori in gara":
+                          con zero offerte mostra il volume aggregato */}
+                      <p style={{ fontSize:13, color:C.muted }}>
+                        {Number(pool.num_bids) > 0
+                          ? `${pool.num_bids} ${Number(pool.num_bids) === 1 ? "fornitore in gara" : "fornitori in gara"}`
+                          : `${kgFmt(b.vol)} kg già aggregati`}
+                      </p>
                     </div>
                     <div style={{ textAlign:"right" }}>
                       <div style={{ display:"flex", alignItems:"center", gap:4, justifyContent:"flex-end", fontSize:12, color:C.muted }}>
@@ -674,7 +718,8 @@ export default function BulkStrikeLight() {
                       <div style={{ fontSize:11, color:C.muted }}>vs {eurKg(b.quick)}/kg</div>
                     </div>
                   </div>
-                  {b.barTarget ? (
+                  {b.state === "A" ? (
+                    // STATO A: c'è uno scaglione successivo → gap + prezzo target + barra
                     <div style={{ marginBottom:14 }}>
                       <div style={{ display:"flex", justifyContent:"space-between", marginBottom:5 }}>
                         <span style={{ fontSize:12, color:C.muted }}>Volume</span>
@@ -683,10 +728,22 @@ export default function BulkStrikeLight() {
                       <div className="bs-progress">
                         <div className="bs-progress-bar" style={{ background:b.pct>=80?`linear-gradient(90deg,${C.amber},${C.red})`:`linear-gradient(90deg,${C.blue},#22D3EE)`, width:`${b.pct}%` }} />
                       </div>
-                      <div style={{ fontSize:12, color:b.pct>=80?C.amber:C.muted, marginTop:4, textAlign:"right" }}>{b.pct}%</div>
+                      <div style={{ display:"flex", justifyContent:"space-between", marginTop:4 }}>
+                        <span style={{ fontSize:12, color:C.muted }}>Mancano {kgFmt(b.toNext)} kg → {eurKg(b.nextPrice)}/kg</span>
+                        <span style={{ fontSize:12, color:b.pct>=80?C.amber:C.muted }}>{b.pct}%</span>
+                      </div>
                     </div>
                   ) : (
-                    <div style={{ marginBottom:14, fontSize:12, color:C.blue, fontWeight:600 }}>🎉 Scaglione massimo raggiunto</div>
+                    // STATO B/C: niente da sbloccare → countdown protagonista, niente emoji
+                    <div style={{ marginBottom:14, background:"#F0F9FF", border:"1px solid #BAE6FD", borderRadius:10, padding:"10px 12px", display:"flex", alignItems:"center", gap:8 }}>
+                      <Clock size={16} color="#0369A1" />
+                      <div>
+                        <div style={{ fontSize:14, fontWeight:800, color:C.text }}>{b.closeIso ? `Chiusura tra ${timeLeft(b.closeIso)}` : "In chiusura"}</div>
+                        <div style={{ fontSize:12, color:C.muted }}>
+                          {b.state === "B" ? `Prezzo bloccato ${eurKg(b.effective)}/kg` : `Prezzo ${eurKg(b.effective)}/kg`}
+                        </div>
+                      </div>
+                    </div>
                   )}
                   <button className="bs-pool-btn" onClick={() => { window.location.href = `/pool?id=${pool.id}`; }}>Visualizza l'asta a ribasso <ArrowRight size={14} /></button>
                   <div style={{ textAlign:"center", fontSize:12, color:C.muted, margin:"8px 0" }}>oppure</div>
@@ -708,31 +765,44 @@ export default function BulkStrikeLight() {
               <p style={{ fontSize:15, color:C.muted, lineHeight:1.65, marginBottom:24 }}>
                 L'andamento dei prezzi delle materie prime, aggiornato di continuo. Per le materie prime agricole i dati provengono dalle fonti ufficiali (ISMEA, CUN Grano Duro).
               </p>
-              <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:24 }}>
-                {marketProducts.map(p => (
-                  <button key={p.id} className="bs-chart-tab" onClick={() => selectMarketProduct(p)}
-                    style={{ background:marketSel?.id===p.id?C.blue:"#fff", color:marketSel?.id===p.id?"#fff":C.muted, borderColor:marketSel?.id===p.id?C.blue:C.border }}>
-                    {p.name}
-                  </button>
-                ))}
-                {indexSectors.map(sec => (
-                  <button key={sec.nace_code} className="bs-chart-tab" onClick={() => selectIndexSector(sec)}
-                    style={{ background:indexSel?.nace_code===sec.nace_code?C.blue:"#fff", color:indexSel?.nace_code===sec.nace_code?"#fff":C.muted, borderColor:indexSel?.nace_code===sec.nace_code?C.blue:C.border }}>
-                    {NACE_SHORT[sec.nace_code] || sec.nace_code}
-                  </button>
-                ))}
+              {/* Due famiglie SEPARATE: prezzi reali €/kg vs indici PPI (numeri
+                  indice in base 100, non prezzi) — mai lo stesso trattamento visivo. */}
+              <div style={{ marginBottom:24 }}>
+                <div style={{ fontSize:10.5, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.08em", color:C.muted, marginBottom:6 }}>Prezzi di mercato €/kg</div>
+                <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:14 }}>
+                  {marketProducts.map(p => (
+                    <button key={p.id} className="bs-chart-tab" onClick={() => selectMarketProduct(p)}
+                      style={{ background:marketSel?.id===p.id?"#0369A1":"#fff", color:marketSel?.id===p.id?"#fff":C.muted, borderColor:marketSel?.id===p.id?"#0369A1":C.border }}>
+                      {p.name}
+                    </button>
+                  ))}
+                </div>
+                <div style={{ fontSize:10.5, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.08em", color:C.muted, marginBottom:6 }}>Indici di settore PPI · base 2021=100</div>
+                <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+                  {indexSectors.map(sec => (
+                    <button key={sec.nace_code} className="bs-chart-tab" onClick={() => selectIndexSector(sec)}
+                      title={`${sec.nace_label || sec.nace_code} · Fonte: ${sec.fonte || "Eurostat"}`}
+                      style={{ background:indexSel?.nace_code===sec.nace_code?"#0369A1":"#fff", color:indexSel?.nace_code===sec.nace_code?"#fff":C.muted, borderColor:indexSel?.nace_code===sec.nace_code?"#0369A1":C.border }}>
+                      {naceChipLabel(sec)}
+                    </button>
+                  ))}
+                </div>
               </div>
               <div style={{ display:"flex", alignItems:"baseline", gap:10, flexWrap:"wrap" }}>
                 <span className="bs-num" style={{ fontSize:42, fontWeight:800, color:C.blue }}>
-                  {lastPrice != null ? (showingIndex ? `Indice ${lastPrice.toFixed(1)}` : `€${lastPrice.toFixed(2)}`) : "—"}
+                  {lastPrice != null ? (showingIndex ? fmt1(lastPrice) : `€${fmt2(lastPrice)}`) : "—"}
                 </span>
-                <span style={{ fontSize:14, color:C.muted }}>{showingIndex ? "indice di settore · base 2021=100" : "/kg · prezzo di mercato"}</span>
+                <span style={{ fontSize:14, color:C.muted }}>{showingIndex ? "indice PPI · base 2021=100 (non un prezzo)" : "/kg · prezzo di mercato"}</span>
               </div>
-              {marketYtd != null && (
-                <div style={{ display:"flex", alignItems:"center", gap:4, fontSize:14, color:marketYtd<=0?C.green:C.red, marginTop:4 }}>
-                  {marketYtd<=0 && <TrendingDown size={14} />} {marketYtd>0?"+":""}{marketYtd.toFixed(1)}% da gennaio
+              {showingIndex ? (indexYoY != null && (
+                <div style={{ display:"flex", alignItems:"center", gap:4, fontSize:14, color:indexYoY<=0?C.green:C.red, marginTop:4 }}>
+                  {indexYoY<=0 && <TrendingDown size={14} />} {indexYoY>0?"+":""}{fmt1(indexYoY)}% anno su anno
                 </div>
-              )}
+              )) : (marketYtd != null && (
+                <div style={{ display:"flex", alignItems:"center", gap:4, fontSize:14, color:marketYtd<=0?C.green:C.red, marginTop:4 }}>
+                  {marketYtd<=0 && <TrendingDown size={14} />} {marketYtd>0?"+":""}{fmt1(marketYtd)}% da gennaio
+                </div>
+              ))}
             </div>
             <div>
               {showingReal && realSeries.length === 0 ? (
@@ -743,8 +813,8 @@ export default function BulkStrikeLight() {
                 <ResponsiveContainer width="100%" height={220}>
                   <LineChart data={chartData}>
                     <XAxis dataKey="t" tick={{ fill:C.muted, fontSize:12 }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fill:C.muted, fontSize:12, fontFamily:"JetBrains Mono" }} axisLine={false} tickLine={false} tickFormatter={v=> showingIndex ? Number(v).toFixed(0) : `€${v}`} domain={["auto","auto"]} />
-                    <Tooltip contentStyle={{ background:"#fff", border:`1px solid ${C.border}`, borderRadius:10 }} formatter={v=> showingIndex ? [Number(v).toFixed(1),"Indice"] : [`€${Number(v).toFixed(2)}/kg`,"Prezzo"]} />
+                    <YAxis tick={{ fill:C.muted, fontSize:12, fontFamily:"JetBrains Mono" }} axisLine={false} tickLine={false} tickFormatter={v=> showingIndex ? Number(v).toLocaleString("it-IT", { maximumFractionDigits:0 }) : `€${fmt2(v)}`} domain={["auto","auto"]} />
+                    <Tooltip contentStyle={{ background:"#fff", border:`1px solid ${C.border}`, borderRadius:10 }} formatter={v=> showingIndex ? [fmt1(v),"Indice PPI"] : [`€${fmt2(v)}/kg`,"Prezzo"]} />
                     <Line type="monotone" dataKey="v" stroke={C.blue} strokeWidth={2.5} dot={showingIndex ? false : { fill:C.blue, r:4, strokeWidth:0 }} activeDot={{ r:6 }} />
                   </LineChart>
                 </ResponsiveContainer>
@@ -775,7 +845,7 @@ export default function BulkStrikeLight() {
             <div style={{ display:"flex", gap:8, marginBottom:24, flexWrap:"wrap" }}>
               {["acquirente","fornitore"].map(tab => (
                 <button key={tab} className="bs-tab" onClick={() => setActiveTab(tab)}
-                  style={{ background:activeTab===tab?C.blue:"transparent", color:activeTab===tab?"#fff":C.muted, borderColor:activeTab===tab?C.blue:C.border }}>
+                  style={{ background:activeTab===tab?"#0369A1":"transparent", color:activeTab===tab?"#fff":C.muted, borderColor:activeTab===tab?"#0369A1":C.border }}>
                   {tab==="acquirente"?"Sono un Acquirente":"Sono un Fornitore"}
                 </button>
               ))}
@@ -825,7 +895,7 @@ export default function BulkStrikeLight() {
             </div>
             {/* Chat mockup */}
             <div style={{ background:"#fff", border:`1px solid ${C.border}`, borderRadius:16, overflow:"hidden", boxShadow:"0 4px 20px rgba(0,0,0,0.06)" }}>
-              <div style={{ display:"flex", alignItems:"center", gap:10, background:"#0EA5E9", padding:"14px 20px" }}>
+              <div style={{ display:"flex", alignItems:"center", gap:10, background:"#0369A1", padding:"14px 20px" }}>
                 <div style={{ width:32, height:32, borderRadius:"50%", background:"rgba(255,255,255,0.2)", display:"flex", alignItems:"center", justifyContent:"center" }}>
                   <Bot size={18} color="white" />
                 </div>
@@ -840,7 +910,7 @@ export default function BulkStrikeLight() {
                     <div style={{
                       maxWidth:"85%", padding:"10px 14px",
                       borderRadius:msg.u?"16px 16px 4px 16px":"16px 16px 16px 4px",
-                      background:msg.u?C.blue:"#F1F5F9",
+                      background:msg.u?"#0369A1":"#F1F5F9",
                       color:msg.u?"#fff":C.text,
                       fontSize:13, lineHeight:1.55, whiteSpace:"pre-line", wordBreak:"break-word"
                     }}>{msg.t}</div>
@@ -853,9 +923,9 @@ export default function BulkStrikeLight() {
                   onChange={e => setHeroChat(e.target.value)}
                   onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendHeroChat(); } }}
                   placeholder="Scrivi un messaggio..."
-                  style={{ flex:1, border:`1px solid ${C.border}`, borderRadius:8, padding:"9px 12px", fontSize:13, outline:"none", fontFamily:"Inter,system-ui" }} />
+                  style={{ flex:1, border:`1px solid ${C.border}`, borderRadius:8, padding:"9px 12px", fontSize:13, outline:"none", fontFamily:"inherit" }} />
                 <button onClick={sendHeroChat} disabled={!heroChat.trim()} aria-label="Invia all'assistente"
-                  style={{ background:C.blue, border:"none", borderRadius:8, width:36, cursor:heroChat.trim()?"pointer":"default", opacity:heroChat.trim()?1:0.5, color:"white", fontWeight:700, flexShrink:0 }}>↑</button>
+                  style={{ background:"#0369A1", border:"none", borderRadius:8, width:36, cursor:heroChat.trim()?"pointer":"default", opacity:heroChat.trim()?1:0.5, color:"white", fontWeight:700, flexShrink:0, display:"flex", alignItems:"center", justifyContent:"center" }}><ArrowUp size={16} /></button>
               </div>
             </div>
           </div>
@@ -873,7 +943,7 @@ export default function BulkStrikeLight() {
           </p>
           <div className="bs-cta-btns" style={{ display:"flex", gap:12, justifyContent:"center", flexWrap:"wrap" }}>
             <button className="bs-btn" onClick={() => { window.location.href = "/registrati"; }} style={{ fontSize:17, padding:"15px 32px" }}>Crea account gratis <ArrowRight size={20} /></button>
-            <button onClick={() => { document.getElementById("come-funziona")?.scrollIntoView({ behavior:"smooth" }); }} style={{ background:"transparent", color:"#F0F6FF", border:"1px solid #1A3454", borderRadius:10, padding:"15px 24px", fontSize:16, fontWeight:600, cursor:"pointer", fontFamily:"Inter,system-ui" }}>Guarda come funziona</button>
+            <button onClick={() => { document.getElementById("come-funziona")?.scrollIntoView({ behavior:"smooth" }); }} style={{ background:"transparent", color:"#F0F6FF", border:"1px solid #1A3454", borderRadius:10, padding:"15px 24px", fontSize:16, fontWeight:600, cursor:"pointer", fontFamily:"inherit" }}>Guarda come funziona</button>
           </div>
         </div>
       </div>
@@ -891,7 +961,7 @@ export default function BulkStrikeLight() {
           <p style={{ fontSize:16, lineHeight:1.6, color:"#475569", marginBottom:26, maxWidth:640, marginLeft:"auto", marginRight:"auto" }}>
             Ordini generati in automatico in base alle tue scadenze e necessità di produzione. È una funzione <b>in arrivo</b>: richiedi l'accesso anticipato per essere tra i primi quando sarà disponibile.
           </p>
-          <a href="mailto:info@bulkstrike.com?subject=Accesso%20anticipato%20integrazione%20gestionale%20BulkStrike" style={{ display:"inline-flex", alignItems:"center", gap:8, background:"#0EA5E9", color:"#fff", fontSize:16, fontWeight:700, padding:"14px 28px", borderRadius:10, textDecoration:"none" }}>
+          <a href="mailto:info@bulkstrike.com?subject=Accesso%20anticipato%20integrazione%20gestionale%20BulkStrike" style={{ display:"inline-flex", alignItems:"center", gap:8, background:"#0369A1", color:"#fff", fontSize:16, fontWeight:700, padding:"14px 28px", borderRadius:10, textDecoration:"none" }}>
             Richiedi accesso anticipato <ArrowRight size={18} />
           </a>
         </div>

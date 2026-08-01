@@ -63,7 +63,7 @@ function RegionPicker({ value, onChange }) {
               {r}
             </label>
           ))}
-          <button onClick={() => setOpen(false)} style={{ marginTop: 6, width: "100%", background: C.blue, color: "#fff", border: "none", borderRadius: 6, padding: "6px", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "Inter,system-ui" }}>Fatto</button>
+          <button onClick={() => setOpen(false)} style={{ marginTop: 6, width: "100%", background: "#0369A1", color: "#fff", border: "none", borderRadius: 6, padding: "6px", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "Inter,system-ui" }}>Fatto</button>
         </div>
       )}
     </div>
@@ -258,7 +258,7 @@ export default function CarrierProfilePage({ inShell = false }) {
         ) : needLogin ? (
           <div style={{ padding: "40px 20px", textAlign: "center", border: `1px solid ${C.border}`, borderRadius: 14 }}>
             <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 12 }}>Accedi per registrarti come corriere</div>
-            <button onClick={() => { window.location.href = "/login"; }} style={{ background: C.blue, color: "#fff", border: "none", borderRadius: 9, padding: "11px 24px", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "Inter,system-ui" }}>Accedi</button>
+            <button onClick={() => { window.location.href = "/login"; }} style={{ background: "#0369A1", color: "#fff", border: "none", borderRadius: 9, padding: "11px 24px", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "Inter,system-ui" }}>Accedi</button>
           </div>
         ) : !profile?.is_carrier ? (
           <div className="cp-card">
@@ -277,7 +277,7 @@ export default function CarrierProfilePage({ inShell = false }) {
               </div>
             </div>
 
-            <button onClick={activate} disabled={saving} style={{ background: C.blue, color: "#fff", border: "none", borderRadius: 10, padding: "12px 24px", fontSize: 14, fontWeight: 700, cursor: saving ? "default" : "pointer", opacity: saving ? 0.6 : 1, fontFamily: "Inter,system-ui" }}>
+            <button onClick={activate} disabled={saving} style={{ background: "#0369A1", color: "#fff", border: "none", borderRadius: 10, padding: "12px 24px", fontSize: 14, fontWeight: 700, cursor: saving ? "default" : "pointer", opacity: saving ? 0.6 : 1, fontFamily: "Inter,system-ui" }}>
               {saving ? "Attivazione…" : "Attiva profilo corriere"}
             </button>
           </div>
@@ -398,7 +398,7 @@ export default function CarrierProfilePage({ inShell = false }) {
                 {pricingMode === "distance" && <div><span style={labelStyle}>€/km</span><input type="number" step="0.01" value={rateForm.perKmFee} onChange={e => setRateForm({ ...rateForm, perKmFee: e.target.value })} style={inputStyle} /></div>}
                 <div><span style={labelStyle}>Tariffa aggiuntiva €/kg</span><input type="number" step="0.01" value={rateForm.perKgFee} onChange={e => setRateForm({ ...rateForm, perKgFee: e.target.value })} style={inputStyle} /></div>
                 </div>
-                <button onClick={addRate} disabled={rateBusy} style={{ width: "100%", background: C.blue, color: "#fff", border: "none", borderRadius: 8, padding: "11px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, fontSize: 14, fontWeight: 700, fontFamily: "Inter,system-ui" }}><Plus size={15} /> {rateForm.id ? "Salva modifica" : "Aggiungi tariffa"}</button>
+                <button onClick={addRate} disabled={rateBusy} style={{ width: "100%", background: "#0369A1", color: "#fff", border: "none", borderRadius: 8, padding: "11px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, fontSize: 14, fontWeight: 700, fontFamily: "Inter,system-ui" }}><Plus size={15} /> {rateForm.id ? "Salva modifica" : "Aggiungi tariffa"}</button>
               </div>
             </div>
 
@@ -442,7 +442,7 @@ export default function CarrierProfilePage({ inShell = false }) {
                   <span style={labelStyle}>Costo €</span>
                   <input type="number" step="0.01" value={serviceForm.fee} onChange={e => setServiceForm({ ...serviceForm, fee: e.target.value })} style={inputStyle} />
                 </div>
-                <button onClick={() => addServiceFee()} disabled={serviceBusy || !serviceForm.selectedOption} style={{ background: C.blue, color: "#fff", border: "none", borderRadius: 8, padding: "9px 16px", cursor: "pointer", display: "flex", alignItems: "center", gap: 5, fontSize: 13, fontWeight: 700, fontFamily: "Inter,system-ui", opacity: !serviceForm.selectedOption ? 0.5 : 1 }}><Plus size={14} /> Aggiungi</button>
+                <button onClick={() => addServiceFee()} disabled={serviceBusy || !serviceForm.selectedOption} style={{ background: "#0369A1", color: "#fff", border: "none", borderRadius: 8, padding: "9px 16px", cursor: "pointer", display: "flex", alignItems: "center", gap: 5, fontSize: 13, fontWeight: 700, fontFamily: "Inter,system-ui", opacity: !serviceForm.selectedOption ? 0.5 : 1 }}><Plus size={14} /> Aggiungi</button>
               </div>
             </div>
 

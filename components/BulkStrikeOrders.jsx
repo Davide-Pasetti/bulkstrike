@@ -109,7 +109,7 @@ export default function OrdersPage({ inShell = false }) {
         ) : needLogin ? (
           <div style={{ padding:"50px 20px", textAlign:"center", border:`1px solid ${C.border}`, borderRadius:14 }}>
             <div style={{ fontSize:16, fontWeight:700, marginBottom:12 }}>Accedi per vedere i tuoi ordini</div>
-            <button onClick={() => { window.location.href = "/login"; }} style={{ background:C.blue, color:"#fff", border:"none", borderRadius:9, padding:"11px 24px", fontSize:14, fontWeight:700, cursor:"pointer", fontFamily:"Inter,system-ui" }}>Accedi</button>
+            <button onClick={() => { window.location.href = "/login"; }} style={{ background:"#0369A1", color:"#fff", border:"none", borderRadius:9, padding:"11px 24px", fontSize:14, fontWeight:700, cursor:"pointer", fontFamily:"Inter,system-ui" }}>Accedi</button>
           </div>
         ) : filtered.length === 0 ? (
           <div style={{ padding:"50px 20px", textAlign:"center", border:`1px solid ${C.border}`, borderRadius:14 }}>
@@ -118,7 +118,7 @@ export default function OrdersPage({ inShell = false }) {
             {orders.length === 0 && (
               <>
                 <div style={{ fontSize:14, color:C.muted, marginBottom:16 }}>Sfoglia il catalogo per il tuo primo acquisto.</div>
-                <button onClick={() => { window.location.href = "/catalogo"; }} style={{ background:C.blue, color:"#fff", border:"none", borderRadius:9, padding:"11px 24px", fontSize:14, fontWeight:700, cursor:"pointer", display:"inline-flex", alignItems:"center", gap:7, fontFamily:"Inter,system-ui" }}>Vai al catalogo <ArrowRight size={15}/></button>
+                <button onClick={() => { window.location.href = "/catalogo"; }} style={{ background:"#0369A1", color:"#fff", border:"none", borderRadius:9, padding:"11px 24px", fontSize:14, fontWeight:700, cursor:"pointer", display:"inline-flex", alignItems:"center", gap:7, fontFamily:"Inter,system-ui" }}>Vai al catalogo <ArrowRight size={15}/></button>
               </>
             )}
           </div>

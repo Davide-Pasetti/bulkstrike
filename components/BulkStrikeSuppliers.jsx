@@ -325,7 +325,7 @@ export default function SuppliersDirectory() {
             </div>
             )}
 
-            <button className="dir-filter-toggle" onClick={() => setShowFilters(false)} style={{ marginTop:16, width:"100%", justifyContent:"center", padding:"12px", borderRadius:9, border:"none", background:C.blue, color:"#fff", fontSize:14, fontWeight:700, cursor:"pointer" }}>
+            <button className="dir-filter-toggle" onClick={() => setShowFilters(false)} style={{ marginTop:16, width:"100%", justifyContent:"center", padding:"12px", borderRadius:9, border:"none", background:"#0369A1", color:"#fff", fontSize:14, fontWeight:700, cursor:"pointer" }}>
               Mostra {filtered.length} fornitori
             </button>
           </aside>

@@ -119,8 +119,8 @@ export default function WelcomeOverlay() {
         .bs-opt:hover { border-color:#0EA5E9; }
         .bs-opt.sel { border-color:#0EA5E9; background:#EFF6FF; }
         .bs-btn { border:none; border-radius:10px; padding:13px 20px; font-size:15px; font-weight:700; cursor:pointer; font-family:'Inter',system-ui; transition:all 0.2s; display:inline-flex; align-items:center; justify-content:center; gap:8px; }
-        .bs-primary { background:#0EA5E9; color:#fff; }
-        .bs-primary:hover { background:#0284C7; }
+        .bs-primary { background:#0369A1; color:#fff; }
+        .bs-primary:hover { background:#075985; }
         .bs-outline { background:#fff; color:#0F172A; border:1.5px solid #E2E8F0; }
         .bs-outline:hover { border-color:#0EA5E9; color:#0EA5E9; }
       `}</style>

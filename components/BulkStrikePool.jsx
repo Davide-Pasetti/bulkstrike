@@ -373,8 +373,8 @@ export default function PoolAuctionPage() {
         .bs-btn { background:#7C3AED; color:#fff; border:none; border-radius:10px; padding:14px 24px; font-size:16px; font-weight:700; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; gap:8px; transition:all 0.2s; font-family:'Inter',system-ui; }
         .bs-btn:hover:not(:disabled){ background:#6D28D9; transform:translateY(-1px); box-shadow:0 6px 20px rgba(124,58,237,0.3); }
         .bs-btn:disabled { background:#CBD5E1; cursor:not-allowed; }
-        .bs-btn-blue { background:#0EA5E9; }
-        .bs-btn-blue:hover { background:#0284C7; box-shadow:0 6px 20px rgba(14,165,233,0.3); }
+        .bs-btn-blue { background:#0369A1; }
+        .bs-btn-blue:hover { background:#075985; box-shadow:0 6px 20px rgba(3,105,161,0.3); }
         .bs-qty-btn { width:38px; height:38px; border:1px solid #E2E8F0; background:#fff; border-radius:8px; cursor:pointer; display:flex; align-items:center; justify-content:center; color:#475569; }
         .bs-qty-btn:hover { border-color:#7C3AED; color:#7C3AED; }
         .bs-chip { border-radius:6px; padding:3px 9px; font-size:11px; font-weight:600; display:inline-flex; align-items:center; gap:4px; }

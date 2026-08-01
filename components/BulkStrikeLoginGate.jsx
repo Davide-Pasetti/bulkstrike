@@ -17,7 +17,7 @@ export default function LoginGate({ title, subtitle }) {
       </div>
       <div style={{ fontSize: 17, fontWeight: 800, color: C.text, marginBottom: 6 }}>{title}</div>
       {subtitle && <div style={{ fontSize: 13.5, color: C.muted, lineHeight: 1.55, marginBottom: 18, maxWidth: 420, marginLeft: "auto", marginRight: "auto" }}>{subtitle}</div>}
-      <button onClick={() => { window.location.href = "/auth/login"; }} style={{ background: C.blue, color: "#fff", border: "none", borderRadius: 9, padding: "12px 28px", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "Inter,system-ui" }}>Accedi</button>
+      <button onClick={() => { window.location.href = "/auth/login"; }} style={{ background: "#0369A1", color: "#fff", border: "none", borderRadius: 9, padding: "12px 28px", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "Inter,system-ui" }}>Accedi</button>
       <div style={{ fontSize: 13, color: C.muted, marginTop: 14 }}>
         Non hai ancora un account?{" "}
         <span onClick={() => { window.location.href = "/registrati"; }} style={{ color: C.blue, fontWeight: 700, cursor: "pointer" }}>Registrati</span>

@@ -450,7 +450,7 @@ export default function CheckoutPage() {
             </div>
 
             <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
-              <button onClick={() => { window.location.href = "/ordini"; }} style={{ background: C.blue, color: "#fff", border: "none", borderRadius: 9, padding: "12px 22px", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "Inter,system-ui" }}>Vai ai miei ordini</button>
+              <button onClick={() => { window.location.href = "/ordini"; }} style={{ background: "#0369A1", color: "#fff", border: "none", borderRadius: 9, padding: "12px 22px", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "Inter,system-ui" }}>Vai ai miei ordini</button>
               <button onClick={() => { window.location.href = "/catalogo"; }} style={{ background: "transparent", color: C.blue, border: `1.5px solid ${C.blue}`, borderRadius: 9, padding: "12px 22px", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "Inter,system-ui" }}>Continua gli acquisti</button>
             </div>
           </div>
@@ -471,13 +471,13 @@ export default function CheckoutPage() {
         ) : needLogin ? (
           <div style={{ padding: "40px 20px", textAlign: "center", border: `1px solid ${C.border}`, borderRadius: 14 }}>
             <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 12 }}>Accedi per completare l'ordine</div>
-            <button onClick={() => { window.location.href = "/login"; }} style={{ background: C.blue, color: "#fff", border: "none", borderRadius: 9, padding: "11px 24px", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "Inter,system-ui" }}>Accedi</button>
+            <button onClick={() => { window.location.href = "/login"; }} style={{ background: "#0369A1", color: "#fff", border: "none", borderRadius: 9, padding: "11px 24px", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "Inter,system-ui" }}>Accedi</button>
           </div>
         ) : items.length === 0 ? (
           <div style={{ padding: "40px 20px", textAlign: "center", border: `1px solid ${C.border}`, borderRadius: 14 }}>
             <Package size={30} color={C.border} style={{ marginBottom: 10 }} />
             <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 12 }}>Il carrello è vuoto</div>
-            <button onClick={() => { window.location.href = "/catalogo"; }} style={{ background: C.blue, color: "#fff", border: "none", borderRadius: 9, padding: "11px 24px", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "Inter,system-ui" }}>Vai al catalogo</button>
+            <button onClick={() => { window.location.href = "/catalogo"; }} style={{ background: "#0369A1", color: "#fff", border: "none", borderRadius: 9, padding: "11px 24px", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "Inter,system-ui" }}>Vai al catalogo</button>
           </div>
         ) : (
           <>
@@ -539,7 +539,7 @@ export default function CheckoutPage() {
                       <input className="co-input" value={newAddrLabel} onChange={e => setNewAddrLabel(e.target.value)} placeholder="Es. Magazzino Nord, Deposito Ovest" style={{ marginBottom: 12 }} />
                       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                         <button onClick={saveNewAddress} disabled={savingAddress}
-                          style={{ background: C.blue, color: "#fff", border: "none", borderRadius: 9, padding: "10px 18px", fontSize: 13.5, fontWeight: 700, cursor: savingAddress ? "default" : "pointer", opacity: savingAddress ? 0.6 : 1, fontFamily: "Inter,system-ui", display: "inline-flex", alignItems: "center", gap: 6 }}>
+                          style={{ background: "#0369A1", color: "#fff", border: "none", borderRadius: 9, padding: "10px 18px", fontSize: 13.5, fontWeight: 700, cursor: savingAddress ? "default" : "pointer", opacity: savingAddress ? 0.6 : 1, fontFamily: "Inter,system-ui", display: "inline-flex", alignItems: "center", gap: 6 }}>
                           <Plus size={14} /> {savingAddress ? "Salvataggio…" : "Salva indirizzo"}
                         </button>
                         {(companyAddress || addresses.length > 0) && (
@@ -758,7 +758,7 @@ export default function CheckoutPage() {
                 </div>
 
                 <button onClick={confirmPayment} disabled={submitting || !payReady || !allMethodsChosen}
-                  style={{ width: "100%", background: C.blue, color: "#fff", border: "none", borderRadius: 10, padding: "14px 20px", fontSize: 15, fontWeight: 700, cursor: (submitting || !payReady || !allMethodsChosen) ? "default" : "pointer", opacity: (submitting || !payReady || !allMethodsChosen) ? 0.6 : 1, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8, fontFamily: "Inter,system-ui", marginBottom: 10 }}>
+                  style={{ width: "100%", background: "#0369A1", color: "#fff", border: "none", borderRadius: 10, padding: "14px 20px", fontSize: 15, fontWeight: 700, cursor: (submitting || !payReady || !allMethodsChosen) ? "default" : "pointer", opacity: (submitting || !payReady || !allMethodsChosen) ? 0.6 : 1, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8, fontFamily: "Inter,system-ui", marginBottom: 10 }}>
                   {submitting ? "Elaborazione…" : !payReady ? "Calcolo totale…" : <>Conferma e paga {grandTotalForDisplay != null ? eur(grandTotalForDisplay) : ""} <ArrowRight size={17} /></>}
                 </button>
                 {payReady && !allMethodsChosen && (

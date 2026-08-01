@@ -35,7 +35,7 @@ export default function NavAuth() {
     return (
       <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
         <a href="/auth/login" style={{ fontSize: 14, color: "#64748B", cursor: "pointer", fontWeight: 500, whiteSpace: "nowrap", textDecoration: "none" }}>Accedi</a>
-        <a href="/registrati" style={{ fontSize: 14, fontWeight: 700, color: "#fff", background: "#0EA5E9", padding: "9px 18px", borderRadius: 9, textDecoration: "none", whiteSpace: "nowrap" }}>Registrati</a>
+        <a href="/registrati" style={{ fontSize: 14, fontWeight: 700, color: "#fff", background: "#0369A1", padding: "9px 18px", borderRadius: 9, textDecoration: "none", whiteSpace: "nowrap" }}>Registrati</a>
       </div>
     );
   }
@@ -47,7 +47,7 @@ export default function NavAuth() {
       <a href="/carrello" title="Carrello" style={{ position: "relative", display: "flex", alignItems: "center", textDecoration: "none", color: "#64748B" }}>
         <ShoppingCart size={21} />
         {cartCount > 0 && (
-          <span style={{ position: "absolute", top: -7, right: -9, minWidth: 16, height: 16, padding: "0 4px", borderRadius: 100, background: "#0EA5E9", color: "#fff", fontSize: 10, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1 }}>
+          <span style={{ position: "absolute", top: -7, right: -9, minWidth: 16, height: 16, padding: "0 4px", borderRadius: 100, background: "#0369A1", color: "#fff", fontSize: 10, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1 }}>
             {cartCount > 9 ? "9+" : cartCount}
           </span>
         )}

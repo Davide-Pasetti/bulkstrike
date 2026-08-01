@@ -144,7 +144,7 @@ export default function PoolListPage() {
             <Gavel size={30} color={C.border} style={{ marginBottom: 10 }} />
             <div style={{ fontSize: 15, fontWeight: 600, color: C.text, marginBottom: 4 }}>{q ? "Nessuna asta trovata" : "Nessuna asta attiva in questo momento"}</div>
             <div style={{ fontSize: 13, marginBottom: 16 }}>{q ? "Prova con un altro nome o E-number." : "Puoi aprirne una dalla pagina di qualsiasi prodotto del catalogo."}</div>
-            <button onClick={() => { window.location.href = "/catalogo"; }} style={{ background: C.blue, color: "#fff", border: "none", borderRadius: 9, padding: "11px 20px", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "Inter,system-ui", display: "inline-flex", alignItems: "center", gap: 7 }}>
+            <button onClick={() => { window.location.href = "/catalogo"; }} style={{ background: "#0369A1", color: "#fff", border: "none", borderRadius: 9, padding: "11px 20px", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "Inter,system-ui", display: "inline-flex", alignItems: "center", gap: 7 }}>
               Vai al catalogo <ArrowRight size={15} />
             </button>
           </div>

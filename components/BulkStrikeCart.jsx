@@ -136,14 +136,14 @@ export default function CartPage() {
           <div style={{ padding: "50px 20px", textAlign: "center", border: `1px solid ${C.border}`, borderRadius: 14 }}>
             <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 6 }}>Accedi per vedere il tuo carrello</div>
             <div style={{ fontSize: 14, color: C.muted, marginBottom: 16 }}>Il carrello è legato al tuo account e ti segue su ogni dispositivo.</div>
-            <button onClick={() => { window.location.href = "/login"; }} style={{ background: C.blue, color: "#fff", border: "none", borderRadius: 9, padding: "11px 24px", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "Inter,system-ui" }}>Accedi</button>
+            <button onClick={() => { window.location.href = "/login"; }} style={{ background: "#0369A1", color: "#fff", border: "none", borderRadius: 9, padding: "11px 24px", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "Inter,system-ui" }}>Accedi</button>
           </div>
         ) : items.length === 0 ? (
           <div style={{ padding: "50px 20px", textAlign: "center", border: `1px solid ${C.border}`, borderRadius: 14 }}>
             <Package size={32} color={C.border} style={{ marginBottom: 10 }} />
             <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 6 }}>Il carrello è vuoto</div>
             <div style={{ fontSize: 14, color: C.muted, marginBottom: 16 }}>Sfoglia il catalogo o i listini dei fornitori per aggiungere materie prime.</div>
-            <button onClick={() => { window.location.href = "/catalogo"; }} style={{ background: C.blue, color: "#fff", border: "none", borderRadius: 9, padding: "11px 24px", fontSize: 14, fontWeight: 700, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 7, fontFamily: "Inter,system-ui" }}>Vai al catalogo <ArrowRight size={15} /></button>
+            <button onClick={() => { window.location.href = "/catalogo"; }} style={{ background: "#0369A1", color: "#fff", border: "none", borderRadius: 9, padding: "11px 24px", fontSize: 14, fontWeight: 700, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 7, fontFamily: "Inter,system-ui" }}>Vai al catalogo <ArrowRight size={15} /></button>
           </div>
         ) : (
           <div className="ct-layout">
@@ -236,7 +236,7 @@ export default function CartPage() {
                 </div>
               )}
               <button onClick={() => { window.location.href = "/checkout"; }} disabled={issues.length > 0 || items.length === 0}
-                style={{ width: "100%", justifyContent: "center", background: C.blue, color: "#fff", border: "none", borderRadius: 10, padding: "13px", fontSize: 14.5, fontWeight: 700, cursor: issues.length > 0 ? "default" : "pointer", opacity: issues.length > 0 ? 0.5 : 1, display: "flex", alignItems: "center", gap: 8, fontFamily: "Inter,system-ui" }}>
+                style={{ width: "100%", justifyContent: "center", background: "#0369A1", color: "#fff", border: "none", borderRadius: 10, padding: "13px", fontSize: 14.5, fontWeight: 700, cursor: issues.length > 0 ? "default" : "pointer", opacity: issues.length > 0 ? 0.5 : 1, display: "flex", alignItems: "center", gap: 8, fontFamily: "Inter,system-ui" }}>
                 Confronta i costi di spedizione <ArrowRight size={16} />
               </button>
               {/* Badge fiducia compatto (icona + 2 parole) — NON il paragrafo escrow

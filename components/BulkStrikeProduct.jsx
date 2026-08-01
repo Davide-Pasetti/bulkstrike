@@ -581,8 +581,8 @@ export default function ProductPage() {
         .bs-ticker { display:flex; width:max-content; animation:tick 45s linear infinite; }
         .bs-ticker:hover { animation-play-state:paused; }
         @keyframes tick { 0%{transform:translateX(0)} 100%{transform:translateX(-50%)} }
-        .bs-btn { background:#0EA5E9; color:#fff; border:none; border-radius:10px; padding:13px 24px; font-size:15px; font-weight:700; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; gap:8px; transition:all 0.2s; font-family:'Inter',system-ui; }
-        .bs-btn:hover { background:#0284C7; transform:translateY(-1px); box-shadow:0 6px 20px rgba(14,165,233,0.3); }
+        .bs-btn { background:#0369A1; color:#fff; border:none; border-radius:10px; padding:13px 24px; font-size:15px; font-weight:700; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; gap:8px; transition:all 0.2s; font-family:'Inter',system-ui; }
+        .bs-btn:hover { background:#075985; transform:translateY(-1px); box-shadow:0 6px 20px rgba(3,105,161,0.3); }
         .bs-btn-ghost { background:transparent; color:#0EA5E9; border:1.5px solid #E2E8F0; border-radius:8px; padding:10px 16px; font-size:14px; font-weight:600; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; gap:6px; transition:all 0.2s; font-family:'Inter',system-ui; }
         .bs-btn-ghost:hover { border-color:#0EA5E9; background:#EFF6FF; }
         .bs-chip { border-radius:6px; padding:3px 9px; font-size:11px; font-weight:600; display:inline-flex; align-items:center; gap:4px; }
@@ -594,7 +594,7 @@ export default function ProductPage() {
         .bs-supplier-row:hover { border-color:#0EA5E9; box-shadow:0 4px 16px rgba(14,165,233,0.08); }
         .bs-qty-btn { width:38px; height:38px; border:1px solid #E2E8F0; background:#fff; border-radius:8px; cursor:pointer; display:flex; align-items:center; justify-content:center; color:#475569; }
         .bs-qty-btn:hover { border-color:#0EA5E9; color:#0EA5E9; }
-        .bs-chatbot-btn { width:56px; height:56px; border-radius:50%; background:#0EA5E9; border:3px solid #fff; cursor:pointer; display:flex; align-items:center; justify-content:center; box-shadow:0 4px 20px rgba(14,165,233,0.4); }
+        .bs-chatbot-btn { width:56px; height:56px; border-radius:50%; background:#0369A1; border:3px solid #fff; cursor:pointer; display:flex; align-items:center; justify-content:center; box-shadow:0 4px 20px rgba(3,105,161,0.4); }
         .bs-spec-row { display:flex; justify-content:space-between; padding:10px 0; border-bottom:1px solid #F1F5F9; font-size:14px; }
         .bs-feature-grid { display:grid; grid-template-columns:1.4fr 1fr; gap:16px; align-items:center; }
         @media (max-width:880px){
@@ -754,7 +754,7 @@ export default function ProductPage() {
             <div style={{ border:`2px solid ${C.blue}`, borderRadius:16, padding:24, marginBottom:24, position:"relative", boxShadow:"0 8px 30px rgba(14,165,233,0.10)" }}>
               <div style={{ position:"absolute", top:-12, left:20, display:"flex", gap:8 }}>
                 {featured.id===cheapestId && <span style={{ background:C.green, color:"#fff", borderRadius:100, padding:"4px 12px", fontSize:12, fontWeight:700 }}>★ Più conveniente</span>}
-                {featured.id!==cheapestId && <span style={{ background:C.blue, color:"#fff", borderRadius:100, padding:"4px 12px", fontSize:12, fontWeight:700 }}>Selezionato da te</span>}
+                {featured.id!==cheapestId && <span style={{ background:"#0369A1", color:"#fff", borderRadius:100, padding:"4px 12px", fontSize:12, fontWeight:700 }}>Selezionato da te</span>}
               </div>
 
               <div style={{ display:"flex", justifyContent:"space-between", gap:16, flexWrap:"wrap", marginBottom:18 }}>

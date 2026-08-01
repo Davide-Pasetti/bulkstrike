@@ -104,7 +104,7 @@ export default function ProductSearch({
           placeholder={placeholder}
           style={{ flex: 1, border: "none", padding: "0 14px", fontSize: 14, outline: "none", color: C.text, fontFamily: "'Inter',system-ui", minWidth: 0, background: "#fff" }}
         />
-        <button onClick={submit} aria-label="Cerca" style={{ background: C.blue, border: "none", padding: "0 16px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <button onClick={submit} aria-label="Cerca" style={{ background: "#0369A1", border: "none", padding: "0 16px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
           <Search size={18} color="#fff" />
         </button>
       </div>

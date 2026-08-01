@@ -65,7 +65,7 @@ function PayinForm({ payin, index, count, onPaid, billing }) {
       <button
         onClick={pay}
         disabled={busy || !stripe || !elements}
-        style={{ width: "100%", marginTop: 14, background: C.blue, color: "#fff", border: "none", borderRadius: 10, padding: "14px", fontSize: 15, fontWeight: 700, cursor: busy ? "default" : "pointer", opacity: busy ? 0.6 : 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, fontFamily: "Inter,system-ui" }}
+        style={{ width: "100%", marginTop: 14, background: "#0369A1", color: "#fff", border: "none", borderRadius: 10, padding: "14px", fontSize: 15, fontWeight: 700, cursor: busy ? "default" : "pointer", opacity: busy ? 0.6 : 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, fontFamily: "Inter,system-ui" }}
       >
         {busy ? "Pagamento in corso…" : <>Paga {eurCents(payin.amountCents)} in garanzia <ArrowRight size={16} /></>}
       </button>

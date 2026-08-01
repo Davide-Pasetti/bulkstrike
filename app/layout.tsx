@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist } from "next/font/google";
+import { Inter } from "next/font/google";
 import { ThemeProvider } from "next-themes";
 import "./globals.css";
 
@@ -13,8 +13,11 @@ export const metadata: Metadata = {
   description: "Marketplace B2B ad asta inversa per materie prime sfuse. Aggrega la domanda, fa competere i fornitori al ribasso, zero commissioni. Da 1 kg a 50 tonnellate.",
 };
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+// Unica famiglia per body e titoli: Inter (Geist rimosso — troppo simile a Inter
+// per leggersi come scelta, e una richiesta font in meno). JetBrains Mono resta
+// solo per numeri tabellari/prezzi/codici, caricato dalle pagine che lo usano.
+const interSans = Inter({
+  variable: "--font-inter-sans",
   display: "swap",
   subsets: ["latin"],
 });
@@ -26,7 +29,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="it" suppressHydrationWarning>
-      <body className={`${geistSans.className} antialiased`}>
+      <body className={`${interSans.className} antialiased`}>
         <ThemeProvider
           attribute="class"
           defaultTheme="system"

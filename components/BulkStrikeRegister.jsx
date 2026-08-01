@@ -415,8 +415,8 @@ export default function RegisterPage() {
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
         * { box-sizing:border-box; }
         input:focus, select:focus { border-color:#0EA5E9 !important; box-shadow:0 0 0 3px rgba(14,165,233,0.12); }
-        .bs-btn { background:#0EA5E9; color:#fff; border:none; border-radius:10px; padding:13px 22px; font-size:15px; font-weight:700; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; gap:8px; font-family:'Inter',system-ui; transition:all 0.2s; }
-        .bs-btn:hover:not(:disabled){ background:#0284C7; }
+        .bs-btn { background:#0369A1; color:#fff; border:none; border-radius:10px; padding:13px 22px; font-size:15px; font-weight:700; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; gap:8px; font-family:'Inter',system-ui; transition:all 0.2s; }
+        .bs-btn:hover:not(:disabled){ background:#075985; }
         .bs-btn:disabled { background:#CBD5E1; cursor:not-allowed; }
         .bs-btn-out { background:#fff; color:#475569; border:1.5px solid #E2E8F0; border-radius:10px; padding:12px 20px; font-size:15px; font-weight:600; cursor:pointer; display:inline-flex; align-items:center; gap:8px; font-family:'Inter',system-ui; }
         .bs-btn-out:hover { border-color:#0EA5E9; color:#0EA5E9; }

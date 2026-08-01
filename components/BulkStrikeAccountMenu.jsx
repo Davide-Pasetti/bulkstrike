@@ -38,7 +38,7 @@ function Item({ href, icon: Icon, label, badge, danger, onClick, note }) {
         {note && <span style={{ display: "block", fontSize: 11, fontWeight: 400, color: C.muted, marginTop: 1 }}>{note}</span>}
       </span>
       {badge > 0 && (
-        <span style={{ minWidth: 18, height: 18, padding: "0 5px", borderRadius: 100, background: C.blue, color: "#fff", fontSize: 10.5, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1 }}>
+        <span style={{ minWidth: 18, height: 18, padding: "0 5px", borderRadius: 100, background: "#0369A1", color: "#fff", fontSize: 10.5, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1 }}>
           {badge > 99 ? "99+" : badge}
         </span>
       )}

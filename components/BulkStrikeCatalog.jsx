@@ -346,7 +346,7 @@ export default function CatalogPage() {
               </div>
             )}
 
-            <button className="cat-filter-toggle" onClick={() => setShowFilters(false)} style={{ marginTop: 18, width: "100%", justifyContent: "center", padding: "12px", borderRadius: 9, border: "none", background: C.blue, color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
+            <button className="cat-filter-toggle" onClick={() => setShowFilters(false)} style={{ marginTop: 18, width: "100%", justifyContent: "center", padding: "12px", borderRadius: 9, border: "none", background: "#0369A1", color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
               Mostra {filtered.length} risultati
             </button>
           </aside>

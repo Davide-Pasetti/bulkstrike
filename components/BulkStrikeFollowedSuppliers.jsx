@@ -70,14 +70,14 @@ export default function FollowedSuppliersPage({ inShell = false }) {
         ) : needLogin ? (
           <div style={{ padding: "40px 20px", textAlign: "center", border: `1px solid ${C.border}`, borderRadius: 14 }}>
             <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 12 }}>Accedi per vedere i tuoi fornitori preferiti</div>
-            <button onClick={() => { window.location.href = "/auth/login"; }} style={{ background: C.blue, color: "#fff", border: "none", borderRadius: 9, padding: "11px 24px", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "Inter,system-ui" }}>Accedi</button>
+            <button onClick={() => { window.location.href = "/auth/login"; }} style={{ background: "#0369A1", color: "#fff", border: "none", borderRadius: 9, padding: "11px 24px", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "Inter,system-ui" }}>Accedi</button>
           </div>
         ) : suppliers.length === 0 ? (
           <div style={{ padding: "48px 20px", textAlign: "center", border: `1px solid ${C.border}`, borderRadius: 14 }}>
             <Star size={30} color={C.border} style={{ marginBottom: 10 }} />
             <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>Non segui ancora nessun fornitore</div>
             <div style={{ fontSize: 13, color: C.muted, marginBottom: 16 }}>Apri il profilo di un fornitore dalla directory e premi &quot;Segui&quot;.</div>
-            <button onClick={() => { window.location.href = "/fornitori"; }} style={{ background: C.blue, color: "#fff", border: "none", borderRadius: 9, padding: "11px 24px", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "Inter,system-ui" }}>Esplora i fornitori</button>
+            <button onClick={() => { window.location.href = "/fornitori"; }} style={{ background: "#0369A1", color: "#fff", border: "none", borderRadius: 9, padding: "11px 24px", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "Inter,system-ui" }}>Esplora i fornitori</button>
           </div>
         ) : (
           <div className="fav-grid">

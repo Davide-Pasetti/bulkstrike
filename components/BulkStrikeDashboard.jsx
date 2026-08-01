@@ -126,7 +126,7 @@ function NotifRow({ n, onRead, compact }) {
         </div>
         <div style={{ fontSize:13, color:C.muted, lineHeight:1.5, marginBottom:8 }}>{n.text}</div>
         <div style={{ display:"flex", gap:8, alignItems:"center" }}>
-          <button style={{ background:C.blue, color:"#fff", border:"none", borderRadius:7, padding:"6px 13px", fontSize:12.5, fontWeight:700, cursor:"pointer", fontFamily:"Inter,system-ui", display:"flex", alignItems:"center", gap:5 }}>{n.action} <ChevronRight size={13}/></button>
+          <button style={{ background:"#0369A1", color:"#fff", border:"none", borderRadius:7, padding:"6px 13px", fontSize:12.5, fontWeight:700, cursor:"pointer", fontFamily:"Inter,system-ui", display:"flex", alignItems:"center", gap:5 }}>{n.action} <ChevronRight size={13}/></button>
           {n.unread && <button onClick={()=>onRead(n.id)} style={{ background:"none", border:"none", color:C.muted, fontSize:12, cursor:"pointer", fontFamily:"Inter,system-ui" }}>segna come letto</button>}
         </div>
       </div>
@@ -686,7 +686,7 @@ export default function Dashboard() {
               </div>
 
               <div style={{ display:"flex", gap:12, alignItems:"center" }}>
-                <button onClick={saveAccount} style={{ background:C.blue, color:"#fff", border:"none", borderRadius:10, padding:"12px 22px", fontSize:15, fontWeight:700, cursor:"pointer", fontFamily:"Inter,system-ui" }}>Salva modifiche</button>
+                <button onClick={saveAccount} style={{ background:"#0369A1", color:"#fff", border:"none", borderRadius:10, padding:"12px 22px", fontSize:15, fontWeight:700, cursor:"pointer", fontFamily:"Inter,system-ui" }}>Salva modifiche</button>
                 <button style={{ background:"#fff", color:C.muted, border:`1px solid ${C.border}`, borderRadius:10, padding:"12px 20px", fontSize:15, fontWeight:600, cursor:"pointer", fontFamily:"Inter,system-ui" }}>Annulla</button>
                 {acctSaved && <span style={{ color:C.green, fontSize:14, fontWeight:600, display:"flex", alignItems:"center", gap:5 }}><Check size={16}/> Salvato</span>}
               </div>
