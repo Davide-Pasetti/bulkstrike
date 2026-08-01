@@ -65,6 +65,10 @@ function Field({ icon, label, children, required, half }) {
 
 const inputStyle = { width:"100%", border:`1px solid ${C.border}`, borderRadius:9, padding:"11px 13px", fontSize:14, outline:"none", fontFamily:"Inter,system-ui", color:C.text, background:"#fff" };
 
+// Messaggio "email già registrata": costante così il render dello step 1 può
+// riconoscerlo e affiancargli il link al login, senza regex fragili sul testo.
+const EMAIL_TAKEN_MSG = "Questa email risulta già registrata.";
+
 function ChipSelect({ options, selected, onToggle }) {
   return (
     <div style={{ display:"flex", flexWrap:"wrap", gap:8 }}>
@@ -310,7 +314,9 @@ export default function RegisterPage() {
 
   async function goToCompanyStep() {
     setError(null);
-    setStep(2);
+    // NON avanzare allo step 2 prima che l'account esista: se signUp fallisce
+    // l'utente deve restare visibilmente sullo step 1, con l'errore sotto gli
+    // occhi, invece di un flash verso lo step 2 seguito da un rimbalzo indietro.
     if (!accountCreated) {
       try {
         await signUpAccount(f.email.trim(), f.pass);
@@ -318,14 +324,14 @@ export default function RegisterPage() {
       } catch (e) {
         const msg = String(e?.message || e);
         setError(/already|registered|exists/i.test(msg)
-          ? "Questa email risulta già registrata. Accedi invece di registrarti."
+          ? EMAIL_TAKEN_MSG
           : /password/i.test(msg)
           ? "La password non soddisfa i requisiti: usa almeno 12 caratteri."
           : "Non è stato possibile creare l'account. Riprova.");
-        setStep(1);
-        return;
+        return; // resta sullo step 1
       }
     }
+    setStep(2); // account creato (o già creato in questa sessione): ora si avanza
     setClaimLoading(true);
     try {
       const rows = await findClaimCandidates({
@@ -525,6 +531,16 @@ export default function RegisterPage() {
                     ))}
                   </div>
                 </div>
+
+                {/* Errore reale del signup (es. email già registrata): reso
+                    visibile QUI nello step 1 — prima veniva impostato ma mai
+                    mostrato, così "Continua" sembrava non fare nulla. */}
+                {error && (
+                  <div style={{ fontSize:13, color:C.red, marginTop:16 }}>
+                    {error}
+                    {error === EMAIL_TAKEN_MSG && <> <a href="/auth/login" style={{ color:C.blue, fontWeight:700, textDecoration:"underline" }}>Accedi</a></>}
+                  </div>
+                )}
               </>
             )}
 
