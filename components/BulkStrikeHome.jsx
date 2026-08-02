@@ -15,23 +15,25 @@ import { BSIcon } from "@/components/BSLogo";
 // Icone Lucide per le macro-aree (chiave = slug dal DB). Niente emoji: rendering
 // identico su ogni OS e allineamento tipografico corretto (DAV-68).
 // Slug allineati allo split 13→16 di DAV-71 (verificati sul DB il 02/08/2026).
+// Ogni icona ha il colore naturale del suo soggetto (spiga dorata, foglia
+// verde, vino bordeaux…); quando la tile è selezionata l'icona diventa bianca.
 const MACRO_ICONS = {
-  "agricoltura-ambiente":            Sprout,
-  "alimentare-ingredienti":          Wheat,
-  "carta-imballaggio":               Package,
-  "ceramica-vetro":                  Grid3x3,
-  "chimica-solventi-gas":            FlaskConical,
-  "cosmetica-detergenza-igiene":     SprayCan,
-  "edilizia-costruzioni":            Building2,
-  "energia-lubrificanti":            Fuel,
-  "enologia-bevande":                Wine,
-  "farmaceutica-nutraceutica":       Pill,
-  "mangimi-zootecnia":               Beef,
-  "metalli-fonderia":                Anvil,
-  "plastiche-gomma-compositi":       Recycle,
-  "tessile-concia-cuoio":            Shirt,
-  "trattamenti-saldatura":           Zap,
-  "vernici-inchiostri-rivestimenti": Palette,
+  "agricoltura-ambiente":            { Ico: Sprout,       color: "#16A34A" }, // foglia verde
+  "alimentare-ingredienti":          { Ico: Wheat,        color: "#CA8A04" }, // spiga dorata/marroncina
+  "carta-imballaggio":               { Ico: Package,      color: "#92400E" }, // cartone marrone
+  "ceramica-vetro":                  { Ico: Grid3x3,      color: "#0891B2" }, // azzurro vetro
+  "chimica-solventi-gas":            { Ico: FlaskConical, color: "#7C3AED" }, // viola laboratorio
+  "cosmetica-detergenza-igiene":     { Ico: SprayCan,     color: "#DB2777" }, // rosa cosmetica
+  "edilizia-costruzioni":            { Ico: Building2,    color: "#57534E" }, // grigio cemento
+  "energia-lubrificanti":            { Ico: Fuel,         color: "#EA580C" }, // arancio carburante
+  "enologia-bevande":                { Ico: Wine,         color: "#9F1239" }, // bordeaux vino
+  "farmaceutica-nutraceutica":       { Ico: Pill,         color: "#DC2626" }, // rosso farmaco
+  "mangimi-zootecnia":               { Ico: Beef,         color: "#78350F" }, // marrone carne
+  "metalli-fonderia":                { Ico: Anvil,        color: "#52525B" }, // grigio ferro
+  "plastiche-gomma-compositi":       { Ico: Recycle,      color: "#0D9488" }, // teal riciclo
+  "tessile-concia-cuoio":            { Ico: Shirt,        color: "#4F46E5" }, // indaco tessuto
+  "trattamenti-saldatura":           { Ico: Zap,          color: "#D97706" }, // ambra scintilla
+  "vernici-inchiostri-rivestimenti": { Ico: Palette,      color: "#C026D3" }, // fucsia pigmento
 };
 // Blu petrolio del design system: il fondo del logo ufficiale (BSLogo, gradiente
 // #0D2137→#0C4A6E). Diverso dallo sky-700 dei pulsanti primari (DAV-72).
@@ -522,11 +524,11 @@ export default function BulkStrikeLight() {
           <div className="bs-cats">
             {macros.map(m => {
               const on = activeMacro?.id === m.id;
-              const Ico = MACRO_ICONS[m.slug] || Package;
+              const { Ico, color } = MACRO_ICONS[m.slug] || { Ico: Package, color: PETROL };
               return (
                 <div key={m.id} className={`bs-cat${on?" active":""}`}
                      onClick={() => { const next = on ? null : m; setActiveMacro(next); setActiveSector(null); setSectorProducts([]); }}>
-                  <Ico size={22} strokeWidth={1.8} color={on ? "#fff" : PETROL} />
+                  <Ico size={22} strokeWidth={1.8} color={on ? "#fff" : color} />
                   <span className="bs-cat-label" style={{ fontSize:12.5, color:on?"#fff":"#0F172A", textAlign:"center", fontWeight:on?700:500 }}>
                     {m.name}
                   </span>
