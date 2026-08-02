@@ -852,7 +852,9 @@ export default function BulkStrikeLight() {
       {/* ── PRICE CHARTS ── */}
       <div style={{ background:C.bg, borderTop:`1px solid ${C.border}`, borderBottom:`1px solid ${C.border}` }}>
         <div className="bs-section">
-          <div className="bs-grid-2" style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:56, alignItems:"start" }}>
+          {/* align center: il grafico si centra sull'altezza della colonna testo
+              anche quando questa cresce (es. etichetta "Dai tuoi preferiti") — DAV-70 */}
+          <div className="bs-grid-2" style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:56, alignItems:"center" }}>
             <div>
               <div className="bs-label">Market Intelligence</div>
               <h2 className="bs-h2" style={{ marginBottom:12 }}>Andamento prezzi in tempo reale</h2>
