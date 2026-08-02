@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
-import { Bot, ArrowRight, ArrowUp, BarChart3, Check, Clock, ChevronRight, TrendingDown, ChevronDown, Flame, Wine, Beef, Pill, SprayCan, FlaskConical, Palette, Recycle, Cog, Building2, Package, Shirt, Fuel, Sprout } from "lucide-react";
+import { Bot, ArrowRight, ArrowUp, BarChart3, Check, Clock, ChevronRight, TrendingDown, Flame, Wine, Beef, Pill, SprayCan, FlaskConical, Palette, Recycle, Building2, Package, Shirt, Fuel, Sprout, Wheat, Grid3x3, Anvil, Zap } from "lucide-react";
 import { getMacroAreas, getMacroAreasCached, getSectorProducts, getActivePools, getMyFollowedProducts, getSession, getMarketPriceSeries, getMarketIndexSectors, getMarketSelectorNav, getWatchedMaterials, getMyOrdersHistory, getMyFollowedSectors, getHomepageStats, getPriceTicker } from "@/lib/api";
 import { ytdChange } from "@/lib/priceTrend";
 import { TIERS, tierIndexFor, tierFor } from "@/lib/tiers";
@@ -14,21 +14,28 @@ import { BSIcon } from "@/components/BSLogo";
 
 // Icone Lucide per le macro-aree (chiave = slug dal DB). Niente emoji: rendering
 // identico su ogni OS e allineamento tipografico corretto (DAV-68).
+// Slug allineati allo split 13→16 di DAV-71 (verificati sul DB il 02/08/2026).
 const MACRO_ICONS = {
-  "alimentare-bevande":              Wine,
-  "mangimi-zootecnia":               Beef,
-  "farmaceutica-nutraceutica":       Pill,
-  "cosmetica-detergenza-igiene":     SprayCan,
-  "chimica-solventi-gas":            FlaskConical,
-  "vernici-inchiostri-rivestimenti": Palette,
-  "plastiche-gomma-compositi":       Recycle,
-  "metalli-metalmeccanica":          Cog,
-  "edilizia-ceramica-vetro":         Building2,
-  "carta-imballaggio":               Package,
-  "tessile-concia-cuoio":            Shirt,
-  "energia-lubrificanti":            Fuel,
   "agricoltura-ambiente":            Sprout,
+  "alimentare-ingredienti":          Wheat,
+  "carta-imballaggio":               Package,
+  "ceramica-vetro":                  Grid3x3,
+  "chimica-solventi-gas":            FlaskConical,
+  "cosmetica-detergenza-igiene":     SprayCan,
+  "edilizia-costruzioni":            Building2,
+  "energia-lubrificanti":            Fuel,
+  "enologia-bevande":                Wine,
+  "farmaceutica-nutraceutica":       Pill,
+  "mangimi-zootecnia":               Beef,
+  "metalli-fonderia":                Anvil,
+  "plastiche-gomma-compositi":       Recycle,
+  "tessile-concia-cuoio":            Shirt,
+  "trattamenti-saldatura":           Zap,
+  "vernici-inchiostri-rivestimenti": Palette,
 };
+// Blu petrolio del design system: il fondo del logo ufficiale (BSLogo, gradiente
+// #0D2137→#0C4A6E). Diverso dallo sky-700 dei pulsanti primari (DAV-72).
+const PETROL = "#0C4A6E";
 
 // ─── FORMATTER + LOGICA ASTA IN EVIDENZA ─────────────────────────────────────
 const eurKg = (n) => "€" + Number(n).toLocaleString("it-IT", { minimumFractionDigits:2, maximumFractionDigits:2 });
@@ -128,7 +135,6 @@ function CookieBanner() {
 }
 
 export default function BulkStrikeLight() {
-  const [sectorsExpanded, setSectorsExpanded] = useState(false); // solo mobile: mostra tutte le icone settore
   const [activeTab, setActiveTab]   = useState("acquirente");
   const [count, setCount]           = useState({ pools:0, materials:0, countries:0, suppliers:0 });
   const [stats, setStats]           = useState(null); // contatori reali (get_homepage_stats)
@@ -415,13 +421,14 @@ export default function BulkStrikeLight() {
         .bs-ticker:hover { animation-play-state:paused; }
         @keyframes tick { 0%{transform:translateX(0)} 100%{transform:translateX(-50%)} }
         .bs-num { font-family:'JetBrains Mono',monospace; }
-        .bs-cats { display:flex; gap:12px; overflow-x:auto; padding:20px 24px; scrollbar-width:none; }
-        .bs-cats::-webkit-scrollbar { display:none; }
-        .bs-cat { display:flex; flex-direction:column; align-items:center; gap:8px; cursor:pointer; flex-shrink:0; width:88px; transition:transform 0.15s; }
-        .bs-cat:hover { transform:translateY(-2px); }
+        /* DAV-72: griglia wrap (8x2 desktop, 4x4 mobile) al posto dello scroll
+           orizzontale — tutte le 16 macro-aree sempre visibili, niente tagli.
+           Tile a 3 toni: bianco / nero / blu petrolio (#0C4A6E, dal logo). */
+        .bs-cats { display:grid; grid-template-columns:repeat(8,minmax(0,1fr)); gap:10px 12px; padding:20px 24px; }
+        .bs-cat { display:flex; flex-direction:column; align-items:center; justify-content:flex-start; gap:7px; cursor:pointer; background:#fff; border:1px solid #E2E8F0; border-radius:12px; padding:12px 6px 10px; transition:all 0.15s; }
+        .bs-cat:hover { transform:translateY(-2px); border-color:#0C4A6E; }
+        .bs-cat.active { background:#0C4A6E; border-color:#0C4A6E; }
         .bs-cat-label { text-align:center; line-height:1.25; display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden; }
-        .bs-cat-icon { width:56px; height:56px; border-radius:14px; display:flex; align-items:center; justify-content:center; border:1.5px solid; transition:all 0.15s; }
-        .bs-cat.active .bs-cat-icon { outline:2px solid #0369A1; outline-offset:2px; }
         .bs-section { max-width:1280px; margin:0 auto; padding:64px 24px; }
         .bs-card { background:#FFFFFF; border:1px solid ${C.border}; border-radius:16px; padding:24px; transition:box-shadow 0.2s,transform 0.2s; }
         .bs-card:hover { box-shadow:0 8px 32px rgba(14,165,233,0.10); transform:translateY(-2px); }
@@ -447,7 +454,6 @@ export default function BulkStrikeLight() {
         .bs-hamburger-btn { display:none; background:none; border:none; cursor:pointer; padding:6px; margin:-6px; flex-shrink:0; }
         .bs-search-mobile-row { display:none; }
         .bs-mobile-menu-panel { display:none; }
-        .bs-cats-expand-btn { display:none; }
         @media (max-width:768px) {
           .bs-grid-2 { grid-template-columns:1fr !important; gap:32px !important; }
           .bs-grid-3 { grid-template-columns:1fr !important; }
@@ -464,12 +470,8 @@ export default function BulkStrikeLight() {
           .bs-search-desktop { display:none !important; }
           .bs-search-mobile-row { display:block !important; padding:10px 16px 14px; border-top:1px solid ${C.border}; }
           .bs-mobile-menu-panel { display:block !important; border-top:1px solid ${C.border}; background:#fff; }
-          .bs-cats { flex-wrap:wrap !important; overflow:hidden !important; max-height:140px; gap:8px !important; padding:16px 16px 0 16px !important; }
-          .bs-cats.expanded { max-height:none !important; }
-          .bs-cat { width:calc((100% - 24px) / 4) !important; }
-          .bs-cat-icon { width:100% !important; height:auto !important; aspect-ratio:1/1; border-radius:12px !important; }
+          .bs-cats { grid-template-columns:repeat(4,minmax(0,1fr)) !important; gap:8px !important; padding:16px !important; }
           .bs-cat-label { font-size:12px !important; }
-          .bs-cats-expand-btn { display:flex !important; align-items:center; justify-content:center; width:100%; background:none; border:none; border-top:1px solid ${C.border}; padding:8px 0; cursor:pointer; }
         }
       `}</style>
 
@@ -515,28 +517,23 @@ export default function BulkStrikeLight() {
       {/* ── DISCOVERY a due livelli: macro-aree → sotto-aree → prodotti ── */}
       <div style={{ borderBottom:`1px solid ${C.border}`, background:"#fff" }}>
         <div style={{ maxWidth:1280, margin:"0 auto" }}>
-          {/* livello 1: macro-aree */}
-          <div className={`bs-cats${sectorsExpanded ? " expanded" : ""}`}>
+          {/* livello 1: macro-aree — griglia 8x2 (4x4 su mobile), tile a 3 toni:
+              non selezionata bianco/bordo grigio, selezionata blu petrolio pieno */}
+          <div className="bs-cats">
             {macros.map(m => {
               const on = activeMacro?.id === m.id;
               const Ico = MACRO_ICONS[m.slug] || Package;
               return (
                 <div key={m.id} className={`bs-cat${on?" active":""}`}
                      onClick={() => { const next = on ? null : m; setActiveMacro(next); setActiveSector(null); setSectorProducts([]); }}>
-                  <div className="bs-cat-icon" style={{ background:on?"#EFF6FF":"#F1F5F9", borderColor:on?"#0369A1":"#E2E8F0" }}>
-                    <Ico size={24} strokeWidth={1.8} color={on?"#0369A1":"#475569"} />
-                  </div>
-                  <span className="bs-cat-label" style={{ fontSize:12.5, color:on?"#0369A1":"#334155", textAlign:"center", fontWeight:on?700:500 }}>
+                  <Ico size={22} strokeWidth={1.8} color={on ? "#fff" : PETROL} />
+                  <span className="bs-cat-label" style={{ fontSize:12.5, color:on?"#fff":"#0F172A", textAlign:"center", fontWeight:on?700:500 }}>
                     {m.name}
                   </span>
                 </div>
               );
             })}
           </div>
-          {/* freccia per espandere tutte le categorie — solo mobile */}
-          <button className="bs-cats-expand-btn" onClick={() => setSectorsExpanded(e => !e)}>
-            <ChevronDown size={18} color={C.muted} style={{ transform: sectorsExpanded ? "rotate(180deg)" : "none", transition:"transform 0.2s" }}/>
-          </button>
 
           {/* livello 2: sotto-aree della macro selezionata */}
           {activeMacro && (

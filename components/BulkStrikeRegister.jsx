@@ -28,7 +28,9 @@ const ALL_MATERIALS = [...new Set(Object.values(SECTOR_PRODUCTS).flat())];
 // I settori senza corrispondenza non mostrano suggerimenti: resta la ricerca.
 function sectorSuggestionKey(macroSlug, sectorSlug) {
   if (sectorSlug === "enologia") return "Enologia / Vino";
-  if (macroSlug === "alimentare-bevande") return "Alimentare";
+  // Slug post-split DAV-71: "alimentare-bevande" è diventata "alimentare-ingredienti"
+  // + "enologia-bevande" (l'enologia ha già il suo caso specifico qui sopra).
+  if (macroSlug === "alimentare-ingredienti" || macroSlug === "enologia-bevande") return "Alimentare";
   if (macroSlug === "chimica-solventi-gas") return "Chimica";
   if (macroSlug === "cosmetica-detergenza-igiene") return "Cosmetica";
   if (macroSlug === "farmaceutica-nutraceutica") return "Farmaceutica";
