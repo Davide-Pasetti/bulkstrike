@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
-import { Bot, ArrowRight, ArrowUp, Check, Clock, ChevronRight, TrendingDown, ChevronDown, Flame, Wine, Beef, Pill, SprayCan, FlaskConical, Palette, Recycle, Cog, Building2, Package, Shirt, Fuel, Sprout } from "lucide-react";
-import { getMacroAreas, getMacroAreasCached, getSectorProducts, getActivePools, getMyFollowedProducts, getSession, getProductsWithMarketPrices, getMarketPriceSeries, getMarketIndexSectors, getHomepageStats } from "@/lib/api";
+import { Bot, ArrowRight, ArrowUp, BarChart3, Check, Clock, ChevronRight, TrendingDown, ChevronDown, Flame, Wine, Beef, Pill, SprayCan, FlaskConical, Palette, Recycle, Cog, Building2, Package, Shirt, Fuel, Sprout } from "lucide-react";
+import { getMacroAreas, getMacroAreasCached, getSectorProducts, getActivePools, getMyFollowedProducts, getSession, getProductsWithMarketPrices, getMarketPriceSeries, getMarketIndexSectors, getHomepageStats, getPriceTicker } from "@/lib/api";
 import { ytdChange } from "@/lib/priceTrend";
 import { TIERS, tierIndexFor, tierFor } from "@/lib/tiers";
 import BulkStrikeNav from "@/components/BulkStrikeNav";
@@ -72,18 +72,15 @@ function deriveFeatured(fp) {
   return { vol, barTarget, pct, toNext, nextPrice, state, effective, quick, savingsPct, almost, closeIso };
 }
 
-const TICKER = [
-  { name:"Acido Citrico E330", price:"€0,81", change:-2.3 },
-  { name:"Polipropilene GP",   price:"€1,12", change:+1.4 },
-  { name:"Carbonato di Calcio",price:"€0,29", change:+3.1 },
-  { name:"Acido Solforico 98%",price:"€0,22", change:-0.8 },
-  { name:"Bicarbonato di Sodio",price:"€0,41",change:-1.5 },
-  { name:"Ossido di Zinco",    price:"€2,45", change:+2.8 },
-  { name:"Acido Acetico 99%",  price:"€0,67", change:-0.4 },
-  { name:"Etanolo 96%",        price:"€0,58", change:+1.9 },
-  { name:"Glicerina USP",      price:"€0,72", change:-0.2 },
-  { name:"Cloruro di Sodio",   price:"€0,18", change:+0.5 },
-];
+// Ticker homepage: indici settoriali Eurostat (PPI, base 2021=100) per prodotto
+// rappresentativo, MAI prezzi reali €/kg — get_price_ticker() / DAV-67.
+function monthLabel(iso) {
+  if (!iso) return "";
+  const [y, m] = String(iso).slice(0, 7).split("-");
+  const MESI = ["gen","feb","mar","apr","mag","giu","lug","ago","set","ott","nov","dic"];
+  const idx = Number(m) - 1;
+  return idx >= 0 && idx < 12 ? `${MESI[idx]} ${y}` : String(iso);
+}
 
 const BUYER_STEPS  = [
   { n:"01", title:"Cerca la materia prima",  desc:"Digita il prodotto o descrivi cosa cerchi. L'AI trova il prodotto esatto nella tassonomia BulkStrike." },
@@ -150,6 +147,11 @@ export default function BulkStrikeLight() {
   // Indici settoriali Eurostat (metalli/plastica/chimica): tendenza, non €/kg.
   const [indexSectors, setIndexSectors]     = useState([]);    // [{nace_code,nace_label,series,...}]
   const [indexSel, setIndexSel]             = useState(null);  // sector selezionato | null
+  // Ticker tape in testa alla homepage: indici settoriali Eurostat (PPI) per
+  // prodotto (get_price_ticker), non prezzi reali €/kg — DAV-67.
+  // null = in caricamento (la fascia resta visibile, niente salto di layout);
+  // [] = vuoto/errore confermato → la fascia sparisce.
+  const [tickerData, setTickerData]         = useState(null);
   // Box hero AI: il campo di testo è un "innesco" verso l'assistente vero (widget
   // flottante). Scrivendo e inviando qui, si apre il widget con il messaggio già inviato.
   const chatWidgetRef = useRef(null);
@@ -206,6 +208,7 @@ export default function BulkStrikeLight() {
   // (metalli/plastica/chimica): i tab del grafico Market Intelligence, tutti reali.
   useEffect(() => { getProductsWithMarketPrices().then(setMarketProducts).catch(() => {}); }, []);
   useEffect(() => { getMarketIndexSectors().then(setIndexSectors).catch(() => {}); }, []);
+  useEffect(() => { getPriceTicker(12).then(d => setTickerData(d || [])).catch(() => setTickerData([])); }, []);
 
   // Seleziona un prodotto agri reale → carica la sua serie €/kg.
   const selectMarketProduct = (p) => {
@@ -400,23 +403,41 @@ export default function BulkStrikeLight() {
       {/* ── NAVBAR ── */}
       <BulkStrikeNav />
 
-      {/* ── TICKER TAPE ── */}
-      <div style={{ background:"#07111E", borderBottom:`1px solid #1A3454`, padding:"10px 0" }}>
-        <div className="bs-ticker-wrap">
-          <div className="bs-ticker">
-            {[...TICKER,...TICKER].map((item,i) => (
-              <div key={i} style={{ display:"flex", alignItems:"center", gap:8, padding:"0 24px", whiteSpace:"nowrap" }}>
-                <span style={{ fontSize:13, color:"#6B94B8" }}>{item.name}</span>
-                <span className="bs-num" style={{ fontSize:13, fontWeight:600, color:"#F0F6FF" }}>{item.price}/kg</span>
-                <span className="bs-num" style={{ fontSize:12, color:item.change>=0?"#10B981":"#F43F5E" }}>
-                  {item.change>=0?"▲":"▼"} {Math.abs(item.change)}%
-                </span>
-                <span style={{ color:"#1A3454", margin:"0 4px" }}>·</span>
+      {/* ── TICKER TAPE: indici settoriali Eurostat (PPI), MAI prezzi reali €/kg ── */}
+      {(tickerData == null || tickerData.length > 0) && (
+        <div style={{ background:"#07111E", borderBottom:`1px solid #1A3454`, padding:"10px 0", display:"flex", alignItems:"center" }}>
+          <div style={{ flex:"0 0 auto", display:"flex", alignItems:"center", gap:8, padding:"0 16px 0 24px", borderRight:"1px solid #1A3454", whiteSpace:"nowrap" }}>
+            <BarChart3 size={15} color="#6B94B8" />
+            <span style={{ fontSize:11.5, color:"#6B94B8", lineHeight:1.3 }}>
+              Indici settoriali<br/><b style={{ color:"#9FC3E8" }}>Eurostat</b> (PPI)
+            </span>
+          </div>
+          <div className="bs-ticker-wrap">
+            {Array.isArray(tickerData) && (
+              <div className="bs-ticker">
+                {[...tickerData,...tickerData].map((item,i) => (
+                  <div
+                    key={i}
+                    title={`${item.nace_label || ""} · indice di settore — fonte Eurostat (PPI, base 2021=100) · ${monthLabel(item.ref_month)}`}
+                    style={{ display:"flex", alignItems:"center", gap:8, padding:"0 24px", whiteSpace:"nowrap" }}
+                  >
+                    <span style={{ fontSize:13, color:"#6B94B8" }}>{item.product_name}</span>
+                    <span className="bs-num" style={{ fontSize:13, fontWeight:600, color:"#F0F6FF" }}>idx {fmt1(item.index_value)}</span>
+                    {item.pct_change_ytd != null ? (
+                      <span className="bs-num" style={{ fontSize:12, color:item.pct_change_ytd>=0?"#10B981":"#F43F5E" }}>
+                        {item.pct_change_ytd>=0?"▲":"▼"} {fmt1(Math.abs(item.pct_change_ytd))}% da gennaio
+                      </span>
+                    ) : (
+                      <span className="bs-num" style={{ fontSize:12, color:"#6B94B8" }}>—</span>
+                    )}
+                    <span style={{ color:"#1A3454", margin:"0 4px" }}>·</span>
+                  </div>
+                ))}
               </div>
-            ))}
+            )}
           </div>
         </div>
-      </div>
+      )}
 
       {/* ── DISCOVERY a due livelli: macro-aree → sotto-aree → prodotti ── */}
       <div style={{ borderBottom:`1px solid ${C.border}`, background:"#fff" }}>
