@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { Bot, ArrowRight, ArrowUp, BarChart3, Check, Clock, ChevronRight, TrendingDown, ChevronDown, Flame, Wine, Beef, Pill, SprayCan, FlaskConical, Palette, Recycle, Cog, Building2, Package, Shirt, Fuel, Sprout } from "lucide-react";
-import { getMacroAreas, getMacroAreasCached, getSectorProducts, getActivePools, getMyFollowedProducts, getSession, getProductsWithMarketPrices, getMarketPriceSeries, getMarketIndexSectors, getHomepageStats, getPriceTicker } from "@/lib/api";
+import { getMacroAreas, getMacroAreasCached, getSectorProducts, getActivePools, getMyFollowedProducts, getSession, getMarketPriceSeries, getMarketIndexSectors, getMarketSelectorNav, getWatchedMaterials, getMyOrdersHistory, getMyFollowedSectors, getHomepageStats, getPriceTicker } from "@/lib/api";
 import { ytdChange } from "@/lib/priceTrend";
 import { TIERS, tierIndexFor, tierFor } from "@/lib/tiers";
 import BulkStrikeNav from "@/components/BulkStrikeNav";
@@ -139,10 +139,12 @@ export default function BulkStrikeLight() {
   // Rimozione del box su schermi stretti: non basta nasconderlo via CSS, va tolto
   // dal render (stesso breakpoint 768px usato nel resto della Home).
   const [isMobile, setIsMobile]     = useState(false);
-  // Grafico "Andamento prezzi": prodotti con storico reale (ISMEA/CUN) affiancati
-  // ai prodotti mock. marketSel = prodotto reale selezionato (null = mock).
-  const [marketProducts, setMarketProducts] = useState([]);   // [{id,name,fonte}] agri €/kg reali
-  const [marketSel, setMarketSel]           = useState(null);  // {id,name} | null (agri selezionato)
+  // Grafico "Andamento prezzi" (DAV-69): due menu a tendina al posto dei chip.
+  // nav = mappa sector_id → { nace_code, nace_label, products:[{id,name}] }.
+  const [nav, setNav]                       = useState(null);  // null = in caricamento
+  const [selSectorId, setSelSectorId]       = useState("");    // settore scelto nel menu 1
+  const [persLabel, setPersLabel]           = useState(null);  // "Dai tuoi preferiti" | "Hai già ordinato questo prodotto"
+  const [marketSel, setMarketSel]           = useState(null);  // {id,name} | null (prodotto €/kg selezionato)
   const [marketData, setMarketData]         = useState(null);  // {series,fonte,fonte_url,last_date}
   // Indici settoriali Eurostat (metalli/plastica/chimica): tendenza, non €/kg.
   const [indexSectors, setIndexSectors]     = useState([]);    // [{nace_code,nace_label,series,...}]
@@ -204,13 +206,9 @@ export default function BulkStrikeLight() {
 
   useEffect(() => { getMacroAreas().then(setMacros).catch(() => {}); }, []);
 
-  // Prodotti con storico prezzi reale (agri €/kg) + indici settoriali Eurostat
-  // (metalli/plastica/chimica): i tab del grafico Market Intelligence, tutti reali.
-  useEffect(() => { getProductsWithMarketPrices().then(setMarketProducts).catch(() => {}); }, []);
-  useEffect(() => { getMarketIndexSectors().then(setIndexSectors).catch(() => {}); }, []);
   useEffect(() => { getPriceTicker(12).then(d => setTickerData(d || [])).catch(() => setTickerData([])); }, []);
 
-  // Seleziona un prodotto agri reale → carica la sua serie €/kg.
+  // Seleziona un prodotto reale → carica la sua serie €/kg.
   const selectMarketProduct = (p) => {
     setIndexSel(null);
     setMarketSel(p); setMarketData(null);
@@ -219,16 +217,77 @@ export default function BulkStrikeLight() {
   // Seleziona un settore indice (serie già inclusa nel payload).
   const selectIndexSector = (sec) => { setMarketSel(null); setMarketData(null); setIndexSel(sec); };
 
-  // Default: Grano duro (la commodity più rappresentativa, con fonte CUN citata
-  // nel copy) invece del primo in ordine alfabetico (era "Avena" — DAV-68);
-  // fallback: primo agri reale, poi primo settore indice.
+  // Menu 1: settore scelto a mano → voce di default nel menu 2 (indice PPI se
+  // il settore ne ha uno con dati, altrimenti il primo prodotto con serie).
+  const applySector = (sectorId, navMap = nav, idxArr = indexSectors) => {
+    setSelSectorId(sectorId); setPersLabel(null);
+    const entry = navMap?.[sectorId];
+    if (!entry) return;
+    const idxObj = entry.nace_code ? (idxArr || []).find(x => x.nace_code === entry.nace_code) : null;
+    if (idxObj) selectIndexSector(idxObj);
+    else if ((entry.products || []).length) selectMarketProduct(entry.products[0]);
+    else { setMarketSel(null); setIndexSel(null); setMarketData(null); }
+  };
+
+  // Navigazione del selettore + indici Eurostat in un'unica catena, poi il
+  // DEFAULT alla prima apertura con priorità rigida (DAV-69):
+  //   1. preferito più recente con serie (watched_materials) → "Dai tuoi preferiti"
+  //   2. ultimo ordine da acquirente con serie → "Hai già ordinato questo prodotto"
+  //   3. settore seguito (sector_follows) → indice PPI o primo prodotto del settore
+  //   4. anonimo / nessuno storico → Risone (la serie con più storico e più
+  //      movimento: 180 rilevazioni, CV 30% — misurato il 02/08/2026)
   useEffect(() => {
-    if (marketSel || indexSel) return;
-    if (marketProducts.length) {
-      const pref = marketProducts.find(p => /grano duro/i.test(p.name || "")) || marketProducts[0];
-      selectMarketProduct(pref);
-    } else if (indexSectors.length) selectIndexSector(indexSectors[0]);
-  }, [marketProducts, indexSectors]); // eslint-disable-line react-hooks/exhaustive-deps
+    let alive = true;
+    (async () => {
+      const [navArr, idxArr] = await Promise.all([
+        getMarketSelectorNav().catch(() => []),
+        getMarketIndexSectors().catch(() => []),
+      ]);
+      if (!alive) return;
+      const navMap = Object.fromEntries((navArr || []).map(e => [e.sector_id, e]));
+      setNav(navMap); setIndexSectors(idxArr || []);
+
+      const seriesById = {}, productSector = {};
+      for (const [sid, e] of Object.entries(navMap)) for (const p of (e.products || [])) {
+        seriesById[p.id] = p;
+        if (!productSector[p.id]) productSector[p.id] = sid;
+      }
+      const pickProduct = (p, label) => { setSelSectorId(productSector[p.id] || ""); setPersLabel(label); selectMarketProduct(p); };
+
+      const session = await getSession().catch(() => null);
+      if (session) {
+        try {
+          const wm = await getWatchedMaterials(); // ordinati per created_at asc → il più recente è in coda
+          const hit = [...(wm || [])].reverse().find(m => m.product_id && seriesById[m.product_id]);
+          if (hit) { if (alive) pickProduct(seriesById[hit.product_id], "Dai tuoi preferiti"); return; }
+        } catch { /* preferiti non leggibili → priorità successiva */ }
+        try {
+          const orders = await getMyOrdersHistory(); // get_my_orders non espone product_id: abbino per nome canonico
+          const byName = Object.fromEntries(Object.values(seriesById).map(p => [String(p.name).toLowerCase(), p]));
+          const hit = (orders || [])
+            .filter(o => o.role === "buyer")
+            .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+            .map(o => byName[String(o.product_name || "").toLowerCase()])
+            .find(Boolean);
+          if (hit) { if (alive) pickProduct(hit, "Hai già ordinato questo prodotto"); return; }
+        } catch { /* → priorità successiva */ }
+        try {
+          const fs = await getMyFollowedSectors();
+          const first = (fs || []).find(f => navMap[f.sector_id]);
+          if (first) { if (alive) applySector(first.sector_id, navMap, idxArr); return; }
+        } catch { /* → fallback anonimo */ }
+      }
+      if (!alive) return;
+      const all = Object.values(seriesById);
+      const pref = all.find(p => /risone/i.test(p.name || "")) || all[0];
+      if (pref) pickProduct(pref, null);
+      else if ((idxArr || []).length) {
+        const sid = Object.keys(navMap).find(k => navMap[k].nace_code === idxArr[0].nace_code);
+        if (sid) applySector(sid, navMap, idxArr);
+      }
+    })();
+    return () => { alive = false; };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Carica le aste attive UNA volta. get_active_pools() torna già ordinato per
   // closes_at asc (stessa RPC/ordinamento "Chiusura più vicina" di /pool). I
@@ -330,9 +389,21 @@ export default function BulkStrikeLight() {
   const indexYoY = showingIndex
     ? (() => { const pts = (indexSel.series || []).filter(p => p.index != null && p.pct != null); return pts.length ? Number(pts[pts.length - 1].pct) : null; })()
     : null;
-  // Etichetta chip dal nace_label del DB (parte prima del trattino lungo);
-  // niente più mappa hardcoded né codici grezzi (DAV-68).
-  const naceChipLabel = (sec) => (String(sec.nace_label || "").split("—")[0].trim()) || sec.nace_code;
+  // Asse Y: dominio su min/max reali con margine e decimali dinamici, così due
+  // tick non stampano MAI la stessa etichetta (le serie quasi piatte, tipo
+  // Grano duro, arrotondavano tutti i tick a "€0,27" — DAV-69).
+  const yAxis = (() => {
+    const vals = chartData.map(p => Number(p.v)).filter(Number.isFinite);
+    const base = showingIndex ? 0 : 2;
+    const fmtAt = (dec) => (v) => (showingIndex ? "" : "€") + Number(v).toLocaleString("it-IT", { minimumFractionDigits: dec, maximumFractionDigits: dec });
+    if (!vals.length) return { domain: ["auto", "auto"], dec: base, fmt: fmtAt(base) };
+    const vMin = Math.min(...vals), vMax = Math.max(...vals);
+    const span = vMax - vMin;
+    const pad = span > 0 ? span * 0.15 : Math.max(Math.abs(vMax) * 0.01, showingIndex ? 1 : 0.005);
+    const spacing = (span + 2 * pad) / 4;                 // 5 tick di default in recharts
+    const dec = Math.min(4, Math.max(base, Math.ceil(-Math.log10(spacing))));
+    return { domain: [vMin - pad, vMax + pad], dec, fmt: fmtAt(dec) };
+  })();
 
   return (
     <div style={{ backgroundColor:"#FFFFFF", color:C.text, minHeight:"100vh", overflowX:"hidden", colorScheme:"light" }}>
@@ -361,7 +432,9 @@ export default function BulkStrikeLight() {
         .bs-pool-btn { width:100%; background:transparent; color:#0369A1; border:1.5px solid #E2E8F0; border-radius:8px; padding:10px; font-size:14px; font-weight:600; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px; font-family:inherit; transition:all 0.2s; }
         .bs-pool-btn:hover { border-color:#0369A1; background:#EFF6FF; }
         .bs-tab { padding:9px 22px; border-radius:100px; font-size:14px; font-weight:600; cursor:pointer; border:1.5px solid; transition:all 0.2s; font-family:inherit; }
-        .bs-chart-tab { padding:7px 14px; border-radius:8px; font-size:13px; font-weight:600; border:1px solid; cursor:pointer; transition:all 0.2s; font-family:inherit; }
+        .bs-select { width:100%; max-width:440px; padding:10px 12px; border:1px solid #E2E8F0; border-radius:9px; font-size:14px; color:#0F172A; background:#fff; font-family:inherit; cursor:pointer; outline:none; }
+        .bs-select:focus { border-color:#0369A1; box-shadow:0 0 0 3px rgba(3,105,161,0.12); }
+        .bs-select:disabled { color:#94A3B8; cursor:default; }
         .bs-label { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.1em; color:#0369A1; margin-bottom:8px; }
         .bs-h2 { font-size:34px; font-weight:800; letter-spacing:-0.02em; }
         .bs-progress { height:6px; background:#E2E8F0; border-radius:100px; overflow:hidden; }
@@ -786,31 +859,59 @@ export default function BulkStrikeLight() {
               <p style={{ fontSize:15, color:C.muted, lineHeight:1.65, marginBottom:24 }}>
                 L'andamento dei prezzi delle materie prime, aggiornato di continuo. Per le materie prime agricole i dati provengono dalle fonti ufficiali (ISMEA, CUN Grano Duro).
               </p>
-              {/* Due famiglie SEPARATE: prezzi reali €/kg vs indici PPI (numeri
-                  indice in base 100, non prezzi) — mai lo stesso trattamento visivo. */}
-              <div style={{ marginBottom:24 }}>
-                <div style={{ fontSize:10.5, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.08em", color:C.muted, marginBottom:6 }}>Prezzi di mercato €/kg</div>
-                <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:14 }}>
-                  {marketProducts.map(p => (
-                    <button key={p.id} className="bs-chart-tab" onClick={() => selectMarketProduct(p)}
-                      style={{ background:marketSel?.id===p.id?"#0369A1":"#fff", color:marketSel?.id===p.id?"#fff":C.muted, borderColor:marketSel?.id===p.id?"#0369A1":C.border }}>
-                      {p.name}
-                    </button>
-                  ))}
+              {/* DAV-69: due menu a tendina al posto dei 17 chip. Menu 1 = macro
+                  area (optgroup) → settore; menu 2 = indice PPI del settore (se
+                  disponibile) + prodotti del settore con serie €/kg reale. */}
+              <div style={{ marginBottom:24, display:"flex", flexDirection:"column", gap:12 }}>
+                <div>
+                  <div style={{ fontSize:10.5, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.08em", color:C.muted, marginBottom:6 }}>Categoria e settore</div>
+                  <select className="bs-select" value={selSectorId} onChange={e => applySector(e.target.value)} aria-label="Categoria e settore">
+                    <option value="" disabled>{nav ? "Seleziona un settore…" : "Caricamento…"}</option>
+                    {macros.map(m => {
+                      const opts = (m.sub_areas || []).filter(s => nav && nav[s.id]);
+                      if (!opts.length) return null;
+                      return (
+                        <optgroup key={m.id} label={m.name}>
+                          {opts.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                        </optgroup>
+                      );
+                    })}
+                  </select>
                 </div>
-                <div style={{ fontSize:10.5, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.08em", color:C.muted, marginBottom:6 }}>Indici di settore PPI · base 2021=100</div>
-                <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
-                  {indexSectors.map(sec => (
-                    <button key={sec.nace_code} className="bs-chart-tab" onClick={() => selectIndexSector(sec)}
-                      title={`${sec.nace_label || sec.nace_code} · Fonte: ${sec.fonte || "Eurostat"}`}
-                      style={{ background:indexSel?.nace_code===sec.nace_code?"#0369A1":"#fff", color:indexSel?.nace_code===sec.nace_code?"#fff":C.muted, borderColor:indexSel?.nace_code===sec.nace_code?"#0369A1":C.border }}>
-                      {naceChipLabel(sec)}
-                    </button>
-                  ))}
+                <div>
+                  <div style={{ fontSize:10.5, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.08em", color:C.muted, marginBottom:6 }}>Prodotto o indice</div>
+                  {(() => {
+                    const entry = nav?.[selSectorId];
+                    const idxObj = entry?.nace_code ? indexSectors.find(x => x.nace_code === entry.nace_code) : null;
+                    return (
+                      <select className="bs-select" value={indexSel ? "index" : (marketSel?.id || "")} disabled={!entry}
+                        aria-label="Prodotto o indice"
+                        onChange={e => {
+                          const v = e.target.value; setPersLabel(null);
+                          if (v === "index") { if (idxObj) selectIndexSector(idxObj); }
+                          else { const p = (entry?.products || []).find(x => x.id === v); if (p) selectMarketProduct(p); }
+                        }}>
+                        {idxObj && <option value="index">Indice di settore (PPI, base 2021=100)</option>}
+                        {(entry?.products || []).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                        {!idxObj && !(entry?.products || []).length && (
+                          <option value="" disabled>{entry ? "Nessuna serie disponibile per questo settore" : "Scegli prima un settore"}</option>
+                        )}
+                      </select>
+                    );
+                  })()}
+                  {persLabel && (
+                    <div style={{ marginTop:7, display:"inline-flex", alignItems:"center", fontSize:11.5, color:"#0369A1", background:"#EFF6FF", border:"1px solid #BFDBFE", borderRadius:100, padding:"2px 10px", fontWeight:600 }}>
+                      {persLabel}
+                    </div>
+                  )}
                 </div>
               </div>
               <div style={{ display:"flex", alignItems:"baseline", gap:10, flexWrap:"wrap" }}>
-                <span className="bs-num" style={{ fontSize:42, fontWeight:800, color:C.blue }}>
+                {/* Niente JetBrains Mono qui: a 42px l'avanzamento monospace
+                    staccava la virgola dalle cifre ("€0 , 27" — DAV-69). Inter
+                    con cifre tabellari tiene i numeri allineati e la virgola
+                    attaccata. */}
+                <span style={{ fontSize:42, fontWeight:800, color:C.blue, fontVariantNumeric:"tabular-nums", letterSpacing:"-0.01em" }}>
                   {lastPrice != null ? (showingIndex ? fmt1(lastPrice) : `€${fmt2(lastPrice)}`) : "—"}
                 </span>
                 <span style={{ fontSize:14, color:C.muted }}>{showingIndex ? "indice PPI · base 2021=100 (non un prezzo)" : "/kg · prezzo di mercato"}</span>
@@ -834,8 +935,8 @@ export default function BulkStrikeLight() {
                 <ResponsiveContainer width="100%" height={220}>
                   <LineChart data={chartData}>
                     <XAxis dataKey="t" tick={{ fill:C.muted, fontSize:12 }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fill:C.muted, fontSize:12, fontFamily:"JetBrains Mono" }} axisLine={false} tickLine={false} tickFormatter={v=> showingIndex ? Number(v).toLocaleString("it-IT", { maximumFractionDigits:0 }) : `€${fmt2(v)}`} domain={["auto","auto"]} />
-                    <Tooltip contentStyle={{ background:"#fff", border:`1px solid ${C.border}`, borderRadius:10 }} formatter={v=> showingIndex ? [fmt1(v),"Indice PPI"] : [`€${fmt2(v)}/kg`,"Prezzo"]} />
+                    <YAxis tick={{ fill:C.muted, fontSize:12, fontFamily:"JetBrains Mono" }} axisLine={false} tickLine={false} tickFormatter={yAxis.fmt} domain={yAxis.domain} />
+                    <Tooltip contentStyle={{ background:"#fff", border:`1px solid ${C.border}`, borderRadius:10 }} formatter={v=> showingIndex ? [fmt1(v),"Indice PPI"] : [`${yAxis.fmt(v)}/kg`,"Prezzo"]} />
                     <Line type="monotone" dataKey="v" stroke={C.blue} strokeWidth={2.5} dot={showingIndex ? false : { fill:C.blue, r:4, strokeWidth:0 }} activeDot={{ r:6 }} />
                   </LineChart>
                 </ResponsiveContainer>
