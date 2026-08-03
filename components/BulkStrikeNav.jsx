@@ -31,6 +31,7 @@ const FORNITORI_MENU = [
   ["Produttori", "/fornitori?type=producer", "Chi produce direttamente la materia prima"],
   ["Distributori", "/fornitori?type=distributor", "Chi rivende materie prime di altri produttori"],
   ["Importatori", "/fornitori?type=importer", "Chi importa materie prime da mercati esteri"],
+  ["Mediatori", "/fornitori?type=broker", "Chi intermedia la compravendita tra venditori e acquirenti"],
 ];
 
 // Fixed link set — same labels/order everywhere.
