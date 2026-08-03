@@ -52,8 +52,11 @@ export default function SuppliersDirectory() {
   // "ereditati" da un settore preferito (cascata lato DB in follow_sector).
   const [followedSupplierIds, setFollowedSupplierIds] = useState(null); // Set | null
   const [favOnly, setFavOnly] = useState(true); // default: solo preferiti (se ne ha)
-  // Tendina "Settore": chiusa di default, si apre al click o da deep-link.
-  const [openSettore, setOpenSettore] = useState(false);
+  // Sezioni del pannello filtri: tutte CHIUSE di default (stato pulito). Una
+  // sezione si apre al clic sull'intestazione o, all'avvio, se il suo filtro
+  // arriva già valorizzato dall'URL (deep-link / mega-menu / back del browser).
+  const [open, setOpen] = useState({ tipo:false, rating:false, paese:false, cert:false, settore:false });
+  const toggleOpen = (k) => setOpen(o => ({ ...o, [k]: !o[k] }));
 
   const refetchFollowedSuppliers = () =>
     getMyFollowedSuppliers()
@@ -77,16 +80,24 @@ export default function SuppliersDirectory() {
     const sp = new URLSearchParams(window.location.search);
     if (sp.get("macro")) setActiveMacro(sp.get("macro"));
     if (sp.get("sector")) setActiveSector(sp.get("sector"));
-    // Filtro preselezionato da URL → la tendina che lo contiene parte aperta.
-    if (sp.get("macro") || sp.get("sector")) setOpenSettore(true);
     // country/type accettano deep-link sia a valore singolo che a lista
     // separata da virgole (?country=Italia,Francia&type=producer,distributor),
     // per restare compatibili con eventuali link già in giro con un solo valore.
-    if (sp.get("country")) setCountrySel(sp.get("country").split(",").map(s => s.trim()).filter(Boolean));
+    const countryFromUrl = sp.get("country") ? sp.get("country").split(",").map(s => s.trim()).filter(Boolean) : [];
+    if (countryFromUrl.length) setCountrySel(countryFromUrl);
     if (sp.get("cert")) setCertSel([sp.get("cert")]);
     if (sp.get("q")) setQ(sp.get("q"));
     const typesFromUrl = (sp.get("type") || "").split(",").map(s => s.trim()).filter(v => TYPE_OPTIONS.some(([tv]) => tv === v));
     if (typesFromUrl.length) setTypeSel(typesFromUrl);
+    // Requisito 2: "chiuso di default" vale per lo stato pulito. Se un filtro è
+    // imposto dall'URL, la sua sezione parte APERTA, così non resta nascosto.
+    setOpen(o => ({
+      ...o,
+      tipo:    o.tipo    || typesFromUrl.length > 0,
+      paese:   o.paese   || countryFromUrl.length > 0,
+      cert:    o.cert    || !!sp.get("cert"),
+      settore: o.settore || !!(sp.get("macro") || sp.get("sector")),
+    }));
   }, []);
 
   // opzioni filtri derivate dai dati reali
@@ -167,7 +178,21 @@ export default function SuppliersDirectory() {
   const toggleType = (v) => setTypeSel(prev => prev.includes(v) ? prev.filter(x => x !== v) : [...prev, v]);
   const toggleCountry = (c) => setCountrySel(prev => prev.includes(c) ? prev.filter(x => x !== c) : [...prev, c]);
 
-  const FilterTitle = ({ children }) => <div style={{ fontSize:12, fontWeight:700, color:C.muted, textTransform:"uppercase", letterSpacing:"0.04em", margin:"18px 0 8px" }}>{children}</div>;
+  // Sezione filtro collassabile — stesso stile di "Settore" (intestazione
+  // + chevron che ruota), ma come <button> accessibile (aria-expanded/controls).
+  // Requisito 1: da chiusa mostra il numero di selezioni attive (· N).
+  const FilterSection = ({ id, title, count = 0, open: isOpen, onToggle, children }) => (
+    <>
+      <button type="button" onClick={onToggle} aria-expanded={isOpen} aria-controls={id}
+        style={{ display:"flex", alignItems:"center", gap:8, width:"100%", margin:"18px 0 8px", padding:0, background:"none", border:"none", cursor:"pointer", fontFamily:"inherit", textAlign:"left" }}>
+        <span style={{ fontSize:12, fontWeight:700, color:C.muted, textTransform:"uppercase", letterSpacing:"0.04em", flex:1 }}>
+          {title}{count > 0 ? ` · ${count}` : ""}
+        </span>
+        <ChevronRight size={14} color={C.muted} style={{ transform:isOpen ? "rotate(90deg)" : "none", transition:"transform 0.15s" }}/>
+      </button>
+      <div id={id} hidden={!isOpen}>{isOpen && children}</div>
+    </>
+  );
   const Opt = ({ on, onClick, children }) => (
     <div onClick={onClick} style={{ display:"flex", alignItems:"center", gap:8, padding:"7px 10px", borderRadius:8, cursor:"pointer", background:on?"#EFF6FF":"transparent", fontSize:13, fontWeight:on?700:500, color:on?"#0369A1":C.text }}>
       <span style={{ width:15, height:15, borderRadius:4, border:`1.5px solid ${on?C.blue:C.border}`, background:on?C.blue:"#fff", display:"inline-flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
@@ -253,38 +278,36 @@ export default function SuppliersDirectory() {
               <span style={{ fontSize:13, fontWeight:600, color:favActive ? "#B45309" : C.text }}>Preferiti</span>
             </label>
 
-            <FilterTitle>Tipo fornitore</FilterTitle>
-            {TYPE_OPTIONS.map(([v,l]) => (
-              <Opt key={v} on={typeSel.includes(v)} onClick={() => toggleType(v)}>{l}</Opt>
-            ))}
-
-            <FilterTitle>Rating minimo</FilterTitle>
-            {[[4.5,"4,5 ★ e oltre"],[4,"4,0 ★ e oltre"]].map(([v,l]) => (
-              <Opt key={v} on={minRating === v} onClick={() => setMinRating(minRating === v ? null : v)}>{l}</Opt>
-            ))}
-
-            <FilterTitle>Paese sede</FilterTitle>
-            <div style={{ maxHeight:180, overflowY:"auto" }}>
-              {countries.map(c => (
-                <Opt key={c} on={countrySel.includes(c)} onClick={() => toggleCountry(c)}><CountryFlag country={c} /> {c}</Opt>
+            <FilterSection id="flt-tipo" title="Tipo fornitore" count={typeSel.length} open={open.tipo} onToggle={() => toggleOpen("tipo")}>
+              {TYPE_OPTIONS.map(([v,l]) => (
+                <Opt key={v} on={typeSel.includes(v)} onClick={() => toggleType(v)}>{l}</Opt>
               ))}
-            </div>
+            </FilterSection>
 
-            <FilterTitle>Certificazioni</FilterTitle>
-            <div style={{ maxHeight:170, overflowY:"auto" }}>
-              {allCerts.map(c => (
-                <Opt key={c} on={certSel.includes(c)} onClick={() => toggleCert(c)}>{c}</Opt>
+            <FilterSection id="flt-rating" title="Rating minimo" count={minRating ? 1 : 0} open={open.rating} onToggle={() => toggleOpen("rating")}>
+              {[[4.5,"4,5 ★ e oltre"],[4,"4,0 ★ e oltre"]].map(([v,l]) => (
+                <Opt key={v} on={minRating === v} onClick={() => setMinRating(minRating === v ? null : v)}>{l}</Opt>
               ))}
-            </div>
+            </FilterSection>
 
-            {/* settore — tendina chiusa di default (come nel catalogo, DAV-46);
-                si apre al click o se un filtro arriva dal deep-link URL. */}
-            <div onClick={() => setOpenSettore(v => !v)}
-              style={{ display:"flex", alignItems:"center", gap:8, margin:"18px 0 8px", cursor:"pointer" }}>
-              <span style={{ fontSize:12, fontWeight:700, color:C.muted, textTransform:"uppercase", letterSpacing:"0.04em", flex:1 }}>Settore</span>
-              <ChevronRight size={14} color={C.muted} style={{ transform:openSettore ? "rotate(90deg)" : "none", transition:"transform 0.15s" }}/>
-            </div>
-            {openSettore && (
+            <FilterSection id="flt-paese" title="Paese sede" count={countrySel.length} open={open.paese} onToggle={() => toggleOpen("paese")}>
+              <div style={{ maxHeight:180, overflowY:"auto" }}>
+                {countries.map(c => (
+                  <Opt key={c} on={countrySel.includes(c)} onClick={() => toggleCountry(c)}><CountryFlag country={c} /> {c}</Opt>
+                ))}
+              </div>
+            </FilterSection>
+
+            <FilterSection id="flt-cert" title="Certificazioni" count={certSel.length} open={open.cert} onToggle={() => toggleOpen("cert")}>
+              <div style={{ maxHeight:170, overflowY:"auto" }}>
+                {allCerts.map(c => (
+                  <Opt key={c} on={certSel.includes(c)} onClick={() => toggleCert(c)}>{c}</Opt>
+                ))}
+              </div>
+            </FilterSection>
+
+            {/* settore — chiuso di default; si apre al click o da deep-link URL. */}
+            <FilterSection id="flt-settore" title="Settore" count={(activeMacro ? 1 : 0) + (activeSector ? 1 : 0)} open={open.settore} onToggle={() => toggleOpen("settore")}>
             <div style={{ display:"flex", flexDirection:"column", gap:2, maxHeight:320, overflowY:"auto" }}>
               {macrosTax.map(m => {
                 const on = activeMacro === m.slug;
@@ -323,7 +346,7 @@ export default function SuppliersDirectory() {
                 );
               })}
             </div>
-            )}
+            </FilterSection>
 
             <button className="dir-filter-toggle" onClick={() => setShowFilters(false)} style={{ marginTop:16, width:"100%", justifyContent:"center", padding:"12px", borderRadius:9, border:"none", background:"#0369A1", color:"#fff", fontSize:14, fontWeight:700, cursor:"pointer" }}>
               Mostra {filtered.length} fornitori
