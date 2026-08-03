@@ -287,7 +287,7 @@ export default function RegisterPage() {
   const [f, setF] = useState({
     email:"", pass:"", pass2:"", company:"", vat:"", country:"Italia", city:"", address:"", phone:"", website:"", contact:"",
     volume:"", deliveryAddr:"", sectors:[], materials:{},
-    emailMgmt:"", emailAdmin:"", pec:"", sdi:"", ibanHolder:"", iban:"", bic:"",
+    emailMgmt:"", emailAdmin:"", pec:"", sdi:"", erpSystem:"", erpOther:"", ibanHolder:"", iban:"", bic:"",
     certs:[], capacity:"", served:[], bulk:true,
     terms:false, privacy:false, ai:false,
   });
@@ -673,6 +673,24 @@ export default function RegisterPage() {
                 <div style={{ background:"#EFF6FF", border:`1px solid #BFDBFE`, borderRadius:9, padding:"10px 12px", marginBottom:4, fontSize:12, color:"#1D4ED8", display:"flex", gap:8 }}>
                   <Boxes size={16} color={C.blue} style={{ flexShrink:0 }}/>
                   <span>Per la fatturazione elettronica in Italia è necessario almeno uno tra <b>PEC</b> e <b>Codice Destinatario (SDI)</b>. Le fatture verranno recapitate lì.</span>
+                </div>
+
+                {/* Gestionale in uso (DAV-75): con questo dato decidiamo quale
+                    integrazione nativa costruire per prima */}
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"0 16px", marginTop:14 }} className="bs-grid2">
+                  <Field icon={<Boxes size={14} color={C.muted}/>} label="Gestionale in uso" half>
+                    <select style={inputStyle} value={f.erpSystem} onChange={e=>set("erpSystem",e.target.value)}>
+                      <option value="">Seleziona...</option>
+                      <option>Fatture in Cloud</option><option>TeamSystem</option><option>Zucchetti</option>
+                      <option>Danea Easyfatt</option><option>Arca Evolution</option><option>SAP</option>
+                      <option>Business Central</option><option>Altro</option><option>Nessuno</option>
+                    </select>
+                  </Field>
+                  {f.erpSystem === "Altro" && (
+                    <Field icon={<Boxes size={14} color={C.muted}/>} label="Quale gestionale?" half>
+                      <input style={inputStyle} placeholder="Nome del gestionale" value={f.erpOther} onChange={e=>set("erpOther",e.target.value)}/>
+                    </Field>
+                  )}
                 </div>
 
                 <Consents f={f} set={set}/>

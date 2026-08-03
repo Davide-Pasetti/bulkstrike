@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import * as XLSX from "npm:xlsx@0.18.5";
 
 // ============================================================
 // BulkStrike — invio email di conferma ricezione ordine (Resend).
@@ -129,21 +130,36 @@ Deno.serve(async (req: Request) => {
 
   const ref = String(order.id).slice(0, 8).toUpperCase();
   const unit = product?.default_unit || "kg";
-  const productCode = product?.e_number || product?.cas_number || ref;
   const supplierName = supplier?.legal_name || "—";
 
-  // ---- CSV (una riga: un prodotto per sub-ordine) ---------------------------
-  const csvHeader = ["codice_prodotto", "descrizione", "quantita", "unita_misura", "lotto", "fornitore", "prezzo"];
-  const csvRows = [[
-    productCode,
-    product?.canonical_name || "",
-    order.quantity_kg ?? "",
-    unit,
-    order.lot_number || "",
-    supplierName,
-    order.unit_price_per_kg ?? "",
-  ]];
-  const csv = "﻿" + [csvHeader, ...csvRows].map((r) => r.map(csvCell).join(",")).join("\r\n");
+  // ---- File di carico per il gestionale (DAV-75, livello 1) ------------------
+  // Fonte unica: get_goods_receipt assegna il progressivo BS-GR-<anno>-<6 cifre>
+  // (STABILE: chiave di idempotenza per il gestionale del cliente) e restituisce
+  // anche DDT numero/data — in contabilità italiana la merce entra in magazzino
+  // col DDT, la fattura arriva dopo via SDI e si riconcilia sul numero DDT.
+  const { data: receipt, error: grErr } = await admin.rpc("get_goods_receipt", { p_order: subOrderId });
+  if (grErr) {
+    const msg = String(grErr.message || grErr);
+    return json(422, { success: false, message: msg.includes("NOT_SHIPPED")
+      ? "L'ordine non risulta ancora spedito: il file di carico (DDT) non esiste."
+      : `Dati di carico non disponibili: ${msg}` });
+  }
+
+  const GR_HEADER = [
+    "numero_documento", "data_documento", "ddt_numero", "ddt_data", "codice_articolo_cliente",
+    "codice_prodotto_bulkstrike", "descrizione", "quantita", "unita_misura", "lotto",
+    "scadenza_lotto", "prezzo_unitario", "valuta", "fornitore_ragione_sociale",
+    "fornitore_piva", "destinazione", "note",
+  ];
+  const grRow = GR_HEADER.map((k) => receipt?.[k] ?? "");
+  const csv = "﻿" + [GR_HEADER, grRow].map((r) => r.map(csvCell).join(",")).join("\r\n");
+
+  // Stesso file in XLSX: molti gestionali importano solo Excel.
+  const ws = XLSX.utils.aoa_to_sheet([GR_HEADER, grRow]);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Carico");
+  const xlsxB64: string = XLSX.write(wb, { type: "base64", bookType: "xlsx" });
+  const grName = String(receipt?.numero_documento || `carico_${ref}`);
 
   // ---- Link documenti (righe con url null OMESSE) ---------------------------
   const docItems: { label: string; url: string }[] = [];
@@ -186,7 +202,7 @@ Deno.serve(async (req: Request) => {
       <p style="margin-top:20px">
         <a href="${esc(orderUrl)}" style="background:#0EA5E9;color:#fff;text-decoration:none;padding:11px 18px;border-radius:8px;display:inline-block">Apri l'ordine in piattaforma</a>
       </p>
-      <p style="font-size:12px;color:#64748b;margin-top:18px">In allegato trovi un file CSV con i dati dell'ordine, pronto per l'import nel tuo gestionale.</p>
+      <p style="font-size:12px;color:#64748b;margin-top:18px">In allegato trovi il file di carico <b>${esc(grName)}</b> (CSV e Excel) con numero e data DDT, pronto per l'import nel tuo gestionale. Il numero documento è stabile: reimportare lo stesso file non crea un doppio carico.</p>
     </div>`;
 
   // ---- Invio via Resend ------------------------------------------------------
@@ -208,7 +224,10 @@ Deno.serve(async (req: Request) => {
         to: recipient,
         subject: `Conferma ricezione ordine #${ref} - BulkStrike`,
         html,
-        attachments: [{ filename: "riepilogo_ordine.csv", content: toBase64Utf8(csv) }],
+        attachments: [
+          { filename: `${grName}.csv`, content: toBase64Utf8(csv) },
+          { filename: `${grName}.xlsx`, content: xlsxB64 },
+        ],
       }),
     });
     const payload = await res.json().catch(() => ({}));

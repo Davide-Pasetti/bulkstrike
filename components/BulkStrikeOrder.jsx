@@ -6,7 +6,7 @@
 // Tutte le transizioni sono validate server-side (RPC dedicate).
 import { useState, useEffect } from "react";
 import { ChevronRight, Check, Truck, CreditCard, PackageCheck, Star, ShieldCheck, FileText, Clock, AlertTriangle, ArrowRight, MapPin, MessageSquareWarning, MessageCircle, X, Landmark, Lock, Download, QrCode, Tag, Mail, RefreshCw } from "lucide-react";
-import { getOrderDetail, getSession, markOrderShipped, confirmDelivery, raiseDispute, poolErrorMessage, getSupplierIbanForOrder, setOrderLot, fetchOrderQrObjectUrl, getMyCompany, adminListOrderEmails, adminResendOrderEmail } from "@/lib/api";
+import { getOrderDetail, getSession, markOrderShipped, confirmDelivery, raiseDispute, poolErrorMessage, getSupplierIbanForOrder, setOrderLot, fetchOrderQrObjectUrl, getMyCompany, adminListOrderEmails, adminResendOrderEmail, getGoodsReceipt } from "@/lib/api";
 import BulkStrikeNav from "@/components/BulkStrikeNav";
 import CopyButton from "@/components/CopyButton";
 import EscrowPayinPanel from "@/components/checkout/EscrowPayinPanel";
@@ -86,6 +86,44 @@ export default function OrderPage() {
   const [lot, setLot] = useState("");
   const [lotSaving, setLotSaving] = useState(false);
   const [lotSaved, setLotSaved] = useState(false);
+
+  // File di carico per il gestionale (DAV-75): CSV subito, XLSX con SheetJS
+  // caricato on-demand (dynamic import: resta fuori dal bundle principale).
+  const [grBusy, setGrBusy] = useState("");
+  const GR_HEADER = ["numero_documento","data_documento","ddt_numero","ddt_data","codice_articolo_cliente","codice_prodotto_bulkstrike","descrizione","quantita","unita_misura","lotto","scadenza_lotto","prezzo_unitario","valuta","fornitore_ragione_sociale","fornitore_piva","destinazione","note"];
+
+  function triggerDownload(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+  }
+
+  async function downloadGoodsReceipt(format) {
+    setGrBusy(format); setErr("");
+    try {
+      const r = await getGoodsReceipt(order.id);
+      const row = GR_HEADER.map(k => r?.[k] ?? "");
+      const name = r?.numero_documento || `carico_${order.id.slice(0, 8)}`;
+      if (format === "csv") {
+        const cell = (s) => `"${String(s ?? "").replace(/"/g, '""')}"`;
+        const csv = "﻿" + [GR_HEADER, row].map(x => x.map(cell).join(",")).join("\r\n");
+        triggerDownload(new Blob([csv], { type: "text/csv;charset=utf-8" }), `${name}.csv`);
+      } else {
+        const XLSX = await import("xlsx");
+        const ws = XLSX.utils.aoa_to_sheet([GR_HEADER, row]);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Carico");
+        const out = XLSX.write(wb, { type: "array", bookType: "xlsx" });
+        triggerDownload(new Blob([out], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }), `${name}.xlsx`);
+      }
+    } catch (e) {
+      setErr(poolErrorMessage(e));
+    } finally {
+      setGrBusy("");
+    }
+  }
 
   // Form "Conferma spedizione" (DAV-74): DDT e lotto obbligatori — il numero
   // DDT è la chiave di riconciliazione col gestionale del compratore (SDI).
@@ -453,6 +491,26 @@ export default function OrderPage() {
                         <div style={{ fontSize:11.5, color:C.muted, marginTop:8 }}>Sospende lo sblocco automatico del pagamento; il nostro team ti contatta per risolvere.</div>
                       </div>
                     )}
+                  </div>
+                )}
+                {/* File di carico per il gestionale (DAV-75): CSV/XLSX con
+                    numero documento stabile e riferimenti DDT */}
+                {isBuyer && ["shipped","delivered","accepted","completed","disputed"].includes(order.status) && (
+                  <div className="od-card">
+                    <div style={{ fontSize:14.5, fontWeight:800, marginBottom:6, display:"flex", alignItems:"center", gap:7 }}><FileText size={16} color="#0369A1"/> Scarica file di carico per il gestionale</div>
+                    <p style={{ fontSize:13, color:C.muted, lineHeight:1.6, marginBottom:12 }}>
+                      Una riga pronta per l'import: numero e data DDT per la riconciliazione con la fattura SDI, lotto, scadenza, prezzo e fornitore. Il numero documento è stabile: se reimporti lo stesso file, il gestionale riconosce che è lo stesso carico.
+                    </p>
+                    <div style={{ display:"flex", gap:10, flexWrap:"wrap" }}>
+                      <button onClick={() => downloadGoodsReceipt("csv")} disabled={!!grBusy}
+                              style={{ background:"#0369A1", color:"#fff", border:"none", borderRadius:9, padding:"11px 18px", fontSize:13.5, fontWeight:700, cursor:grBusy?"default":"pointer", opacity:grBusy?0.6:1, display:"inline-flex", alignItems:"center", gap:7, fontFamily:"inherit" }}>
+                        <Download size={14}/> {grBusy === "csv" ? "Preparazione…" : "CSV"}
+                      </button>
+                      <button onClick={() => downloadGoodsReceipt("xlsx")} disabled={!!grBusy}
+                              style={{ background:"#fff", color:"#0369A1", border:"1.5px solid #0369A1", borderRadius:9, padding:"11px 18px", fontSize:13.5, fontWeight:700, cursor:grBusy?"default":"pointer", opacity:grBusy?0.6:1, display:"inline-flex", alignItems:"center", gap:7, fontFamily:"inherit" }}>
+                        <Download size={14}/> {grBusy === "xlsx" ? "Preparazione…" : "Excel (XLSX)"}
+                      </button>
+                    </div>
                   </div>
                 )}
                 {isBuyer && ["accepted","completed"].includes(order.status) && !order.reviewed && (

@@ -157,6 +157,7 @@ export default function Dashboard() {
   const [acct, setAcct] = useState({
     company:"Cantina Pasetti", vat:"IT01234567890", country:"Italia", city:"Francavilla al Mare (CH)", address:"Via Esempio 1", phone:"+39 085 000000", website:"www.esempio.it", contact:"Nome Cognome",
     emailMgmt:"acquisti@esempio.it", emailAdmin:"amministrazione@esempio.it", pec:"azienda@pec.esempio.it", sdi:"XXXXXXX",
+    erpSystem:"", erpOther:"",
     ibanHolder:"Cantina Pasetti", iban:"IT00 X000 0000 0000 0000 0000 000", bic:"XXXXXXXX",
     chEmail:true, chSms:false, chPush:true,
   });
@@ -278,6 +279,7 @@ export default function Dashboard() {
         company:c.legal_name||"", vat:c.vat||"", country:c.country||"", city:c.city||"",
         address:c.address||"", phone:c.phone||"", website:c.website||"", contact:c.contact_name||"",
         emailMgmt:c.email_mgmt||"", emailAdmin:c.email_admin||"", pec:c.pec||"", sdi:c.sdi||"",
+        erpSystem:c.erp_system||"", erpOther:c.erp_system_other||"",
         ibanHolder:c.iban_holder||"", iban:c.iban||"", bic:c.bic||"",
       }));
     }).catch(()=>{});
@@ -315,6 +317,8 @@ export default function Dashboard() {
       legal_name: acct.company, vat: acct.vat, country: acct.country, city: acct.city,
       address: acct.address, phone: acct.phone, website: acct.website, contact_name: acct.contact,
       email_mgmt: acct.emailMgmt, email_admin: acct.emailAdmin, pec: acct.pec, sdi: acct.sdi,
+      erp_system: acct.erpSystem || null,
+      erp_system_other: acct.erpSystem === "Altro" ? acct.erpOther || null : null,
       iban_holder: acct.ibanHolder, iban: acct.iban, bic: acct.bic,
     });
     setAcctSaved(true);
@@ -654,6 +658,21 @@ export default function Dashboard() {
                   <AField label="Email amministrazione (documenti)" v={acct.emailAdmin} on={v=>setA("emailAdmin",v)}/>
                   <AField label="PEC" v={acct.pec} on={v=>setA("pec",v)}/>
                   <AField label="Codice Destinatario (SDI)" v={acct.sdi} on={v=>setA("sdi",v)}/>
+                  {/* Gestionale in uso (DAV-75): con questo dato decidiamo quale
+                      integrazione nativa costruire per prima */}
+                  <div style={{ marginBottom:14 }}>
+                    <div style={{ fontSize:12.5, fontWeight:700, color:C.muted, marginBottom:5 }}>Gestionale in uso</div>
+                    <select value={acct.erpSystem} onChange={e=>setA("erpSystem",e.target.value)}
+                            style={{ width:"100%", padding:"10px 12px", border:`1px solid ${C.border}`, borderRadius:9, fontSize:14, color:C.text, background:"#fff", fontFamily:"inherit", outline:"none" }}>
+                      <option value="">Seleziona...</option>
+                      <option>Fatture in Cloud</option><option>TeamSystem</option><option>Zucchetti</option>
+                      <option>Danea Easyfatt</option><option>Arca Evolution</option><option>SAP</option>
+                      <option>Business Central</option><option>Altro</option><option>Nessuno</option>
+                    </select>
+                  </div>
+                  {acct.erpSystem === "Altro" && (
+                    <AField label="Quale gestionale?" v={acct.erpOther} on={v=>setA("erpOther",v)}/>
+                  )}
                 </div>
               </div>
 
