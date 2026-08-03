@@ -26,16 +26,21 @@ export default function BulkStrikeReceipt({ orderId, token }) {
     getOrderReceiptInfo(orderId, token)
       .then((d) => {
         if (!alive) return;
+        // errori "soft" nel payload (BAD_TOKEN / RATE_LIMITED): la RPC non
+        // solleva eccezioni, così i tentativi falliti restano registrati
+        // e il rate limit funziona davvero.
+        if (d?.error) {
+          setLoadErr(d.error === "RATE_LIMITED"
+            ? "Troppi tentativi: riprova tra qualche minuto."
+            : "Link non valido: il codice di questa pagina non corrisponde a nessun ordine.");
+          return;
+        }
         setInfo(d);
         setAlready(!!d.already_delivered);
         setQty(d.quantity_kg != null ? String(d.quantity_kg) : "");
       })
-      .catch((e) => {
-        if (!alive) return;
-        const msg = String(e?.message || e);
-        setLoadErr(msg.includes("RATE_LIMITED")
-          ? "Troppi tentativi: riprova tra qualche minuto."
-          : "Link non valido: il codice di questa pagina non corrisponde a nessun ordine.");
+      .catch(() => {
+        if (alive) setLoadErr("Errore di rete: riprova tra qualche istante.");
       })
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
@@ -45,13 +50,17 @@ export default function BulkStrikeReceipt({ orderId, token }) {
     setSending(true); setErr("");
     try {
       const r = await confirmOrderReceipt(orderId, token, qty, notes);
-      if (r?.already) setAlready(true);
-      else setDone(true);
-    } catch (e) {
-      const msg = String(e?.message || e);
-      setErr(msg.includes("RATE_LIMITED") ? "Troppi tentativi: riprova tra qualche minuto."
-        : msg.includes("INVALID_STATE") ? "L'ordine non è in uno stato che permette la conferma di ricezione."
-        : "Non è stato possibile registrare la ricezione. Riprova.");
+      if (r?.error) {
+        setErr(r.error === "RATE_LIMITED" ? "Troppi tentativi: riprova tra qualche minuto."
+          : r.error === "INVALID_STATE" ? "L'ordine non è in uno stato che permette la conferma di ricezione."
+          : "Link non valido: impossibile registrare la ricezione.");
+      } else if (r?.already) {
+        setAlready(true);
+      } else {
+        setDone(true);
+      }
+    } catch {
+      setErr("Non è stato possibile registrare la ricezione. Riprova.");
     } finally {
       setSending(false);
     }
