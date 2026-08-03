@@ -385,7 +385,9 @@ export default function CatalogPage() {
                       <span>{activeSectorObj?.icon || p.primary_icon || "📦"}</span>{activeSectorObj?.name || p.primary_sector || "Materie prime"}
                       </span>
                       <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }} onClick={(e) => e.stopPropagation()}>
-                        {p.has_pool && <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 10, fontWeight: 800, color: "#B45309", background: "#FEF3C7", borderRadius: 100, padding: "3px 8px", flexShrink: 0 }}><Flame size={11} />ASTA</span>}
+                        {p.listing_mode === "sample_only"
+                          ? <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 10, fontWeight: 800, color: C.muted, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 100, padding: "3px 8px", flexShrink: 0 }}>Solo campionatura</span>
+                          : (p.has_pool && <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 10, fontWeight: 800, color: "#B45309", background: "#FEF3C7", borderRadius: 100, padding: "3px 8px", flexShrink: 0 }}><Flame size={11} />ASTA</span>)}
                         <ProductFollowButton productId={p.id} following={!!(followedIds && followedIds.has(p.id))} onChange={(next) => toggleFollow(p.id, next)} compact muted={C.muted} border={C.border} />
                       </div>
                     </div>
@@ -394,11 +396,23 @@ export default function CatalogPage() {
                       <div style={{ fontSize: 11, color: C.muted }}>{[p.e_number, p.cas_number && `CAS ${p.cas_number}`].filter(Boolean).join(" · ")}</div>
                     )}
                     <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 8, borderTop: `1px solid ${C.border}`, paddingTop: 10 }}>
-                      <div>
-                        <div style={{ fontSize: 10, color: C.muted }}>da</div>
-                        <div style={{ fontSize: 18, fontWeight: 900, color: C.blue, letterSpacing: "-0.02em", lineHeight: 1 }}>€{fmt(p.best_price)}<span style={{ fontSize: 11, color: C.muted, fontWeight: 600 }}>/kg</span></div>
-                        <IvaChip style={{ marginTop: 4 }} />
-                      </div>
+                      {p.listing_mode === "sample_only" ? (
+                        // Vini/mosti sfusi: prezzo €/hl-grado (campo separato), mai €/kg.
+                        <div>
+                          {p.best_price_hl_grado != null ? (<>
+                            <div style={{ fontSize: 10, color: C.muted }}>da</div>
+                            <div style={{ fontSize: 18, fontWeight: 900, color: "#9D174D", letterSpacing: "-0.02em", lineHeight: 1 }}>{fmt(p.best_price_hl_grado)}<span style={{ fontSize: 11, color: C.muted, fontWeight: 600 }}> €/hl-grado</span></div>
+                          </>) : (
+                            <div style={{ fontSize: 12.5, color: C.muted, fontWeight: 600 }}>Nessuna offerta disponibile</div>
+                          )}
+                        </div>
+                      ) : (
+                        <div>
+                          <div style={{ fontSize: 10, color: C.muted }}>da</div>
+                          <div style={{ fontSize: 18, fontWeight: 900, color: C.blue, letterSpacing: "-0.02em", lineHeight: 1 }}>€{fmt(p.best_price)}<span style={{ fontSize: 11, color: C.muted, fontWeight: 600 }}>/kg</span></div>
+                          <IvaChip style={{ marginTop: 4 }} />
+                        </div>
+                      )}
                       <div style={{ fontSize: 11, color: C.muted, textAlign: "right" }}>{p.supplier_count} {p.supplier_count === 1 ? "fornitore" : "fornitori"}</div>
                     </div>
                   </div>

@@ -4,7 +4,7 @@
 // l'annullamento di una richiesta ancora in attesa.
 import { useState, useEffect } from "react";
 import { Beaker, X } from "lucide-react";
-import { getSession, getBuyerSampleRequests, updateSampleRequest, sampleErrorMessage } from "@/lib/api";
+import { getSession, getMySampleRequests, updateSampleRequest, sampleErrorMessage } from "@/lib/api";
 import BulkStrikeNav from "@/components/BulkStrikeNav";
 
 const C = { blue:"#0EA5E9", text:"#0F172A", muted:"#64748B", border:"#E2E8F0", bg:"#F8FAFE", green:"#059669", red:"#DC2626", amber:"#D97706", wine:"#9D174D" };
@@ -34,7 +34,7 @@ export default function SampleRequestsBuyerPage({ inShell = false }) {
   async function load() {
     const session = await getSession().catch(() => null);
     if (!session) { setNeedLogin(true); setLoading(false); return; }
-    try { setRows(await getBuyerSampleRequests()); }
+    try { const all = await getMySampleRequests(); setRows(all.filter((r) => r.role === "buyer")); }
     catch (e) { setErr(sampleErrorMessage(e)); }
     setLoading(false);
   }
@@ -64,11 +64,13 @@ export default function SampleRequestsBuyerPage({ inShell = false }) {
             <div key={r.id} style={{ background:"#fff", border:`1px solid ${C.border}`, borderRadius:14, padding:16, display:"flex", justifyContent:"space-between", gap:14, flexWrap:"wrap", alignItems:"flex-start" }}>
               <div style={{ minWidth:220 }}>
                 <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap", marginBottom:3 }}>
-                  <strong style={{ fontSize:15, color:C.text }}>{r.product?.canonical_name || "Prodotto"}</strong>
+                  <strong style={{ fontSize:15, color:C.text }}>{r.product_name || "Prodotto"}</strong>
                   <Badge status={r.status} />
                 </div>
                 <div style={{ fontSize:13, color:C.muted }}>
-                  {r.counterpart_name || "Fornitore"} · {litri(r.quantity_l)} · richiesto il {dt(r.created_at)}
+                  <b style={{ color:C.text, fontWeight:600 }}>{r.counterpart_name || "Fornitore"}</b>
+                  {(r.counterpart_city || r.counterpart_region) && <span> · {[r.counterpart_city, r.counterpart_region].filter(Boolean).join(", ")}</span>}
+                  {" "}· {litri(r.quantity_l)} · richiesto il {dt(r.created_at)}
                 </div>
                 {r.status === "declined" && r.decline_reason && <div style={{ fontSize:12.5, color:C.red, marginTop:6 }}>Motivo: {r.decline_reason}</div>}
                 {r.status === "shipped" && r.tracking_note && <div style={{ fontSize:12.5, color:C.green, marginTop:6 }}>Tracking: {r.tracking_note}</div>}

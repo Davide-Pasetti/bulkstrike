@@ -5,7 +5,7 @@
 // date le stampiglia il DB; ogni cambio di stato invia l'email all'acquirente.
 import { useState, useEffect } from "react";
 import { Check, X, Beaker, Truck, AlertTriangle, MapPin } from "lucide-react";
-import { getSession, getMyCompany, getSupplierSampleRequests, updateSampleRequest, sampleErrorMessage } from "@/lib/api";
+import { getSession, getMyCompany, getMySampleRequests, updateSampleRequest, sampleErrorMessage } from "@/lib/api";
 import BulkStrikeNav from "@/components/BulkStrikeNav";
 
 const C = { blue:"#0EA5E9", text:"#0F172A", muted:"#64748B", border:"#E2E8F0", bg:"#F8FAFE", green:"#059669", red:"#DC2626", amber:"#D97706", wine:"#9D174D" };
@@ -40,7 +40,7 @@ export default function SampleRequestsSupplierPage({ inShell = false }) {
     if (!session) { setNeedLogin(true); setLoading(false); return; }
     const co = await getMyCompany().catch(() => null);
     if (!co?.is_supplier) { setNotSupplier(true); setLoading(false); return; }
-    try { setRows(await getSupplierSampleRequests()); }
+    try { const all = await getMySampleRequests(); setRows(all.filter((r) => r.role === "supplier")); }
     catch (e) { setErr(sampleErrorMessage(e)); }
     setLoading(false);
   }
@@ -71,11 +71,13 @@ export default function SampleRequestsSupplierPage({ inShell = false }) {
               <div style={{ display:"flex", justifyContent:"space-between", gap:12, flexWrap:"wrap", marginBottom:8 }}>
                 <div>
                   <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap" }}>
-                    <strong style={{ fontSize:15, color:C.text }}>{r.product?.canonical_name || "Prodotto"}</strong>
+                    <strong style={{ fontSize:15, color:C.text }}>{r.product_name || "Prodotto"}</strong>
                     <Badge status={r.status} />
                   </div>
                   <div style={{ fontSize:13, color:C.muted, marginTop:3 }}>
-                    {r.counterpart_name || "Azienda acquirente"} · richiesti <b style={{ color:C.text }}>{litri(r.quantity_l)}</b> · {dt(r.created_at)}
+                    <b style={{ color:C.text, fontWeight:600 }}>{r.counterpart_name || "Azienda acquirente"}</b>
+                    {(r.counterpart_city || r.counterpart_region) && <span> · {[r.counterpart_city, r.counterpart_region].filter(Boolean).join(", ")}</span>}
+                    {" "}· richiesti <b style={{ color:C.text }}>{litri(r.quantity_l)}</b> · {dt(r.created_at)}
                   </div>
                 </div>
               </div>

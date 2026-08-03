@@ -15,7 +15,7 @@ import { useState, useEffect, useLayoutEffect } from "react";
 import { LayoutGrid, Bell, ShoppingBag, Gavel, MessageSquare, Star, Package, Truck, Shield, ShieldCheck, Settings, Tag, Beaker } from "lucide-react";
 import { BSIcon } from "@/components/BSLogo";
 import NavAuth from "@/components/BulkStrikeNavAuth";
-import { getMyCompany, getNotifications, getUnreadMessagesCount, adminCountPendingSuppliers, adminListPendingPromotions, getSupplierSampleRequests } from "@/lib/api";
+import { getMyCompany, getNotifications, getUnreadMessagesCount, adminCountPendingSuppliers, adminListPendingPromotions, getMySampleRequests } from "@/lib/api";
 
 const C = { blue: "#0EA5E9", text: "#0F172A", muted: "#64748B", border: "#E2E8F0", bg: "#F8FAFE", red: "#DC2626" };
 
@@ -75,8 +75,8 @@ export default function ProfileShell({ active, headerCenter = null, children }) 
     adminCountPendingSuppliers().then((n) => { setPendingSuppliers(n || 0); writeShellCache({ pending: n || 0 }); }).catch(() => {});
     // Promozioni in attesa (guardia lato RPC: NOT_ADMIN per i non-admin → 0).
     adminListPendingPromotions().then((rows) => { const n = (rows || []).length; setPendingPromos(n); writeShellCache({ pendingPromo: n }); }).catch(() => {});
-    // Richieste di campionatura ancora in attesa (per i fornitori; [] altrimenti).
-    getSupplierSampleRequests().then((rows) => { const n = (rows || []).filter((r) => r.status === "pending").length; setPendingSamples(n); writeShellCache({ pendingSample: n }); }).catch(() => {});
+    // Richieste di campionatura da gestire come FORNITORE, ancora in attesa.
+    getMySampleRequests().then((rows) => { const n = (rows || []).filter((r) => r.role === "supplier" && r.status === "pending").length; setPendingSamples(n); writeShellCache({ pendingSample: n }); }).catch(() => {});
   }, []);
 
   const SIDEBAR = [
