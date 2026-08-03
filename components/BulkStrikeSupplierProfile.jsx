@@ -13,7 +13,7 @@ import CountryFlag from "@/components/CountryFlag";
 
 const C = { blue:"#0EA5E9", dark:"#0284C7", text:"#0F172A", muted:"#64748B", border:"#E2E8F0", bg:"#F8FAFE", green:"#059669", red:"#DC2626", amber:"#D97706", purple:"#7C3AED" };
 
-const TYPE_LABEL = { producer:"Produttore", distributor:"Distributore", trader:"Trader" };
+const TYPE_LABEL = { producer:"Produttore", distributor:"Distributore", importer:"Importatore", broker:"Mediatore", trader:"Trader" };
 const eurKg = (n) => n == null ? "—" : "€" + Number(n).toLocaleString("it-IT", { minimumFractionDigits:2, maximumFractionDigits:2 });
 const eur = (n) => n == null ? "—" : "€" + Number(n).toLocaleString("it-IT", { minimumFractionDigits:2, maximumFractionDigits:2 });
 // Bottone Segui/Non seguire (tabella supplier_follows, RPC follow/unfollow):

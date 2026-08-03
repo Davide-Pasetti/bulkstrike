@@ -26,7 +26,7 @@ import { SupplierTypeBadge, SupplierTypeBadges } from "@/components/BulkStrikeBa
 
 const C = { blue: "#0EA5E9", text: "#0F172A", muted: "#64748B", border: "#E2E8F0", bg: "#F8FAFE", green: "#059669", red: "#DC2626", amber: "#D97706", purple: "#7C3AED" };
 const GRID = "26px 1.5fr 1fr 80px 96px 92px 58px 84px 26px";
-const TIPO = { producer: "Produttore", distributor: "Distributore", importer: "Importatore" };
+const TIPO = { producer: "Produttore", distributor: "Distributore", importer: "Importatore", broker: "Mediatore" };
 
 export default function AdminSuppliersPage({ inShell = false }) {
   const [loading, setLoading] = useState(true);

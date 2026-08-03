@@ -11,7 +11,7 @@ import CountryFlag from "@/components/CountryFlag";
 
 const C = { blue: "#0EA5E9", text: "#0F172A", muted: "#64748B", border: "#E2E8F0", bg: "#F8FAFE", green: "#059669", amber: "#D97706", red: "#DC2626" };
 
-const TYPE_LABEL = { producer: "Produttore", distributor: "Distributore" };
+const TYPE_LABEL = { producer: "Produttore", distributor: "Distributore", importer: "Importatore", broker: "Mediatore" };
 
 export default function FollowedSuppliersPage({ inShell = false }) {
   const [loading, setLoading] = useState(true);

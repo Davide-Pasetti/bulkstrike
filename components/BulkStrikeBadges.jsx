@@ -43,6 +43,7 @@ export const SUPPLIER_TYPES = {
   producer: { icon: "🏭", label: "Produttore", hint: "Produce direttamente la materia prima" },
   distributor: { icon: "🚚", label: "Distributore", hint: "Rivende materie prime di altri produttori" },
   importer: { icon: "🚢", label: "Importatore", hint: "Importa materie prime da mercati esteri" },
+  broker: { icon: "🤝", label: "Mediatore", hint: "Intermedia la compravendita tra venditori e acquirenti" },
 };
 
 export function SupplierTypeBadge({ type, withLabel = false, size = 12.5, style }) {
@@ -67,7 +68,7 @@ export function SupplierTypeBadge({ type, withLabel = false, size = 12.5, style 
 // manca o è vuoto (RPC che non lo espongono ancora, es. coda admin) fa fallback
 // sul singolo `type`, così SupplierTypeBadge resta usabile com'era.
 // Ordine: importatore per primo (è la novità), poi produttore, poi distributore.
-const ROLE_ORDER = ["importer", "producer", "distributor"];
+const ROLE_ORDER = ["importer", "producer", "distributor", "broker"];
 export function SupplierTypeBadges({ roles, type, withLabel = false, size = 12.5, style }) {
   const list = Array.isArray(roles) ? roles.filter(r => SUPPLIER_TYPES[r]) : [];
   if (list.length === 0) return <SupplierTypeBadge type={type} withLabel={withLabel} size={size} style={style} />;

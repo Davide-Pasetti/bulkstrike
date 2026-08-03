@@ -288,7 +288,7 @@ export default function RegisterPage() {
     email:"", pass:"", pass2:"", company:"", vat:"", country:"Italia", city:"", address:"", phone:"", website:"", contact:"",
     volume:"", deliveryAddr:"", sectors:[], materials:{},
     emailMgmt:"", emailAdmin:"", pec:"", sdi:"", erpSystem:"", erpOther:"", ibanHolder:"", iban:"", bic:"",
-    certs:[], capacity:"", served:[], bulk:true,
+    certs:[], capacity:"", served:[], supplierType:"producer",
     terms:false, privacy:false, ai:false,
   });
   const set = (k,v) => setF(s => ({ ...s, [k]:v }));
@@ -709,8 +709,11 @@ export default function RegisterPage() {
                     <input style={inputStyle} placeholder="Es. 50 tonnellate" value={f.capacity} onChange={e=>set("capacity",e.target.value)}/>
                   </Field>
                   <Field icon={<Globe size={14} color={C.muted}/>} label="Tipo" half>
-                    <select style={inputStyle} value={f.bulk?"Produttore":"Distributore"} onChange={e=>set("bulk",e.target.value==="Produttore")}>
-                      <option>Produttore</option><option>Distributore</option>
+                    <select style={inputStyle} value={f.supplierType || "producer"} onChange={e=>set("supplierType", e.target.value)}>
+                      <option value="producer">Produttore</option>
+                      <option value="distributor">Distributore</option>
+                      <option value="importer">Importatore</option>
+                      <option value="broker">Mediatore</option>
                     </select>
                   </Field>
                 </div>
