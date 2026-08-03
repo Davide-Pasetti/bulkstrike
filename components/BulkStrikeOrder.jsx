@@ -87,6 +87,34 @@ export default function OrderPage() {
   const [lotSaving, setLotSaving] = useState(false);
   const [lotSaved, setLotSaved] = useState(false);
 
+  // Form "Conferma spedizione" (DAV-74): DDT e lotto obbligatori — il numero
+  // DDT è la chiave di riconciliazione col gestionale del compratore (SDI).
+  const [shipOpen, setShipOpen] = useState(false);
+  const [ship, setShip] = useState({ carrier:"", tracking:"", ddtNumber:"", ddtDate:"", lotNumber:"", expiryDate:"", quantityShipped:"", notes:"" });
+  const setShipField = (k) => (e) => setShip(s => ({ ...s, [k]: e.target.value }));
+
+  async function submitShipment() {
+    if (!ship.ddtNumber.trim()) { setErr("Il numero DDT è obbligatorio."); return; }
+    if (!ship.ddtDate) { setErr("La data DDT è obbligatoria."); return; }
+    if (!ship.lotNumber.trim()) { setErr("Il numero di lotto è obbligatorio."); return; }
+    setActing(true); setErr(""); setJustDone("");
+    try {
+      await markOrderShipped(order.id, {
+        carrier: ship.carrier.trim(), tracking: ship.tracking.trim(),
+        ddtNumber: ship.ddtNumber.trim(), ddtDate: ship.ddtDate,
+        lotNumber: ship.lotNumber.trim(), expiryDate: ship.expiryDate || null,
+        quantityShipped: ship.quantityShipped, notes: ship.notes.trim(),
+      });
+      await reload(order.id);
+      setShipOpen(false);
+      setJustDone("Spedizione confermata. L'acquirente ha ricevuto tracking e riferimenti DDT.");
+    } catch (e) {
+      setErr(poolErrorMessage(e));
+    } finally {
+      setActing(false);
+    }
+  }
+
   // Admin: email dell'ordine (reinvio).
   const [isAdmin, setIsAdmin] = useState(false);
   const [orderEmails, setOrderEmails] = useState([]);
@@ -344,12 +372,47 @@ export default function OrderPage() {
                   <div className="od-card" style={{ borderColor:C.blue, background:"#F0F9FF" }}>
                     <div style={{ fontSize:14.5, fontWeight:800, marginBottom:6, display:"flex", alignItems:"center", gap:7 }}><Truck size={16} color={C.blue}/> Pagamento in escrow ricevuto — spedisci la merce</div>
                     <p style={{ fontSize:13, color:C.muted, lineHeight:1.6, marginBottom:14 }}>
-                      L'acquirente ha versato <b className="od-num" style={{ color:C.text }}>{eur(order.goods_subtotal)}</b> in escrow. Quando la merce parte, segna l'ordine come spedito: l'acquirente riceverà una notifica.
+                      L'acquirente ha versato <b className="od-num" style={{ color:C.text }}>{eur(order.goods_subtotal)}</b> in escrow. Alla partenza della merce conferma la spedizione con i riferimenti del DDT: numero DDT e lotto sono obbligatori (servono al gestionale dell'acquirente per riconciliare il carico con la fattura).
                     </p>
-                    <button onClick={() => doAction(markOrderShipped, "Ordine segnato come spedito. L'acquirente è stato avvisato.")} disabled={acting}
-                            style={{ background:"#0369A1", color:"#fff", border:"none", borderRadius:10, padding:"13px 24px", fontSize:14, fontWeight:700, cursor:acting?"default":"pointer", opacity:acting?0.6:1, display:"inline-flex", alignItems:"center", gap:8, fontFamily:"Inter,system-ui" }}>
-                      {acting ? "Aggiornamento…" : <>Segna come spedito <Truck size={15}/></>}
-                    </button>
+                    {!shipOpen ? (
+                      <button onClick={() => setShipOpen(true)} disabled={acting}
+                              style={{ background:"#0369A1", color:"#fff", border:"none", borderRadius:10, padding:"13px 24px", fontSize:14, fontWeight:700, cursor:acting?"default":"pointer", opacity:acting?0.6:1, display:"inline-flex", alignItems:"center", gap:8, fontFamily:"Inter,system-ui" }}>
+                        Conferma spedizione <Truck size={15}/>
+                      </button>
+                    ) : (
+                      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                        {[
+                          { k:"carrier", label:"Corriere", type:"text", ph:"es. DHL Freight" },
+                          { k:"tracking", label:"Numero tracking", type:"text", ph:"es. JD014600003RM" },
+                          { k:"ddtNumber", label:"Numero DDT *", type:"text", ph:"es. 2026/00123" },
+                          { k:"ddtDate", label:"Data DDT *", type:"date" },
+                          { k:"lotNumber", label:"Lotto *", type:"text", ph:"es. L2026-08-A" },
+                          { k:"expiryDate", label:"Scadenza lotto", type:"date" },
+                          { k:"quantityShipped", label:"Quantità spedita (kg)", type:"number", ph:String(order.quantity_kg || "") },
+                        ].map(f => (
+                          <label key={f.k} style={{ display:"flex", flexDirection:"column", gap:4, fontSize:12, fontWeight:700, color:C.muted }}>
+                            {f.label}
+                            <input type={f.type} value={ship[f.k]} onChange={setShipField(f.k)} placeholder={f.ph || ""}
+                                   style={{ border:`1px solid ${C.border}`, borderRadius:8, padding:"9px 11px", fontSize:13.5, fontWeight:400, color:C.text, outline:"none", fontFamily:"inherit" }} />
+                          </label>
+                        ))}
+                        <label style={{ display:"flex", flexDirection:"column", gap:4, fontSize:12, fontWeight:700, color:C.muted, gridColumn:"1 / -1" }}>
+                          Note
+                          <textarea value={ship.notes} onChange={setShipField("notes")} rows={2} placeholder="Note per l'acquirente (facoltative)"
+                                    style={{ border:`1px solid ${C.border}`, borderRadius:8, padding:"9px 11px", fontSize:13.5, fontWeight:400, color:C.text, outline:"none", fontFamily:"inherit", resize:"vertical" }} />
+                        </label>
+                        <div style={{ gridColumn:"1 / -1", display:"flex", gap:10, marginTop:2 }}>
+                          <button onClick={submitShipment} disabled={acting}
+                                  style={{ background:"#0369A1", color:"#fff", border:"none", borderRadius:10, padding:"12px 22px", fontSize:14, fontWeight:700, cursor:acting?"default":"pointer", opacity:acting?0.6:1, display:"inline-flex", alignItems:"center", gap:8, fontFamily:"inherit" }}>
+                            {acting ? "Invio…" : <>Conferma spedizione <Truck size={15}/></>}
+                          </button>
+                          <button onClick={() => setShipOpen(false)} disabled={acting}
+                                  style={{ background:"#fff", color:C.muted, border:`1.5px solid ${C.border}`, borderRadius:10, padding:"12px 18px", fontSize:14, fontWeight:600, cursor:"pointer", fontFamily:"inherit" }}>
+                            Annulla
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
                 {isBuyer && ["paid","shipped","delivered"].includes(order.status) && (

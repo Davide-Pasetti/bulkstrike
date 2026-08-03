@@ -9,8 +9,8 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 //
 // DAV-73: NESSUNA whitelist di kind — il contenuto (subject/body) è già
 // nella riga, quindi qualunque kind viene inviato. Destinatario:
-//   claim_request / removal_request → ALERT_EMAIL (l'admin, come prima)
-//   qualunque altro kind            → to_email della riga; se NULL viene
+//   ADMIN_KINDS          → ALERT_EMAIL (l'admin)
+//   qualunque altro kind → to_email della riga; se NULL viene
 //     risolto con resolve_company_email(to_company_id, recipient_role) e
 //     salvato sulla riga. Se non risolvibile: status='failed',
 //     last_error='NO_RECIPIENT' + avviso ad ALERT_EMAIL.
@@ -30,8 +30,8 @@ const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") ?? "";
 const FROM_EMAIL = Deno.env.get("FROM_EMAIL") ?? "BulkStrike <ordini@updates.bulkstrike.com>";
 const ALERT_TO = Deno.env.get("ALERT_EMAIL") ?? "davide@bulkstrike.com";
 
-// Kind amministrativi: vanno all'admin, non all'azienda della riga.
-const ADMIN_KINDS = ["claim_request", "removal_request"] as const;
+// Kind amministrativi: vanno all'admin (ALERT_EMAIL), non all'azienda della riga.
+const ADMIN_KINDS = ["claim_request", "removal_request", "payout_ready_admin", "order_disputed_admin"] as const;
 
 // Backoff per numero di tentativo (1°→1 min … 5°→12 h); al 6° → failed.
 const BACKOFF_MINUTES = [1, 5, 30, 120, 720] as const;
