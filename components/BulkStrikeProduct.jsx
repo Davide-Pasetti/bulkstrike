@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { Search, ArrowRight, Check, Clock, ChevronDown, ChevronRight, ChevronUp, Star, Shield, Truck, FileText, Download, Plus, Minus, Beaker, TrendingDown, Users, Gavel, Info, ShoppingCart, Factory, ExternalLink, MessageSquare, X, Wine } from "lucide-react";
-import { getProduct, getOpenPoolForProduct, getPriceReference, getProductBreadcrumb, getSession, upsertCartItem, poolErrorMessage, searchProducts, getCart, isFollowingProduct, getMarketPriceSeries, getMarketIndexSeries, getProductSpecs, getProductCandidateSuppliers, getMyCompany, getMyCompanyAddress, createSampleRequest, sampleErrorMessage, getMarketPriceSeriesByPiazza } from "@/lib/api";
+import { getProduct, getOpenPoolForProduct, getPriceReference, getProductBreadcrumb, getSession, upsertCartItem, poolErrorMessage, searchProducts, getCart, isFollowingProduct, getMarketPriceSeries, getMarketIndexSeries, getProductSpecs, getProductCandidateSuppliers, getMyCompany, getMyCompanyAddress, createSampleRequest, sampleErrorMessage, getMarketPriceSeriesByPiazza, requestSamplesBulk } from "@/lib/api";
 import PriceSourceNote from "@/components/PriceSourceNote";
 import CountryFlag from "@/components/CountryFlag";
 import { ytdChange } from "@/lib/priceTrend";
@@ -334,6 +334,15 @@ export default function ProductPage() {
   const [wfAlcMax, setWfAlcMax] = useState("");
   const [wfPriceMin, setWfPriceMin] = useState("");
   const [wfPriceMax, setWfPriceMax] = useState("");
+  // Selezione multipla + richiesta di campionatura cumulativa (per supplier_product.id).
+  const [selectedSP, setSelectedSP] = useState(() => new Set());
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkQty, setBulkQty] = useState(0.75);
+  const [bulkAddr, setBulkAddr] = useState("");
+  const [bulkMsg, setBulkMsg] = useState("");
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkResult, setBulkResult] = useState(null); // array risposta RPC | null
+  const [bulkErr, setBulkErr] = useState("");
   const [piazzaData, setPiazzaData] = useState(null);
   const [selectedPiazze, setSelectedPiazze] = useState([]); // piazze mostrate sul grafico vino
   useEffect(() => { if (productId) isFollowingProduct(productId).then(setFollowingProduct).catch(() => {}); }, [productId]);
@@ -481,22 +490,21 @@ export default function ProductPage() {
   // Campionatura (DAV-77): questi prodotti (vini/mosti sfusi) non si acquistano
   // online — niente prezzo aggregato, carrello, asta, promo. Solo richiesta campione.
   const sampleOnly = product.listing_mode === "sample_only";
-  const wineSuppliers = suppliers.filter(s => s.wine);
-
-  // Filtro listini vino: opzioni/range derivati SOLO dai dati reali dei listini.
-  // Grado e prezzo vengono da supplier_product_wine_specs (mai da best_price €/kg,
-  // unità diversa). Regione dipende dalla nazione selezionata. Se una dimensione
-  // non ha valori disponibili, il campo va disabilitato ("nessun dato"), non a
-  // un range fisso arbitrario.
-  const wineCountries = [...new Set(wineSuppliers.map(s => s.origin).filter(Boolean))].sort();
-  const wineRegions = [...new Set(wineSuppliers.filter(s => !wfCountry || s.origin === wfCountry).map(s => s.region).filter(Boolean))].sort();
-  const alcVals = wineSuppliers.map(s => s.wine?.alcohol_degree).filter(v => v != null);
-  const priceVals = wineSuppliers.map(s => s.wine?.price_per_hl_grado).filter(v => v != null);
+  // Fornitori vino del prodotto: TUTTI i supplier_products (con o senza listino
+  // pubblicato). Nazione/Regione arrivano da companies (sempre valorizzate),
+  // quindi il filtro funziona SUBITO anche sui fornitori senza prezzo. Grado e
+  // Prezzo vengono da supplier_product_wine_specs (mai da best_price €/kg) e
+  // restano vuoti finché non ci sono listini reali.
+  const wineWithListing = suppliers.filter(s => s.wine);
+  const wineCountries = [...new Set(suppliers.map(s => s.origin).filter(Boolean))].sort();
+  const wineRegions = [...new Set(suppliers.filter(s => !wfCountry || s.origin === wfCountry).map(s => s.region).filter(Boolean))].sort();
+  const alcVals = wineWithListing.map(s => s.wine.alcohol_degree).filter(v => v != null);
+  const priceVals = wineWithListing.map(s => s.wine.price_per_hl_grado).filter(v => v != null);
   const alcRange = alcVals.length ? [Math.min(...alcVals), Math.max(...alcVals)] : null;
   const priceRange = priceVals.length ? [Math.min(...priceVals), Math.max(...priceVals)] : null;
   const wineFilterActive = !!(wfCountry || wfRegion || wfAlcMin !== "" || wfAlcMax !== "" || wfPriceMin !== "" || wfPriceMax !== "");
   const clearWineFilter = () => { setWfCountry(""); setWfRegion(""); setWfAlcMin(""); setWfAlcMax(""); setWfPriceMin(""); setWfPriceMax(""); };
-  const filteredWine = wineSuppliers.filter(s => {
+  const wineMatches = (s) => {
     if (wfCountry && s.origin !== wfCountry) return false;
     if (wfRegion && s.region !== wfRegion) return false;
     const a = s.wine?.alcohol_degree, p = s.wine?.price_per_hl_grado;
@@ -505,7 +513,11 @@ export default function ProductPage() {
     if (wfPriceMin !== "" && (p == null || p < Number(wfPriceMin))) return false;
     if (wfPriceMax !== "" && (p == null || p > Number(wfPriceMax))) return false;
     return true;
-  });
+  };
+  const filteredWithListing = suppliers.filter(s => s.wine && wineMatches(s));
+  const filteredWithoutListing = suppliers.filter(s => !s.wine && wineMatches(s));
+  const toggleSP = (id) => setSelectedSP(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const supplierNameById = (id) => (suppliers.find(s => s.id === id)?.name) || "Fornitore";
   const wfLabel = { display:"block", fontSize:11, color:C.muted, fontWeight:600, marginBottom:4 };
   const wfNum = { width:"100%", minWidth:0, padding:"7px 8px", border:`1px solid ${C.border}`, borderRadius:7, fontSize:13, fontFamily:"'JetBrains Mono',monospace" };
   const wfSel = (disabled) => ({ width:"100%", padding:"7px 8px", border:`1px solid ${C.border}`, borderRadius:7, fontSize:13, background:disabled?"#F1F5F9":"#fff", color:disabled?C.muted:C.text, cursor:disabled?"not-allowed":"pointer" });
@@ -528,6 +540,37 @@ export default function ProductPage() {
       setSampleErr(sampleErrorMessage(e));
     }
     setSampleBusy(false);
+  }
+  // Testo leggibile per gli errori per-fornitore della RPC cumulativa: i
+  // messaggi dei trigger sono già in italiano; l'indice unico torna un messaggio
+  // grezzo che mappiamo.
+  function bulkSampleErrorText(msg) {
+    if (!msg) return "Errore imprevisto.";
+    if (/duplicate key|unique/i.test(msg)) return "Hai già una richiesta di campionatura aperta per questo fornitore.";
+    return msg;
+  }
+  async function openBulkSample() {
+    if (selectedSP.size === 0) return;
+    const session = await getSession().catch(() => null);
+    if (!session) { window.location.href = "/auth/login"; return; }
+    setBulkErr(""); setBulkResult(null); setBulkQty(0.75); setBulkAddr(myAddress || ""); setBulkMsg(""); setBulkOpen(true);
+  }
+  async function submitBulkSample() {
+    const q = Number(bulkQty);
+    if (!q || q <= 0 || q > 20) { setBulkErr("La quantità deve essere tra 0 e 20 litri."); return; }
+    if (!bulkAddr || !bulkAddr.trim()) { setBulkErr("Inserisci l'indirizzo di spedizione."); return; }
+    setBulkBusy(true); setBulkErr("");
+    try {
+      const res = await requestSamplesBulk({ supplierProductIds: [...selectedSP], quantityL: q, shippingAddress: bulkAddr.trim(), message: bulkMsg.trim() || null });
+      const arr = Array.isArray(res) ? res : [];
+      setBulkResult(arr);
+      // Le richieste andate a buon fine escono dalla selezione (quelle in errore restano).
+      const createdIds = new Set(arr.filter(r => r.status === "created").map(r => r.supplier_product_id));
+      if (createdIds.size) setSelectedSP(prev => new Set([...prev].filter(id => !createdIds.has(id))));
+    } catch (e) {
+      setBulkErr(sampleErrorMessage(e));
+    }
+    setBulkBusy(false);
   }
   const cheapestId = ranked.length ? ranked[0].id : null;
 
@@ -746,7 +789,7 @@ export default function ProductPage() {
                   comunque presenti sulla scheda, ma non sono acquistabili — la
                   distinzione fra quotato e solo censito deve restare netta. */}
               {sampleOnly
-                ? <span className="bs-chip" style={{ background:"#FDF2F8", color:"#9D174D" }}><Wine size={11}/> {wineSuppliers.length} {wineSuppliers.length === 1 ? "fornitore" : "fornitori"} · su campionatura</span>
+                ? <span className="bs-chip" style={{ background:"#FDF2F8", color:"#9D174D" }}><Wine size={11}/> {suppliers.length} {suppliers.length === 1 ? "fornitore" : "fornitori"} · su campionatura</span>
                 : <span className="bs-chip" style={{ background:"#ECFDF5", color:C.green }}><Check size={11}/> {ranked.length} {ranked.length === 1 ? "fornitore" : "fornitori"} con prezzo</span>}
             </div>
             <h1 style={{ fontSize:32, fontWeight:800, letterSpacing:"-0.02em", marginBottom:6 }}>{product.name}</h1>
@@ -971,14 +1014,11 @@ export default function ProductPage() {
             {/* CAMPIONATURA — listino vini/mosti sfusi (DAV-77): prezzo in €/hl-grado,
                 specifiche enologiche, unica CTA "Richiedi campionatura". */}
             {sampleOnly && (<>
-              <div style={{ fontSize:12, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.08em", color:"#9D174D", marginBottom:12 }}>Listini a campionatura</div>
-
-              {/* FILTRO LISTINI — Nazione, Regione, Grado alcolico, Prezzo (€/hl-grado).
-                  Opzioni/range presi solo dai dati reali dei listini; ogni campo si
-                  disabilita ("nessun dato") finché non ci sono valori. */}
-              <div style={{ border:`1px solid ${C.border}`, borderRadius:12, padding:14, marginBottom:16, background:C.bg }}>
+              {/* FILTRO — Nazione/Regione dai fornitori del prodotto (sempre valorizzate);
+                  Grado alcolico/Prezzo dai listini pubblicati (vuoti finché non esistono). */}
+              <div style={{ border:`1px solid ${C.border}`, borderRadius:12, padding:14, marginBottom:14, background:C.bg }}>
                 <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
-                  <span style={{ fontSize:12, fontWeight:700, color:C.muted, textTransform:"uppercase", letterSpacing:"0.04em" }}>Filtra i listini</span>
+                  <span style={{ fontSize:12, fontWeight:700, color:C.muted, textTransform:"uppercase", letterSpacing:"0.04em" }}>Filtra i fornitori</span>
                   {wineFilterActive && <button onClick={clearWineFilter} style={{ background:"none", border:"none", color:C.blue, fontSize:12.5, fontWeight:700, cursor:"pointer" }}>Azzera</button>}
                 </div>
                 <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))", gap:10 }}>
@@ -1019,17 +1059,27 @@ export default function ProductPage() {
                 </div>
               </div>
 
-              {wineSuppliers.length === 0 ? (
+              {/* SELEZIONE MULTIPLA + richiesta cumulativa (disabilitata se N=0) */}
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:12, flexWrap:"wrap", marginBottom:14 }}>
+                <span style={{ fontSize:13, color:C.muted }}>{selectedSP.size > 0 ? `${selectedSP.size} ${selectedSP.size === 1 ? "fornitore selezionato" : "fornitori selezionati"}` : "Seleziona i fornitori per una richiesta di campionatura cumulativa."}</span>
+                <button onClick={openBulkSample} disabled={selectedSP.size === 0}
+                  style={{ background:selectedSP.size===0?"#F1F5F9":"#9D174D", color:selectedSP.size===0?C.muted:"#fff", border:"none", borderRadius:10, padding:"10px 16px", fontSize:14, fontWeight:700, cursor:selectedSP.size===0?"default":"pointer", display:"inline-flex", alignItems:"center", gap:8, fontFamily:"Inter,system-ui" }}>
+                  <Beaker size={15}/> Richiedi campionatura ai fornitori selezionati ({selectedSP.size})
+                </button>
+              </div>
+
+              {suppliers.length === 0 ? (
                 <div style={{ border:`1px dashed ${C.border}`, borderRadius:14, padding:"28px 20px", textAlign:"center", color:C.muted, marginBottom:16 }}>
-                  Nessun fornitore ha ancora pubblicato un listino per questo prodotto.
+                  Nessun fornitore per questo prodotto.
                 </div>
-              ) : filteredWine.length === 0 ? (
+              ) : (filteredWithListing.length + filteredWithoutListing.length) === 0 ? (
                 <div style={{ border:`1px dashed ${C.border}`, borderRadius:14, padding:"28px 20px", textAlign:"center", color:C.muted, marginBottom:16 }}>
-                  Nessun listino corrisponde ai filtri. <span onClick={clearWineFilter} style={{ color:C.blue, fontWeight:700, cursor:"pointer" }}>Azzera i filtri</span>
+                  Nessun fornitore corrisponde ai filtri. <span onClick={clearWineFilter} style={{ color:C.blue, fontWeight:700, cursor:"pointer" }}>Azzera i filtri</span>
                 </div>
-              ) : (
+              ) : (<>
+                {filteredWithListing.length > 0 && (
                 <div style={{ display:"flex", flexDirection:"column", gap:14, marginBottom:16 }}>
-                  {filteredWine.map(s => {
+                  {filteredWithListing.map(s => {
                     const w = s.wine;
                     const pHl = w.price_per_hl != null ? w.price_per_hl : w.price_per_hl_grado * w.alcohol_degree;
                     const n2 = (x) => Number(x).toLocaleString("it-IT", { minimumFractionDigits:2, maximumFractionDigits:2 });
@@ -1042,15 +1092,17 @@ export default function ProductPage() {
                     if (w.available_hl != null) chips.push(["Disponibilità", `${Number(w.available_hl).toLocaleString("it-IT")} hl`]);
                     if (w.available_until) chips.push(["Disponibile fino al", new Date(w.available_until).toLocaleDateString("it-IT")]);
                     return (
-                      <div key={s.id} style={{ border:`1px solid ${C.border}`, borderRadius:16, padding:20, background:"#fff" }}>
+                      <div key={s.id} style={{ border:`1px solid ${selectedSP.has(s.id) ? "#9D174D" : C.border}`, borderRadius:16, padding:20, background:"#fff" }}>
                         <div style={{ display:"flex", justifyContent:"space-between", gap:16, flexWrap:"wrap", marginBottom:12 }}>
                           <div style={{ minWidth:200 }}>
                             <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:4 }}>
+                              <input type="checkbox" checked={selectedSP.has(s.id)} onChange={() => toggleSP(s.id)} aria-label={`Seleziona ${s.name}`} style={{ width:16, height:16, accentColor:"#9D174D", cursor:"pointer", flexShrink:0 }}/>
                               <SupplierName name={s.name} companyId={s.company_id} className="bs-suplink" style={{ fontSize:17, fontWeight:800 }}/>
                               <CountryFlag country={s.origin} size={14} />
                             </div>
                             <div style={{ display:"flex", alignItems:"center", gap:10, fontSize:12.5, color:C.muted, flexWrap:"wrap" }}>
                               <span style={{ display:"flex", alignItems:"center", gap:4 }}><Star size={12} fill={C.amber} color={C.amber}/> {s.rating.toFixed(1)} ({s.reviews})</span>
+                              {s.region && <span>{s.region}</span>}
                               {w.organic && <span style={{ color:C.green, fontWeight:700, display:"flex", alignItems:"center", gap:3 }}><Check size={11}/> Biologico</span>}
                             </div>
                           </div>
@@ -1074,7 +1126,38 @@ export default function ProductPage() {
                     );
                   })}
                 </div>
-              )}
+                )}
+
+                {filteredWithoutListing.length > 0 && (
+                  <div style={{ marginBottom:16 }}>
+                    <div style={{ fontSize:12, fontWeight:700, color:C.muted, textTransform:"uppercase", letterSpacing:"0.04em", margin:"6px 0 10px" }}>Fornitori senza listino pubblicato</div>
+                    <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(240px,1fr))", gap:10 }}>
+                      {filteredWithoutListing.map(s => (
+                        <div key={s.id} style={{ border:`1px solid ${selectedSP.has(s.id) ? "#9D174D" : C.border}`, borderRadius:11, padding:"12px 13px", background:C.bg, display:"flex", flexDirection:"column", gap:8 }}>
+                          <div>
+                            <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:4 }}>
+                              <input type="checkbox" checked={selectedSP.has(s.id)} onChange={() => toggleSP(s.id)} aria-label={`Seleziona ${s.name}`} style={{ width:15, height:15, accentColor:"#9D174D", cursor:"pointer", flexShrink:0 }}/>
+                              <SupplierName name={s.name} companyId={s.company_id} className="bs-suplink" style={{ fontSize:13.5, fontWeight:700 }}/>
+                              <CountryFlag country={s.origin} size={12} />
+                            </div>
+                            <div style={{ display:"flex", alignItems:"center", gap:8, fontSize:11.5, color:C.muted, flexWrap:"wrap" }}>
+                              <span style={{ display:"flex", alignItems:"center", gap:3 }}><Star size={11} fill={C.amber} color={C.amber}/> {s.rating.toFixed(1)}</span>
+                              {s.region && <span>{s.region}</span>}
+                              <span className="bs-chip" style={{ background: s.status==="verified" ? "#ECFDF5" : "#FEF3C7", color: s.status==="verified" ? C.green : C.amber }}>{s.status==="verified" ? "Verificato" : "In attesa di verifica"}</span>
+                            </div>
+                          </div>
+                          {s.company_id && (
+                            <a href={`/messaggi?to=${s.company_id}`} className="bs-btn-ghost" style={{ textDecoration:"none", justifyContent:"center", fontSize:12, borderColor:C.blue, color:C.blue, fontWeight:700, marginTop:"auto" }}>
+                              <MessageSquare size={12}/> Contatta fornitore
+                            </a>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>)}
+
               <div style={{ fontSize:12.5, color:C.muted, lineHeight:1.6, background:C.bg, border:`1px solid ${C.border}`, borderRadius:10, padding:"12px 14px", marginBottom:28 }}>
                 Vini e mosti sfusi non si acquistano online: richiedi un campione al fornitore e concludi la trattativa direttamente con lui.
               </div>
@@ -1104,7 +1187,7 @@ export default function ProductPage() {
                 caso raro/transitorio (l'approvazione admin rende visibile il
                 listino già compilato), ma se esiste resta distinto dalla sezione
                 "Fornitori non verificati": qui la verifica c'è, manca il listino. */}
-            {verifiedUnpriced.length > 0 && (
+            {!sampleOnly && verifiedUnpriced.length > 0 && (
               <div style={{ border:`1px solid ${C.border}`, borderRadius:14, padding:"18px 20px", marginBottom:28 }}>
                 <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:6 }}>
                   <Factory size={17} color={C.muted} />
@@ -1138,7 +1221,7 @@ export default function ProductPage() {
                 ancora controllato. Niente prezzo né escrow, ma si contattano con
                 la messaggistica INTERNA (mascheramento DAV-23) — mai col mailto
                 esterno, che resta solo per i "Fornitori individuati" qui sotto. */}
-            {unverifiedSuppliers.length > 0 && (
+            {!sampleOnly && unverifiedSuppliers.length > 0 && (
               <div style={{ border:`1px solid ${C.border}`, borderRadius:14, padding:"18px 20px", marginBottom:28 }}>
                 <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:6 }}>
                   <Factory size={17} color={C.muted} />
@@ -1640,6 +1723,69 @@ export default function ProductPage() {
                   {sampleErr && <div style={{ fontSize:13, color:C.red }}>{sampleErr}</div>}
                   <button onClick={submitSampleRequest} disabled={sampleBusy} style={{ width:"100%", background:"#9D174D", color:"#fff", border:"none", borderRadius:10, padding:"12px", fontSize:15, fontWeight:700, cursor:sampleBusy?"default":"pointer", opacity:sampleBusy?0.7:1, fontFamily:"Inter,system-ui" }}>
                     {sampleBusy ? "Invio…" : "Invia richiesta"}
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODALE — Richiedi campionatura ai fornitori selezionati (cumulativa) */}
+      {bulkOpen && (
+        <div onClick={() => !bulkBusy && setBulkOpen(false)} style={{ position:"fixed", inset:0, background:"rgba(15,23,42,0.45)", zIndex:1300, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ background:"#fff", borderRadius:16, width:"100%", maxWidth:480, maxHeight:"90vh", overflowY:"auto", boxShadow:"0 20px 60px rgba(0,0,0,0.25)" }}>
+            <div style={{ padding:"16px 20px", borderBottom:`1px solid ${C.border}`, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+              <strong style={{ fontSize:16, color:C.text }}>Richiedi campionatura</strong>
+              <button onClick={() => !bulkBusy && setBulkOpen(false)} style={{ background:"none", border:"none", cursor:"pointer", color:C.muted, padding:4 }}><X size={18}/></button>
+            </div>
+            <div style={{ padding:20 }}>
+              {bulkResult ? (() => {
+                const created = bulkResult.filter(r => r.status === "created");
+                const failed = bulkResult.filter(r => r.status !== "created");
+                return (
+                  <div>
+                    <div style={{ fontSize:15, fontWeight:700, color:C.text, marginBottom:8 }}>
+                      {created.length} {created.length === 1 ? "richiesta inviata" : "richieste inviate"}{failed.length > 0 ? `, ${failed.length} non ${failed.length === 1 ? "inviata" : "inviate"}` : ""}
+                    </div>
+                    {created.length > 0 && <div style={{ fontSize:13, color:C.green, marginBottom:failed.length?12:16, display:"flex", alignItems:"center", gap:6 }}><Check size={15}/> I fornitori riceveranno una email e ti risponderanno.</div>}
+                    {failed.length > 0 && (
+                      <div style={{ marginBottom:16 }}>
+                        <div style={{ fontSize:13, fontWeight:700, color:C.text, marginBottom:6 }}>Non inviate:</div>
+                        <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+                          {failed.map(r => (
+                            <div key={r.supplier_product_id} style={{ fontSize:12.5, color:C.text, background:"#FEF2F2", border:"1px solid #FECACA", borderRadius:8, padding:"8px 10px" }}>
+                              <b>{supplierNameById(r.supplier_product_id)}</b>: {bulkSampleErrorText(r.error_message)}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    <button onClick={() => setBulkOpen(false)} style={{ width:"100%", background:"#9D174D", color:"#fff", border:"none", borderRadius:10, padding:"12px", fontSize:15, fontWeight:700, cursor:"pointer" }}>Chiudi</button>
+                  </div>
+                );
+              })() : (
+                <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+                  <div style={{ fontSize:14, color:C.text }}>{product.name} — <strong>{selectedSP.size} {selectedSP.size === 1 ? "fornitore" : "fornitori"}</strong> selezionat{selectedSP.size === 1 ? "o" : "i"}</div>
+                  <label style={{ fontSize:13, fontWeight:600, color:C.muted }}>
+                    Quantità campione (litri)
+                    <input type="number" min={0.1} max={20} step={0.25} value={bulkQty} onChange={(e) => setBulkQty(e.target.value)} disabled={bulkBusy}
+                      style={{ marginTop:6, width:"100%", padding:"10px 12px", border:`1px solid ${C.border}`, borderRadius:8, fontSize:15, fontFamily:"'JetBrains Mono',monospace" }} />
+                    <span style={{ display:"block", marginTop:4, fontSize:11.5, color:C.muted }}>Stessa quantità per ogni fornitore. Massimo 20 l.</span>
+                  </label>
+                  <label style={{ fontSize:13, fontWeight:600, color:C.muted }}>
+                    Indirizzo di spedizione
+                    <textarea value={bulkAddr} onChange={(e) => setBulkAddr(e.target.value)} disabled={bulkBusy} rows={2}
+                      style={{ marginTop:6, width:"100%", padding:"10px 12px", border:`1px solid ${C.border}`, borderRadius:8, fontSize:14, fontFamily:"Inter,system-ui", resize:"vertical" }} />
+                  </label>
+                  <label style={{ fontSize:13, fontWeight:600, color:C.muted }}>
+                    Messaggio ai fornitori (facoltativo)
+                    <textarea value={bulkMsg} onChange={(e) => setBulkMsg(e.target.value)} disabled={bulkBusy} rows={2}
+                      style={{ marginTop:6, width:"100%", padding:"10px 12px", border:`1px solid ${C.border}`, borderRadius:8, fontSize:14, fontFamily:"Inter,system-ui", resize:"vertical" }} />
+                  </label>
+                  {bulkErr && <div style={{ fontSize:13, color:C.red }}>{bulkErr}</div>}
+                  <button onClick={submitBulkSample} disabled={bulkBusy} style={{ width:"100%", background:"#9D174D", color:"#fff", border:"none", borderRadius:10, padding:"12px", fontSize:15, fontWeight:700, cursor:bulkBusy?"default":"pointer", opacity:bulkBusy?0.7:1, fontFamily:"Inter,system-ui" }}>
+                    {bulkBusy ? "Invio…" : `Invia ${selectedSP.size} ${selectedSP.size === 1 ? "richiesta" : "richieste"}`}
                   </button>
                 </div>
               )}
