@@ -117,6 +117,7 @@ function mapDbSupplier(s) {
     company_id: s.company_id,
     name: s.name,
     origin: s.country,
+    region: s.region || null,
     flag: flagFor(s.country),
     rating: s.rating ?? 0,
     reviews: s.reviews_count ?? 0,
@@ -326,6 +327,13 @@ export default function ProductPage() {
   const [sampleBusy, setSampleBusy] = useState(false);
   const [sampleErr, setSampleErr] = useState("");
   const [sampleOk, setSampleOk] = useState(false);
+  // Filtro listini vino (Nazione, Regione, Grado alcolico, Prezzo €/hl-grado).
+  const [wfCountry, setWfCountry] = useState("");
+  const [wfRegion, setWfRegion] = useState("");
+  const [wfAlcMin, setWfAlcMin] = useState("");
+  const [wfAlcMax, setWfAlcMax] = useState("");
+  const [wfPriceMin, setWfPriceMin] = useState("");
+  const [wfPriceMax, setWfPriceMax] = useState("");
   const [piazzaData, setPiazzaData] = useState(null);
   const [selectedPiazze, setSelectedPiazze] = useState([]); // piazze mostrate sul grafico vino
   useEffect(() => { if (productId) isFollowingProduct(productId).then(setFollowingProduct).catch(() => {}); }, [productId]);
@@ -474,6 +482,34 @@ export default function ProductPage() {
   // online — niente prezzo aggregato, carrello, asta, promo. Solo richiesta campione.
   const sampleOnly = product.listing_mode === "sample_only";
   const wineSuppliers = suppliers.filter(s => s.wine);
+
+  // Filtro listini vino: opzioni/range derivati SOLO dai dati reali dei listini.
+  // Grado e prezzo vengono da supplier_product_wine_specs (mai da best_price €/kg,
+  // unità diversa). Regione dipende dalla nazione selezionata. Se una dimensione
+  // non ha valori disponibili, il campo va disabilitato ("nessun dato"), non a
+  // un range fisso arbitrario.
+  const wineCountries = [...new Set(wineSuppliers.map(s => s.origin).filter(Boolean))].sort();
+  const wineRegions = [...new Set(wineSuppliers.filter(s => !wfCountry || s.origin === wfCountry).map(s => s.region).filter(Boolean))].sort();
+  const alcVals = wineSuppliers.map(s => s.wine?.alcohol_degree).filter(v => v != null);
+  const priceVals = wineSuppliers.map(s => s.wine?.price_per_hl_grado).filter(v => v != null);
+  const alcRange = alcVals.length ? [Math.min(...alcVals), Math.max(...alcVals)] : null;
+  const priceRange = priceVals.length ? [Math.min(...priceVals), Math.max(...priceVals)] : null;
+  const wineFilterActive = !!(wfCountry || wfRegion || wfAlcMin !== "" || wfAlcMax !== "" || wfPriceMin !== "" || wfPriceMax !== "");
+  const clearWineFilter = () => { setWfCountry(""); setWfRegion(""); setWfAlcMin(""); setWfAlcMax(""); setWfPriceMin(""); setWfPriceMax(""); };
+  const filteredWine = wineSuppliers.filter(s => {
+    if (wfCountry && s.origin !== wfCountry) return false;
+    if (wfRegion && s.region !== wfRegion) return false;
+    const a = s.wine?.alcohol_degree, p = s.wine?.price_per_hl_grado;
+    if (wfAlcMin !== "" && (a == null || a < Number(wfAlcMin))) return false;
+    if (wfAlcMax !== "" && (a == null || a > Number(wfAlcMax))) return false;
+    if (wfPriceMin !== "" && (p == null || p < Number(wfPriceMin))) return false;
+    if (wfPriceMax !== "" && (p == null || p > Number(wfPriceMax))) return false;
+    return true;
+  });
+  const wfLabel = { display:"block", fontSize:11, color:C.muted, fontWeight:600, marginBottom:4 };
+  const wfNum = { width:"100%", minWidth:0, padding:"7px 8px", border:`1px solid ${C.border}`, borderRadius:7, fontSize:13, fontFamily:"'JetBrains Mono',monospace" };
+  const wfSel = (disabled) => ({ width:"100%", padding:"7px 8px", border:`1px solid ${C.border}`, borderRadius:7, fontSize:13, background:disabled?"#F1F5F9":"#fff", color:disabled?C.muted:C.text, cursor:disabled?"not-allowed":"pointer" });
+  const wfNoData = { fontSize:12, color:C.muted, fontStyle:"italic", padding:"7px 0" };
 
   function openSampleModal(s) {
     setSampleTarget(s); setSampleQty(0.75); setSampleAddr(myAddress || "");
@@ -936,13 +972,64 @@ export default function ProductPage() {
                 specifiche enologiche, unica CTA "Richiedi campionatura". */}
             {sampleOnly && (<>
               <div style={{ fontSize:12, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.08em", color:"#9D174D", marginBottom:12 }}>Listini a campionatura</div>
+
+              {/* FILTRO LISTINI — Nazione, Regione, Grado alcolico, Prezzo (€/hl-grado).
+                  Opzioni/range presi solo dai dati reali dei listini; ogni campo si
+                  disabilita ("nessun dato") finché non ci sono valori. */}
+              <div style={{ border:`1px solid ${C.border}`, borderRadius:12, padding:14, marginBottom:16, background:C.bg }}>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
+                  <span style={{ fontSize:12, fontWeight:700, color:C.muted, textTransform:"uppercase", letterSpacing:"0.04em" }}>Filtra i listini</span>
+                  {wineFilterActive && <button onClick={clearWineFilter} style={{ background:"none", border:"none", color:C.blue, fontSize:12.5, fontWeight:700, cursor:"pointer" }}>Azzera</button>}
+                </div>
+                <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))", gap:10 }}>
+                  <div>
+                    <label style={wfLabel}>Nazione</label>
+                    <select value={wfCountry} disabled={wineCountries.length===0} onChange={e => { setWfCountry(e.target.value); setWfRegion(""); }} style={wfSel(wineCountries.length===0)}>
+                      <option value="">{wineCountries.length ? "Tutte" : "Nessun dato"}</option>
+                      {wineCountries.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label style={wfLabel}>Regione</label>
+                    <select value={wfRegion} disabled={wineRegions.length===0} onChange={e => setWfRegion(e.target.value)} style={wfSel(wineRegions.length===0)}>
+                      <option value="">{wineRegions.length ? "Tutte" : "Nessun dato"}</option>
+                      {wineRegions.map(r => <option key={r} value={r}>{r}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label style={wfLabel}>Grado alcolico (% vol)</label>
+                    {alcRange ? (
+                      <div style={{ display:"flex", gap:6, alignItems:"center" }}>
+                        <input type="number" step="0.1" min={0} value={wfAlcMin} onChange={e=>setWfAlcMin(e.target.value)} placeholder={alcRange[0].toLocaleString("it-IT",{minimumFractionDigits:1,maximumFractionDigits:1})} style={wfNum} aria-label="Grado alcolico minimo"/>
+                        <span style={{ color:C.muted, fontSize:12 }}>–</span>
+                        <input type="number" step="0.1" min={0} value={wfAlcMax} onChange={e=>setWfAlcMax(e.target.value)} placeholder={alcRange[1].toLocaleString("it-IT",{minimumFractionDigits:1,maximumFractionDigits:1})} style={wfNum} aria-label="Grado alcolico massimo"/>
+                      </div>
+                    ) : <div style={wfNoData}>Nessun dato disponibile</div>}
+                  </div>
+                  <div>
+                    <label style={wfLabel}>Prezzo (€/hl-grado)</label>
+                    {priceRange ? (
+                      <div style={{ display:"flex", gap:6, alignItems:"center" }}>
+                        <input type="number" step="0.01" min={0} value={wfPriceMin} onChange={e=>setWfPriceMin(e.target.value)} placeholder={priceRange[0].toLocaleString("it-IT",{minimumFractionDigits:2,maximumFractionDigits:2})} style={wfNum} aria-label="Prezzo minimo"/>
+                        <span style={{ color:C.muted, fontSize:12 }}>–</span>
+                        <input type="number" step="0.01" min={0} value={wfPriceMax} onChange={e=>setWfPriceMax(e.target.value)} placeholder={priceRange[1].toLocaleString("it-IT",{minimumFractionDigits:2,maximumFractionDigits:2})} style={wfNum} aria-label="Prezzo massimo"/>
+                      </div>
+                    ) : <div style={wfNoData}>Nessun dato disponibile</div>}
+                  </div>
+                </div>
+              </div>
+
               {wineSuppliers.length === 0 ? (
                 <div style={{ border:`1px dashed ${C.border}`, borderRadius:14, padding:"28px 20px", textAlign:"center", color:C.muted, marginBottom:16 }}>
                   Nessun fornitore ha ancora pubblicato un listino per questo prodotto.
                 </div>
+              ) : filteredWine.length === 0 ? (
+                <div style={{ border:`1px dashed ${C.border}`, borderRadius:14, padding:"28px 20px", textAlign:"center", color:C.muted, marginBottom:16 }}>
+                  Nessun listino corrisponde ai filtri. <span onClick={clearWineFilter} style={{ color:C.blue, fontWeight:700, cursor:"pointer" }}>Azzera i filtri</span>
+                </div>
               ) : (
                 <div style={{ display:"flex", flexDirection:"column", gap:14, marginBottom:16 }}>
-                  {wineSuppliers.map(s => {
+                  {filteredWine.map(s => {
                     const w = s.wine;
                     const pHl = w.price_per_hl != null ? w.price_per_hl : w.price_per_hl_grado * w.alcohol_degree;
                     const n2 = (x) => Number(x).toLocaleString("it-IT", { minimumFractionDigits:2, maximumFractionDigits:2 });
