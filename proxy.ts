@@ -13,6 +13,8 @@ export const config = {
 // "prodotti|categorie|aste" sono alias pubblici (redirect in next.config verso
 // catalogo/pool): esclusi qui così, se il redirect non scattasse, non finiscono
 // comunque sul login.
-"/((?!_next/static|_next/image|favicon.ico|api|welcome|registrati|pool|prodotto|prodotti|categorie|aste|andamento-prezzi|fornitore|fornitori|dashboard|catalogo|corriere|corrieri|legale|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)"
+// "ricezione" (conferma consegna via QR, DAV-74) è pubblica per design: il
+// token nell'URL è la credenziale, validata server-side con rate limit.
+"/((?!_next/static|_next/image|favicon.ico|api|welcome|registrati|pool|prodotto|prodotti|categorie|aste|andamento-prezzi|fornitore|fornitori|dashboard|catalogo|corriere|corrieri|legale|ricezione|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)"
   ],
 };
