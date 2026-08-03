@@ -12,10 +12,10 @@
 // Le voci con show:false sono nascoste per il ruolo corrente (flag
 // companies.is_* da getMyCompany, stesso pattern della vecchia sidebar).
 import { useState, useEffect, useLayoutEffect } from "react";
-import { LayoutGrid, Bell, ShoppingBag, Gavel, MessageSquare, Star, Package, Truck, Shield, ShieldCheck, Settings, Tag } from "lucide-react";
+import { LayoutGrid, Bell, ShoppingBag, Gavel, MessageSquare, Star, Package, Truck, Shield, ShieldCheck, Settings, Tag, Beaker } from "lucide-react";
 import { BSIcon } from "@/components/BSLogo";
 import NavAuth from "@/components/BulkStrikeNavAuth";
-import { getMyCompany, getNotifications, getUnreadMessagesCount, adminCountPendingSuppliers, adminListPendingPromotions } from "@/lib/api";
+import { getMyCompany, getNotifications, getUnreadMessagesCount, adminCountPendingSuppliers, adminListPendingPromotions, getSupplierSampleRequests } from "@/lib/api";
 
 const C = { blue: "#0EA5E9", text: "#0F172A", muted: "#64748B", border: "#E2E8F0", bg: "#F8FAFE", red: "#DC2626" };
 
@@ -53,6 +53,7 @@ export default function ProfileShell({ active, headerCenter = null, children }) 
   const [msgUnread, setMsgUnread] = useState(0);
   const [pendingSuppliers, setPendingSuppliers] = useState(0);
   const [pendingPromos, setPendingPromos] = useState(0);
+  const [pendingSamples, setPendingSamples] = useState(0);
 
   // Prima del paint: ripristina l'ultimo stato noto (vedi commento su SHELL_CACHE_KEY).
   useIsoLayoutEffect(() => {
@@ -63,6 +64,7 @@ export default function ProfileShell({ active, headerCenter = null, children }) 
     if (c.msg) setMsgUnread(c.msg);
     if (c.pending) setPendingSuppliers(c.pending);
     if (c.pendingPromo) setPendingPromos(c.pendingPromo);
+    if (c.pendingSample) setPendingSamples(c.pendingSample);
   }, []);
 
   useEffect(() => {
@@ -73,17 +75,21 @@ export default function ProfileShell({ active, headerCenter = null, children }) 
     adminCountPendingSuppliers().then((n) => { setPendingSuppliers(n || 0); writeShellCache({ pending: n || 0 }); }).catch(() => {});
     // Promozioni in attesa (guardia lato RPC: NOT_ADMIN per i non-admin → 0).
     adminListPendingPromotions().then((rows) => { const n = (rows || []).length; setPendingPromos(n); writeShellCache({ pendingPromo: n }); }).catch(() => {});
+    // Richieste di campionatura ancora in attesa (per i fornitori; [] altrimenti).
+    getSupplierSampleRequests().then((rows) => { const n = (rows || []).filter((r) => r.status === "pending").length; setPendingSamples(n); writeShellCache({ pendingSample: n }); }).catch(() => {});
   }, []);
 
   const SIDEBAR = [
     { id: "overview",  label: "Panoramica",             icon: LayoutGrid,    href: "/dashboard?section=overview" },
     { id: "alerts",    label: "Avvisi & materie prime", icon: Bell,          href: "/dashboard?section=alerts", badge: notifUnread },
     { id: "ordini",    label: "Ordini",                 icon: ShoppingBag,   href: "/ordini" },
+    { id: "richieste-campioni", label: "Le mie campionature", icon: Beaker,   href: "/le-mie-richieste-campioni" },
     { id: "pools",     label: "Aste personali",         icon: Gavel,         href: "/dashboard?section=pools" },
     { id: "messaggi",  label: "Messaggi",               icon: MessageSquare, href: "/messaggi", badge: msgUnread },
     { id: "preferiti", label: "Fornitori preferiti",    icon: Star,          href: "/preferiti" },
     { id: "prodotti",  label: "Listino prodotti",       icon: Package,       href: "/i-miei-prodotti", show: !!company?.is_supplier },
     { id: "promozioni", label: "Le mie promozioni",      icon: Tag,           href: "/le-mie-promozioni", show: !!company?.is_supplier },
+    { id: "campionature", label: "Richieste di campionatura", icon: Beaker,   href: "/le-mie-campionature", show: !!company?.is_supplier, badge: pendingSamples },
     { id: "servizi",   label: "Listino servizi",        icon: Truck,         href: "/corriere",        show: !!company?.is_carrier },
     { id: "admin",     label: "Apertura asta",          icon: Shield,        href: "/admin/prodotti",  show: !!company?.is_platform_admin },
     { id: "admin-fornitori", label: "Fornitori da verificare", icon: ShieldCheck, href: "/admin/fornitori", show: !!company?.is_platform_admin, badge: pendingSuppliers },

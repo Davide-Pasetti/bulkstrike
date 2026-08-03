@@ -73,7 +73,9 @@ export default function PromotionsPage({ inShell = false }) {
       const [mine, ls] = await Promise.all([getMyPromotions(), getMySupplierListings()]);
       setPromos(mine.promotions || []);
       setQuota(mine.quota || []);
-      setListings(ls || []);
+      // I prodotti a sola campionatura (vini/mosti sfusi) non sono promuovibili
+      // (niente prezzo €/kg): esclusi dal selettore.
+      setListings((ls || []).filter((l) => l.product?.listing_mode !== "sample_only"));
     } catch (e) { setErr(promotionErrorMessage(e)); }
     setLoading(false);
   }

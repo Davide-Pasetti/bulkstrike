@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
-import { Search, ArrowRight, Check, Clock, ChevronDown, ChevronRight, ChevronUp, Star, Shield, Truck, FileText, Download, Plus, Minus, Beaker, TrendingDown, Users, Gavel, Info, ShoppingCart, Factory, ExternalLink, MessageSquare } from "lucide-react";
-import { getProduct, getOpenPoolForProduct, getPriceReference, getProductBreadcrumb, getSession, upsertCartItem, poolErrorMessage, searchProducts, getCart, isFollowingProduct, getMarketPriceSeries, getMarketIndexSeries, getProductSpecs, getProductCandidateSuppliers, getMyCompany } from "@/lib/api";
+import { Search, ArrowRight, Check, Clock, ChevronDown, ChevronRight, ChevronUp, Star, Shield, Truck, FileText, Download, Plus, Minus, Beaker, TrendingDown, Users, Gavel, Info, ShoppingCart, Factory, ExternalLink, MessageSquare, X, Wine } from "lucide-react";
+import { getProduct, getOpenPoolForProduct, getPriceReference, getProductBreadcrumb, getSession, upsertCartItem, poolErrorMessage, searchProducts, getCart, isFollowingProduct, getMarketPriceSeries, getMarketIndexSeries, getProductSpecs, getProductCandidateSuppliers, getMyCompany, getMyCompanyAddress, createSampleRequest, sampleErrorMessage, getMarketPriceSeriesByPiazza } from "@/lib/api";
 import PriceSourceNote from "@/components/PriceSourceNote";
 import CountryFlag from "@/components/CountryFlag";
 import { ytdChange } from "@/lib/priceTrend";
@@ -82,6 +82,9 @@ function compute(supplier, qty) {
 }
 const eur = (n) => n.toLocaleString("it-IT", { style:"currency", currency:"EUR", maximumFractionDigits:0 });
 const eurKg = (n) => "€" + n.toLocaleString("it-IT", { minimumFractionDigits:2, maximumFractionDigits:2 });
+// Suffisso unità del grafico prezzi: il payload delle serie porta ora `unit`
+// (non si assume più €/kg). 'kg'→/kg, 'hl_grado'→/hl-grado, 'hl'→/hl.
+const unitSuffix = (u) => u === "hl_grado" ? "/hl-grado" : u === "hl" ? "/hl" : "/kg";
 const tierLabel = (qty) => qty<5000?"1–5 t":qty<20000?"5–20 t":qty<50000?"20–50 t":"50 t+";
 
 /* ─── MAPPERS DB → shape del componente ─────────────────────────────────────
@@ -122,6 +125,8 @@ function mapDbSupplier(s) {
     purity,
     certs: s.certifications || [],
     hasPrice,
+    // Specifiche enologiche (solo prodotti a campionatura). null altrimenti.
+    wine: s.wine || null,
     // 'verified' | 'pending' (DAV-33): decide in quale sezione compare un
     // fornitore senza prezzo pubblicato.
     status: s.status || null,
@@ -145,6 +150,9 @@ function mapDbProduct(p) {
     purityRange: "—",
     description: p.description || "",
     default_unit: p.default_unit || "kg",
+    // 'purchase' | 'sample_only' (DAV-77): sample_only = vini/mosti sfusi, solo
+    // richiesta di campionatura (niente carrello/asta/promo).
+    listing_mode: p.listing_mode || "purchase",
     pallet_kg: p.pallet_kg || 1000,
     // Formati di vendita del prodotto impostati da admin (null = non applicabile).
     sacco_kg: p.sacco_kg ?? null,
@@ -309,7 +317,26 @@ export default function ProductPage() {
   const [candidates, setCandidates] = useState([]);
   const [buyerCompanyName, setBuyerCompanyName] = useState("");
   const [cartSupplierIds, setCartSupplierIds] = useState(new Set()); // fornitori già presenti nel tuo carrello → spedizione si consolida
+  // Campionatura (DAV-77): modale "Richiedi campionatura" + serie prezzi per piazza.
+  const [myAddress, setMyAddress] = useState("");
+  const [sampleTarget, setSampleTarget] = useState(null); // il listing vino a cui chiedere il campione
+  const [sampleQty, setSampleQty] = useState(0.75);
+  const [sampleAddr, setSampleAddr] = useState("");
+  const [sampleMsg, setSampleMsg] = useState("");
+  const [sampleBusy, setSampleBusy] = useState(false);
+  const [sampleErr, setSampleErr] = useState("");
+  const [sampleOk, setSampleOk] = useState(false);
+  const [piazzaData, setPiazzaData] = useState(null);
+  const [selectedPiazze, setSelectedPiazze] = useState([]); // piazze mostrate sul grafico vino
   useEffect(() => { if (productId) isFollowingProduct(productId).then(setFollowingProduct).catch(() => {}); }, [productId]);
+  // Alla ricezione dei dati per piazza, preseleziona quella con la rilevazione più recente.
+  useEffect(() => {
+    const piazze = piazzaData?.piazze || [];
+    if (piazze.length) {
+      const recent = [...piazze].sort((a, b) => String(b.ultima_data || "").localeCompare(String(a.ultima_data || "")))[0];
+      setSelectedPiazze([recent.piazza]);
+    } else setSelectedPiazze([]);
+  }, [piazzaData]);
 
   // se sei loggato, sappiamo da quali fornitori hai già roba nel carrello: la spedizione
   // di un nuovo prodotto dello stesso fornitore si unisce a quella già "pagata" da quei prodotti
@@ -325,6 +352,12 @@ export default function ProductPage() {
       try {
         const c = await getMyCompany();
         if (c?.legal_name) setBuyerCompanyName(c.legal_name);
+      } catch (e) {}
+      // Indirizzo aziendale per precompilare la richiesta di campionatura.
+      try {
+        const addr = await getMyCompanyAddress();
+        const full = [addr?.address, addr?.city, addr?.country].filter(Boolean).join(", ");
+        if (full) setMyAddress(full);
       } catch (e) {}
     })();
   }, []);
@@ -366,6 +399,8 @@ export default function ProductPage() {
           setSuppliers((p.suppliers || []).map(mapDbSupplier));
           setPriceRef(ref != null ? Number(ref) : null);
           setPool(mapDbPool(op));
+          // Vini/mosti sfusi: serie prezzi per piazza (Verona, Asti…), non media nazionale.
+          if (p.listing_mode === "sample_only") getMarketPriceSeriesByPiazza(id).then(setPiazzaData).catch(() => setPiazzaData(null));
           setCrumb(bc || null);
           setSelectedId(null);
           setSelectedFormatIdx(0);
@@ -435,6 +470,29 @@ export default function ProductPage() {
 
   const featured = (selectedId ? ranked.find(s => s.id === selectedId) : ranked[0]) || null;
   const others = featured ? ranked.filter(s => s.id !== featured.id) : [];
+  // Campionatura (DAV-77): questi prodotti (vini/mosti sfusi) non si acquistano
+  // online — niente prezzo aggregato, carrello, asta, promo. Solo richiesta campione.
+  const sampleOnly = product.listing_mode === "sample_only";
+  const wineSuppliers = suppliers.filter(s => s.wine);
+
+  function openSampleModal(s) {
+    setSampleTarget(s); setSampleQty(0.75); setSampleAddr(myAddress || "");
+    setSampleMsg(""); setSampleErr(""); setSampleOk(false);
+  }
+  async function submitSampleRequest() {
+    if (!sampleTarget) return;
+    const q = Number(sampleQty);
+    if (!q || q <= 0 || q > 20) { setSampleErr("La quantità deve essere tra 0 e 20 litri."); return; }
+    if (!sampleAddr || !sampleAddr.trim()) { setSampleErr("Inserisci l'indirizzo di spedizione."); return; }
+    setSampleBusy(true); setSampleErr("");
+    try {
+      await createSampleRequest({ supplierProductId: sampleTarget.id, quantityL: q, shippingAddress: sampleAddr.trim(), message: sampleMsg.trim() || null });
+      setSampleOk(true);
+    } catch (e) {
+      setSampleErr(sampleErrorMessage(e));
+    }
+    setSampleBusy(false);
+  }
   const cheapestId = ranked.length ? ranked[0].id : null;
 
   // Acquisto Rapido è a unità di vendita (es. sacchi da 25 kg), non a kg liberi.
@@ -651,7 +709,9 @@ export default function ProductPage() {
               {/* "con prezzo", non "disponibili": i fornitori senza listino sono
                   comunque presenti sulla scheda, ma non sono acquistabili — la
                   distinzione fra quotato e solo censito deve restare netta. */}
-              <span className="bs-chip" style={{ background:"#ECFDF5", color:C.green }}><Check size={11}/> {ranked.length} {ranked.length === 1 ? "fornitore" : "fornitori"} con prezzo</span>
+              {sampleOnly
+                ? <span className="bs-chip" style={{ background:"#FDF2F8", color:"#9D174D" }}><Wine size={11}/> {wineSuppliers.length} {wineSuppliers.length === 1 ? "fornitore" : "fornitori"} · su campionatura</span>
+                : <span className="bs-chip" style={{ background:"#ECFDF5", color:C.green }}><Check size={11}/> {ranked.length} {ranked.length === 1 ? "fornitore" : "fornitori"} con prezzo</span>}
             </div>
             <h1 style={{ fontSize:32, fontWeight:800, letterSpacing:"-0.02em", marginBottom:6 }}>{product.name}</h1>
             <p style={{ fontSize:14, color:C.muted }}>{product.form} · Purezza {product.purityRange} · CAS {product.cas}</p>
@@ -662,7 +722,13 @@ export default function ProductPage() {
             )}
           </div>
           <div style={{ textAlign:"right" }}>
-            {ranked.length ? (
+            {sampleOnly ? (
+              <>
+                <div style={{ fontSize:12, color:C.muted }}>Vini e mosti sfusi</div>
+                <div style={{ fontSize:16, fontWeight:800, color:"#9D174D" }}>Solo su campionatura</div>
+                <div style={{ fontSize:10.5, color:C.muted, marginTop:2 }}>Prezzo in €/hl-grado, per listino</div>
+              </>
+            ) : ranked.length ? (
               <>
                 <div style={{ fontSize:12, color:C.muted }}>Prezzo indicativo da</div>
                 <div className="bs-num" style={{ fontSize:28, fontWeight:800, color:C.blue }}>{eurKg(ranked[0].calc.preVatKg)}<span style={{ fontSize:14, fontWeight:400, color:C.muted }}>/kg</span> <IvaChip style={{ verticalAlign: "2px" }} /></div>
@@ -688,7 +754,8 @@ export default function ProductPage() {
 
           {/* LEFT COLUMN */}
           <div>
-            {/* QUANTITA NECESSARIA — due passaggi: 1) formato, 2) numero di unita di quel formato */}
+            {/* QUANTITA NECESSARIA — nascosta per i prodotti a sola campionatura */}
+            {!sampleOnly && (
             <div style={{ border:`1px solid ${C.border}`, borderRadius:14, padding:20, marginBottom:20, background:C.bg }}>
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16, flexWrap:"wrap", gap:10 }}>
                 <div style={{ fontSize:14, fontWeight:700 }}>Seleziona le quantità necessarie</div>
@@ -728,6 +795,7 @@ export default function ProductPage() {
                 ))}
               </div>
             </div>
+            )}
 
 
             {/* FEATURED SUPPLIER */}
@@ -749,7 +817,7 @@ export default function ProductPage() {
               </div>
             )}
 
-            {featured ? (<>
+            {!sampleOnly && featured ? (<>
             <div style={{ fontSize:12, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.08em", color:C.blue, marginBottom:10 }}>In evidenza</div>
             <div style={{ border:`2px solid ${C.blue}`, borderRadius:16, padding:24, marginBottom:24, position:"relative", boxShadow:"0 8px 30px rgba(14,165,233,0.10)" }}>
               <div style={{ position:"absolute", top:-12, left:20, display:"flex", gap:8 }}>
@@ -863,6 +931,67 @@ export default function ProductPage() {
               ))}
             </div>
             </>) : null}
+
+            {/* CAMPIONATURA — listino vini/mosti sfusi (DAV-77): prezzo in €/hl-grado,
+                specifiche enologiche, unica CTA "Richiedi campionatura". */}
+            {sampleOnly && (<>
+              <div style={{ fontSize:12, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.08em", color:"#9D174D", marginBottom:12 }}>Listini a campionatura</div>
+              {wineSuppliers.length === 0 ? (
+                <div style={{ border:`1px dashed ${C.border}`, borderRadius:14, padding:"28px 20px", textAlign:"center", color:C.muted, marginBottom:16 }}>
+                  Nessun fornitore ha ancora pubblicato un listino per questo prodotto.
+                </div>
+              ) : (
+                <div style={{ display:"flex", flexDirection:"column", gap:14, marginBottom:16 }}>
+                  {wineSuppliers.map(s => {
+                    const w = s.wine;
+                    const pHl = w.price_per_hl != null ? w.price_per_hl : w.price_per_hl_grado * w.alcohol_degree;
+                    const n2 = (x) => Number(x).toLocaleString("it-IT", { minimumFractionDigits:2, maximumFractionDigits:2 });
+                    const d1 = (x) => Number(x).toLocaleString("it-IT", { minimumFractionDigits:1, maximumFractionDigits:1 });
+                    const chips = [];
+                    if (w.vintage) chips.push(["Annata", w.vintage]);
+                    if (w.production_zone) chips.push(["Zona", w.production_zone]);
+                    if (w.total_acidity_g_l != null) chips.push(["Acidità totale", `${n2(w.total_acidity_g_l)} g/l`]);
+                    if (w.total_so2_mg_l != null) chips.push(["SO₂ totale", `${d1(w.total_so2_mg_l)} mg/l`]);
+                    if (w.available_hl != null) chips.push(["Disponibilità", `${Number(w.available_hl).toLocaleString("it-IT")} hl`]);
+                    if (w.available_until) chips.push(["Disponibile fino al", new Date(w.available_until).toLocaleDateString("it-IT")]);
+                    return (
+                      <div key={s.id} style={{ border:`1px solid ${C.border}`, borderRadius:16, padding:20, background:"#fff" }}>
+                        <div style={{ display:"flex", justifyContent:"space-between", gap:16, flexWrap:"wrap", marginBottom:12 }}>
+                          <div style={{ minWidth:200 }}>
+                            <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:4 }}>
+                              <SupplierName name={s.name} companyId={s.company_id} className="bs-suplink" style={{ fontSize:17, fontWeight:800 }}/>
+                              <CountryFlag country={s.origin} size={14} />
+                            </div>
+                            <div style={{ display:"flex", alignItems:"center", gap:10, fontSize:12.5, color:C.muted, flexWrap:"wrap" }}>
+                              <span style={{ display:"flex", alignItems:"center", gap:4 }}><Star size={12} fill={C.amber} color={C.amber}/> {s.rating.toFixed(1)} ({s.reviews})</span>
+                              {w.organic && <span style={{ color:C.green, fontWeight:700, display:"flex", alignItems:"center", gap:3 }}><Check size={11}/> Biologico</span>}
+                            </div>
+                          </div>
+                          <div style={{ textAlign:"right" }}>
+                            <div className="bs-num" style={{ fontSize:26, fontWeight:800, color:"#9D174D", lineHeight:1.1 }}>{n2(w.price_per_hl_grado)} <span style={{ fontSize:13, fontWeight:600, color:C.muted }}>€/hl-grado</span></div>
+                            <div style={{ fontSize:12.5, color:C.muted, marginTop:2 }}>= {n2(pHl)} €/hl a {d1(w.alcohol_degree)}° vol.</div>
+                          </div>
+                        </div>
+                        {chips.length > 0 && (
+                          <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:14 }}>
+                            {chips.map(([k,v]) => (
+                              <span key={k} className="bs-chip" style={{ background:"#F1F5F9", color:C.text }}>{k}: <b>{String(v)}</b></span>
+                            ))}
+                          </div>
+                        )}
+                        {w.notes && <div style={{ fontSize:13, color:C.muted, marginBottom:14, lineHeight:1.5 }}>{w.notes}</div>}
+                        <button onClick={() => openSampleModal(s)} style={{ width:"100%", background:"#9D174D", color:"#fff", border:"none", borderRadius:10, padding:"12px", fontSize:15, fontWeight:700, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:8, fontFamily:"Inter,system-ui" }}>
+                          <Beaker size={16}/> Richiedi campionatura
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              <div style={{ fontSize:12.5, color:C.muted, lineHeight:1.6, background:C.bg, border:`1px solid ${C.border}`, borderRadius:10, padding:"12px 14px", marginBottom:28 }}>
+                Vini e mosti sfusi non si acquistano online: richiedi un campione al fornitore e concludi la trattativa direttamente con lui.
+              </div>
+            </>)}
 
             {/* SEGNALA UN FORNITORE — solo quando il prodotto non ha alcun fornitore
                 attivo (getProduct filtra già active=true). Niente invio automatico:
@@ -1120,7 +1249,18 @@ export default function ProductPage() {
                 (visto dal vivo con l'Acido citrico). Con 1 solo fornitore resta
                 il flusso Acquisto di gruppo (router sotto); col divieto di legge
                 resta il box normativo. */}
-            {!pool.exists && !auctionBlocked && !groupBuy && (
+            {sampleOnly && (
+              <div style={{ border:"1px solid #FBCFE8", borderRadius:14, padding:18, background:"#FDF2F8" }}>
+                <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:8 }}>
+                  <div style={{ width:32, height:32, borderRadius:9, background:"#9D174D", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}><Beaker size={16} color="#fff"/></div>
+                  <span style={{ fontSize:14, fontWeight:800, color:C.text }}>Come funziona</span>
+                </div>
+                <div style={{ fontSize:13, color:C.muted, lineHeight:1.55 }}>
+                  Scegli un fornitore dal listino e richiedi un campione: riceverà una email e ti risponderà per organizzare la spedizione. Servizio gratuito, nessun ordine online.
+                </div>
+              </div>
+            )}
+            {!sampleOnly && !pool.exists && !auctionBlocked && !groupBuy && (
               /* Sfondo #FBF7FF: lo stesso rosino della palette viola gia' usato
                  dal box asta ("Asta a ribasso disponibile") nella pagina aste. */
               <div style={{ border:`1px dashed ${C.border}`, borderRadius:14, padding:"22px 18px", textAlign:"center", color:C.muted, background:"#FBF7FF" }}>
@@ -1155,7 +1295,7 @@ export default function ProductPage() {
                 Acquisto di gruppo con 1 solo fornitore (groupBuy, dove il
                 router resta l'ingresso per aprirlo). Mai insieme al box
                 "Apri un'asta" qui sopra. */}
-            {(pool.exists || auctionBlocked || groupBuy) && (auctionBlocked ? (
+            {!sampleOnly && (pool.exists || auctionBlocked || groupBuy) && (auctionBlocked ? (
               /* DIVIETO DI LEGGE — sostituisce il box asta per agricoli/alimentari grezzi
                  SOLO in asta competitiva (2+ fornitori). Con 1 fornitore mostra il box
                  "Acquisto di gruppo" (ramo else), che il divieto non vieta. */
@@ -1225,7 +1365,58 @@ export default function ProductPage() {
             </div>
             ))}
 
-            {/* PRICE HISTORY */}
+            {/* PRICE HISTORY — vini/mosti: grafico per PIAZZA (nascosto se non ci
+                sono ancora dati); altri prodotti: mercato €/unità o indice. */}
+            {sampleOnly ? ((piazzaData?.piazze || []).length > 0 && (
+              <div style={{ border:`1px solid ${C.border}`, borderRadius:14, padding:18 }}>
+                {(() => {
+                  const piazze = piazzaData.piazze;
+                  const suffix = unitSuffix(piazzaData.unit || "hl_grado");
+                  const COLORS = ["#9D174D","#0EA5E9","#059669","#D97706","#7C3AED"];
+                  const sel = selectedPiazze.length ? selectedPiazze : (piazze[0] ? [piazze[0].piazza] : []);
+                  const map = {};
+                  sel.forEach(pz => {
+                    const p = piazze.find(x => x.piazza === pz);
+                    (p?.serie || []).forEach(pt => {
+                      const key = String(pt.t).slice(0,10);
+                      if (!map[key]) { const [,m,d] = key.split("-"); map[key] = { t:`${d}/${m}`, _k:key }; }
+                      map[key][pz] = Number(pt.v);
+                    });
+                  });
+                  const data = Object.values(map).sort((a,b) => a._k.localeCompare(b._k));
+                  const headline = piazze.find(x => x.piazza === sel[0]);
+                  const toggle = (pz) => setSelectedPiazze(cur => cur.includes(pz) ? (cur.length > 1 ? cur.filter(x => x !== pz) : cur) : [...cur, pz]);
+                  return (<>
+                    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", marginBottom:8, flexWrap:"wrap", gap:6 }}>
+                      <div style={{ fontSize:13, fontWeight:700 }}>Andamento prezzo per piazza</div>
+                      {headline && <span className="bs-num" style={{ fontSize:18, fontWeight:800, color:"#9D174D" }}>{Number(headline.ultimo_prezzo).toLocaleString("it-IT",{minimumFractionDigits:2,maximumFractionDigits:2})}<span style={{ fontSize:11, fontWeight:400, color:C.muted }}>{suffix}</span></span>}
+                    </div>
+                    <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:10 }}>
+                      {piazze.map((p) => {
+                        const on = sel.includes(p.piazza);
+                        const color = COLORS[Math.max(0, sel.indexOf(p.piazza)) % COLORS.length];
+                        return <button key={p.piazza} onClick={() => toggle(p.piazza)} style={{ padding:"5px 10px", borderRadius:100, fontSize:11.5, fontWeight:600, cursor:"pointer", border:`1px solid ${on?color:C.border}`, background:on?`${color}14`:"#fff", color:on?color:C.muted, fontFamily:"Inter,system-ui" }}>{p.piazza}</button>;
+                      })}
+                    </div>
+                    {data.length >= 2 ? (
+                      <ResponsiveContainer width="100%" height={130}>
+                        <LineChart data={data} margin={{ top:4, right:4, bottom:0, left:-22 }}>
+                          <XAxis dataKey="t" tick={{ fill:C.muted, fontSize:10 }} axisLine={false} tickLine={false}/>
+                          <YAxis tick={{ fill:C.muted, fontSize:10, fontFamily:"JetBrains Mono" }} axisLine={false} tickLine={false} domain={["auto","auto"]} tickFormatter={v=>`€${Number(v).toFixed(2)}`}/>
+                          <Tooltip contentStyle={{ background:"#fff", border:`1px solid ${C.border}`, borderRadius:8, fontSize:12 }} formatter={(v,name)=>[`€${Number(v).toFixed(2)}${suffix}`, name]}/>
+                          {sel.map((pz,i) => <Line key={pz} type="monotone" dataKey={pz} stroke={COLORS[i%COLORS.length]} strokeWidth={2.5} dot={false} activeDot={{ r:4 }} connectNulls/>)}
+                        </LineChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div style={{ height:70, display:"flex", alignItems:"center", justifyContent:"center", fontSize:11.5, color:C.muted, textAlign:"center", lineHeight:1.4 }}>Storico in raccolta: il grafico si popola a ogni rilevazione.</div>
+                    )}
+                    <div style={{ fontSize:10.5, color:C.muted, marginTop:10, paddingTop:10, borderTop:`1px solid ${C.border}`, lineHeight:1.5 }}>
+                      Prezzi indicativi per piazza (CCIAA/ISMEA){piazzaData.last_date ? ` · ultimo aggiornamento ${new Date(piazzaData.last_date).toLocaleDateString("it-IT")}` : ""}. Il prezzo effettivo si definisce con la campionatura.
+                    </div>
+                  </>);
+                })()}
+              </div>
+            )) : (
             <div style={{ border:`1px solid ${C.border}`, borderRadius:14, padding:18 }}>
               <div style={{ fontSize:13, fontWeight:700, marginBottom:2 }}>Andamento prezzo</div>
               {(() => {
@@ -1237,7 +1428,7 @@ export default function ProductPage() {
                   const change = series.length >= 2 ? ((last - series[0].v) / series[0].v) * 100 : null;
                   return (<>
                     <div style={{ display:"flex", alignItems:"baseline", gap:6, marginBottom:10 }}>
-                      <span className="bs-num" style={{ fontSize:22, fontWeight:800, color:C.blue }}>{eurKg(last)}<span style={{ fontSize:12, fontWeight:400, color:C.muted }}>/kg</span></span>
+                      <span className="bs-num" style={{ fontSize:22, fontWeight:800, color:C.blue }}>{eurKg(last)}<span style={{ fontSize:12, fontWeight:400, color:C.muted }}>{unitSuffix(priceSeries.unit)}</span></span>
                       {change != null && <span style={{ fontSize:12, color:change<=0?C.green:C.red, display:"flex", alignItems:"center", gap:2 }}>{change<=0 && <TrendingDown size={11}/>} {change>0?"+":""}{change.toFixed(1)}%</span>}
                     </div>
                     {series.length >= 2 ? (
@@ -1245,7 +1436,7 @@ export default function ProductPage() {
                         <LineChart data={series} margin={{ top:4, right:4, bottom:0, left:-22 }}>
                           <XAxis dataKey="t" tick={{ fill:C.muted, fontSize:10 }} axisLine={false} tickLine={false}/>
                           <YAxis tick={{ fill:C.muted, fontSize:10, fontFamily:"JetBrains Mono" }} axisLine={false} tickLine={false} domain={["auto","auto"]} tickFormatter={v=>`€${Number(v).toFixed(1)}`}/>
-                          <Tooltip contentStyle={{ background:"#fff", border:`1px solid ${C.border}`, borderRadius:8, fontSize:12 }} formatter={v=>[`€${Number(v).toFixed(2)}/kg`,"Prezzo"]}/>
+                          <Tooltip contentStyle={{ background:"#fff", border:`1px solid ${C.border}`, borderRadius:8, fontSize:12 }} formatter={v=>[`€${Number(v).toFixed(2)}${unitSuffix(priceSeries.unit)}`,"Prezzo"]}/>
                           <Line type="monotone" dataKey="v" stroke={C.blue} strokeWidth={2.5} dot={{ fill:C.blue, r:3, strokeWidth:0 }} activeDot={{ r:4 }}/>
                         </LineChart>
                       </ResponsiveContainer>
@@ -1309,18 +1500,66 @@ export default function ProductPage() {
                 </>);
               })()}
             </div>
+            )}
 
-            {/* SAMPLE / SAFETY NOTE */}
+            {/* SAMPLE / SAFETY NOTE — non pertinente ai prodotti a sola campionatura */}
+            {!sampleOnly && (
             <div style={{ border:`1px solid ${C.border}`, borderRadius:14, padding:18 }}>
-              <button className="bs-btn-ghost" style={{ width:"100%", marginBottom:10 }}><Beaker size={14}/> Richiedi un campione</button>
               <div style={{ display:"flex", gap:8, fontSize:12, color:C.muted, lineHeight:1.5 }}>
                 <Shield size={26} color={C.green} style={{ flexShrink:0 }}/>
                 <span>Pagamento protetto in <b style={{ color:C.text }}>escrow</b>: il fornitore viene pagato solo dopo la tua conferma di consegna conforme.</span>
               </div>
             </div>
+            )}
           </div>
         </div>
       </div>
+
+      {/* MODALE — Richiedi campionatura (DAV-77) */}
+      {sampleTarget && (
+        <div onClick={() => !sampleBusy && setSampleTarget(null)} style={{ position:"fixed", inset:0, background:"rgba(15,23,42,0.45)", zIndex:1300, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ background:"#fff", borderRadius:16, width:"100%", maxWidth:460, overflow:"hidden", boxShadow:"0 20px 60px rgba(0,0,0,0.25)" }}>
+            <div style={{ padding:"16px 20px", borderBottom:`1px solid ${C.border}`, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+              <strong style={{ fontSize:16, color:C.text }}>Richiedi campionatura</strong>
+              <button onClick={() => !sampleBusy && setSampleTarget(null)} style={{ background:"none", border:"none", cursor:"pointer", color:C.muted, padding:4 }}><X size={18}/></button>
+            </div>
+            <div style={{ padding:20 }}>
+              {sampleOk ? (
+                <div style={{ textAlign:"center" }}>
+                  <div style={{ width:44, height:44, borderRadius:22, background:"#ECFDF5", display:"flex", alignItems:"center", justifyContent:"center", margin:"0 auto 12px" }}><Check size={22} color={C.green}/></div>
+                  <div style={{ fontSize:15, fontWeight:700, color:C.text, marginBottom:6 }}>Richiesta inviata</div>
+                  <div style={{ fontSize:14, color:C.muted, lineHeight:1.5, marginBottom:16 }}>Il fornitore riceverà una email e ti risponderà a breve.</div>
+                  <button onClick={() => setSampleTarget(null)} style={{ background:"#9D174D", color:"#fff", border:"none", borderRadius:10, padding:"11px 22px", fontSize:14, fontWeight:700, cursor:"pointer" }}>Chiudi</button>
+                </div>
+              ) : (
+                <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+                  <div style={{ fontSize:14, color:C.text }}>{product.name} — <strong>{sampleTarget.name}</strong></div>
+                  <label style={{ fontSize:13, fontWeight:600, color:C.muted }}>
+                    Quantità campione (litri)
+                    <input type="number" min={0.1} max={20} step={0.25} value={sampleQty} onChange={(e) => setSampleQty(e.target.value)} disabled={sampleBusy}
+                      style={{ marginTop:6, width:"100%", padding:"10px 12px", border:`1px solid ${C.border}`, borderRadius:8, fontSize:15, fontFamily:"'JetBrains Mono',monospace" }} />
+                    <span style={{ display:"block", marginTop:4, fontSize:11.5, color:C.muted }}>Default 0,75 l (una bottiglia). Massimo 20 l.</span>
+                  </label>
+                  <label style={{ fontSize:13, fontWeight:600, color:C.muted }}>
+                    Indirizzo di spedizione
+                    <textarea value={sampleAddr} onChange={(e) => setSampleAddr(e.target.value)} disabled={sampleBusy} rows={2}
+                      style={{ marginTop:6, width:"100%", padding:"10px 12px", border:`1px solid ${C.border}`, borderRadius:8, fontSize:14, fontFamily:"Inter,system-ui", resize:"vertical" }} />
+                  </label>
+                  <label style={{ fontSize:13, fontWeight:600, color:C.muted }}>
+                    Messaggio al fornitore (facoltativo)
+                    <textarea value={sampleMsg} onChange={(e) => setSampleMsg(e.target.value)} disabled={sampleBusy} rows={2}
+                      style={{ marginTop:6, width:"100%", padding:"10px 12px", border:`1px solid ${C.border}`, borderRadius:8, fontSize:14, fontFamily:"Inter,system-ui", resize:"vertical" }} />
+                  </label>
+                  {sampleErr && <div style={{ fontSize:13, color:C.red }}>{sampleErr}</div>}
+                  <button onClick={submitSampleRequest} disabled={sampleBusy} style={{ width:"100%", background:"#9D174D", color:"#fff", border:"none", borderRadius:10, padding:"12px", fontSize:15, fontWeight:700, cursor:sampleBusy?"default":"pointer", opacity:sampleBusy?0.7:1, fontFamily:"Inter,system-ui" }}>
+                    {sampleBusy ? "Invio…" : "Invia richiesta"}
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* FOOTER */}
       <div style={{ background:"#050D18", padding:"28px 20px" }}>

@@ -13,11 +13,12 @@
 //   e riviste prima del salvataggio. Nessun salvataggio automatico.
 // - Duplicazione one-click di una variante (con scaglioni inclusi).
 import { useState, useEffect, useMemo } from "react";
-import { Plus, X, Check, Trash2, Pencil, AlertTriangle, Layers, Search, ChevronRight, Clock, Package, ShieldCheck, Copy, FileUp, FileText } from "lucide-react";
+import { Plus, X, Check, Trash2, Pencil, AlertTriangle, Layers, Search, ChevronRight, Clock, Package, ShieldCheck, Copy, FileUp, FileText, Wine } from "lucide-react";
 import {
   getSession, getMyCompany, poolErrorMessage, searchProducts,
   getMySupplierListings, addSupplierProductVariant, updateSupplierProductVariant,
   deleteSupplierProductVariant, setSupplierProductTiers,
+  upsertWineSpec, sampleErrorMessage,
 } from "@/lib/api";
 import { supabase } from "@/lib/supabase"; // per invocare la edge function del PDF senza toccare lib/api
 import BulkStrikeNav from "@/components/BulkStrikeNav";
@@ -35,6 +36,7 @@ function StatusBadge({ status, note }) {
 const emptyFormat = () => ({ label:"sacco", size_kg:25 });
 const emptyAttr = () => ({ key:"", value:"" });
 const emptyTier = () => ({ min_kg:"", max_kg:"", price_per_kg:"" });
+const emptyWine = () => ({ price_per_hl_grado:"", alcohol_degree:"", available_hl:"", vintage:"", production_zone:"", total_acidity_g_l:"", total_so2_mg_l:"", organic:false, available_until:"", notes:"" });
 
 export default function MyProductsPage({ inShell = false }) {
   const [loading, setLoading] = useState(true);
@@ -61,7 +63,12 @@ export default function MyProductsPage({ inShell = false }) {
   const [formats, setFormats] = useState([emptyFormat()]);
   const [attributes, setAttributes] = useState([]);
   const [tiers, setTiers] = useState([emptyTier()]);
+  // Prodotti a campionatura (vini/mosti sfusi): al posto degli scaglioni €/kg si
+  // inseriscono prezzo €/hl-grado + grado alcolico + specifiche enologiche.
+  const [wine, setWine] = useState(emptyWine());
   const [saving, setSaving] = useState(false);
+  // Il prodotto selezionato è a sola campionatura? (guida tutta la UI del form)
+  const formSampleOnly = formProduct?.listing_mode === "sample_only";
 
   // ---- Documenti & certificati per prodotto (pannello espandibile) ----
   const [docsOpen, setDocsOpen] = useState({}); // { [productId]: true }
@@ -110,6 +117,7 @@ export default function MyProductsPage({ inShell = false }) {
     setFormats([emptyFormat()]);
     setAttributes([]);
     setTiers([emptyTier()]);
+    setWine(emptyWine());
     setEditingId(null);
   }
 
@@ -131,6 +139,21 @@ export default function MyProductsPage({ inShell = false }) {
     setFormats(v.available_formats?.length ? v.available_formats.map(f => ({ label:f.label, size_kg:f.size_kg })) : [emptyFormat()]);
     setAttributes(Object.entries(v.variant_attributes || {}).map(([key,value]) => ({ key, value })));
     setTiers(v.price_tiers?.length ? v.price_tiers.map(t => ({ min_kg:t.min_kg, max_kg:t.max_kg ?? "", price_per_kg:t.price_per_kg })) : [emptyTier()]);
+    // Prefill specifiche enologiche se è un listing a campionatura (embed 1:1).
+    const wraw = v.supplier_product_wine_specs;
+    const w = Array.isArray(wraw) ? (wraw[0] || null) : (wraw || null);
+    setWine(w ? {
+      price_per_hl_grado: w.price_per_hl_grado ?? "",
+      alcohol_degree: w.alcohol_degree ?? "",
+      available_hl: w.available_hl ?? "",
+      vintage: w.vintage ?? "",
+      production_zone: w.production_zone ?? "",
+      total_acidity_g_l: w.total_acidity_g_l ?? "",
+      total_so2_mg_l: w.total_so2_mg_l ?? "",
+      organic: !!w.organic,
+      available_until: w.available_until ?? "",
+      notes: w.notes ?? "",
+    } : emptyWine());
     setShowForm(true);
     setErr(""); setOkMsg("");
   }
@@ -138,6 +161,44 @@ export default function MyProductsPage({ inShell = false }) {
   async function handleSave() {
     setErr(""); setOkMsg("");
     if (!editingId && !formProduct) { setErr("Seleziona un prodotto dal catalogo."); return; }
+
+    // ── Prodotti a campionatura (vini/mosti): niente scaglioni €/kg. Si salva la
+    //    variante (per ricerca/preferiti/dashboard) e le specifiche enologiche. ──
+    if (formSampleOnly) {
+      const phg = Number(wine.price_per_hl_grado);
+      const deg = Number(wine.alcohol_degree);
+      if (!phg || phg <= 0) { setErr("Inserisci il prezzo in €/hl-grado."); return; }
+      if (!deg || deg < 4 || deg > 20) { setErr("Il grado alcolico deve essere tra 4 e 20% vol."); return; }
+      const winePayload = {
+        price_per_hl_grado: phg,
+        alcohol_degree: deg,
+        available_hl: wine.available_hl === "" ? null : Number(wine.available_hl),
+        vintage: wine.vintage === "" ? null : Number(wine.vintage),
+        total_acidity_g_l: wine.total_acidity_g_l === "" ? null : Number(wine.total_acidity_g_l),
+        total_so2_mg_l: wine.total_so2_mg_l === "" ? null : Number(wine.total_so2_mg_l),
+        production_zone: wine.production_zone.trim() || null,
+        organic: !!wine.organic,
+        available_until: wine.available_until || null,
+        notes: wine.notes.trim() || null,
+      };
+      const variantPayload = {
+        grade: null, origin: null, min_order_kg: null, lead_time_days: null,
+        certifications: [], available_formats: [emptyFormat()], variant_attributes: {},
+      };
+      setSaving(true);
+      try {
+        let spId = editingId;
+        if (editingId) await updateSupplierProductVariant(editingId, variantPayload);
+        else { const row = await addSupplierProductVariant(formProduct.id, variantPayload); spId = row.id; }
+        await upsertWineSpec(spId, winePayload);
+        await load();
+        setShowForm(false); resetForm();
+        setOkMsg("Listino a campionatura salvato.");
+      } catch (e) { setErr(sampleErrorMessage(e)); }
+      finally { setSaving(false); }
+      return;
+    }
+
     const validTiers = tiers.filter(t => t.min_kg !== "" && t.price_per_kg !== "").map(t => ({
       min_kg: Number(t.min_kg), max_kg: t.max_kg === "" ? null : Number(t.max_kg), price_per_kg: Number(t.price_per_kg),
     }));
@@ -507,6 +568,46 @@ export default function MyProductsPage({ inShell = false }) {
                   </div>
                 )}
 
+                {formSampleOnly ? (
+                  /* CAMPIONATURA — vini/mosti sfusi: prezzo €/hl-grado + grado + specifiche */
+                  <div style={{ marginBottom:20 }}>
+                    <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:12, color:"#9D174D" }}>
+                      <Wine size={18}/> <strong style={{ fontSize:15 }}>Listino a campionatura</strong>
+                    </div>
+                    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:12 }}>
+                      <div>
+                        <label className="mp-label">Prezzo €/hl-grado *</label>
+                        <input className="mp-input" type="number" step="0.0001" value={wine.price_per_hl_grado} onChange={e => setWine(w => ({ ...w, price_per_hl_grado:e.target.value }))} placeholder="Es. 4,50" />
+                      </div>
+                      <div>
+                        <label className="mp-label">Grado alcolico % vol * (4–20)</label>
+                        <input className="mp-input" type="number" step="0.1" value={wine.alcohol_degree} onChange={e => setWine(w => ({ ...w, alcohol_degree:e.target.value }))} placeholder="Es. 12,0" />
+                      </div>
+                    </div>
+                    <div style={{ background:"#FDF2F8", border:"1px solid #FBCFE8", borderRadius:8, padding:"10px 12px", marginBottom:14, fontSize:13.5 }}>
+                      {(() => {
+                        const p = Number(wine.price_per_hl_grado), d = Number(wine.alcohol_degree);
+                        if (!p || !d) return <span style={{ color:C.muted }}>Inserisci prezzo e grado per vedere il valore in €/hl.</span>;
+                        return <span>= <b style={{ color:"#9D174D" }}>{(p*d).toLocaleString("it-IT",{minimumFractionDigits:2,maximumFractionDigits:2})} €/hl</b> a {d.toLocaleString("it-IT",{minimumFractionDigits:1,maximumFractionDigits:1})}° vol. <span style={{ color:C.muted }}>(anteprima, non salvata)</span></span>;
+                      })()}
+                    </div>
+                    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:12 }}>
+                      <div><label className="mp-label">hl disponibili (facoltativo)</label><input className="mp-input" type="number" value={wine.available_hl} onChange={e => setWine(w => ({ ...w, available_hl:e.target.value }))} placeholder="Es. 200" /></div>
+                      <div><label className="mp-label">Annata (facoltativo)</label><input className="mp-input" type="number" value={wine.vintage} onChange={e => setWine(w => ({ ...w, vintage:e.target.value }))} placeholder="Es. 2024" /></div>
+                      <div><label className="mp-label">Zona di produzione (facoltativo)</label><input className="mp-input" value={wine.production_zone} onChange={e => setWine(w => ({ ...w, production_zone:e.target.value }))} placeholder="Es. Puglia" /></div>
+                      <div><label className="mp-label">Disponibile fino al (facoltativo)</label><input className="mp-input" type="date" value={wine.available_until} onChange={e => setWine(w => ({ ...w, available_until:e.target.value }))} /></div>
+                      <div><label className="mp-label">Acidità totale g/l (facoltativo)</label><input className="mp-input" type="number" step="0.01" value={wine.total_acidity_g_l} onChange={e => setWine(w => ({ ...w, total_acidity_g_l:e.target.value }))} placeholder="Es. 5,5" /></div>
+                      <div><label className="mp-label">SO₂ totale mg/l (facoltativo)</label><input className="mp-input" type="number" step="0.1" value={wine.total_so2_mg_l} onChange={e => setWine(w => ({ ...w, total_so2_mg_l:e.target.value }))} placeholder="Es. 80" /></div>
+                    </div>
+                    <label style={{ display:"flex", alignItems:"center", gap:8, fontSize:14, marginBottom:12, cursor:"pointer" }}>
+                      <input type="checkbox" checked={wine.organic} onChange={e => setWine(w => ({ ...w, organic:e.target.checked }))} /> Biologico
+                    </label>
+                    <div>
+                      <label className="mp-label">Note (facoltativo)</label>
+                      <textarea className="mp-input" rows={2} value={wine.notes} onChange={e => setWine(w => ({ ...w, notes:e.target.value }))} style={{ resize:"vertical" }} />
+                    </div>
+                  </div>
+                ) : (<>
                 {/* CAMPI BASE */}
                 <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:16 }}>
                   <div>
@@ -576,6 +677,7 @@ export default function MyProductsPage({ inShell = false }) {
                   ))}
                   <button onClick={addTierRow} style={{ background:"none", border:"none", color:C.blue, fontSize:12.5, fontWeight:600, cursor:"pointer", display:"flex", alignItems:"center", gap:5, padding:0 }}><Plus size={13}/> Aggiungi scaglione</button>
                 </div>
+                </>)}
 
                 <div style={{ display:"flex", gap:10 }}>
                   <button onClick={handleSave} disabled={saving} className="mp-btn"><Check size={16}/> {saving ? "Salvataggio…" : "Salva"}</button>
