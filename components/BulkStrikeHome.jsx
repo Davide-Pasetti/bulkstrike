@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from "react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { Bot, ArrowRight, ArrowUp, BarChart3, Check, Clock, ChevronRight, TrendingDown, Flame, Wine, Beef, Pill, SprayCan, FlaskConical, Palette, Recycle, Building2, Package, Shirt, Fuel, Sprout, Wheat, Grid3x3, Anvil, Zap } from "lucide-react";
-import { getMacroAreas, getMacroAreasCached, getSectorProducts, getActivePools, getMyFollowedProducts, getSession, getMarketPriceSeries, getMarketIndexSectors, getMarketSelectorNav, getWatchedMaterials, getMyOrdersHistory, getMyFollowedSectors, getHomepageStats, getPriceTicker } from "@/lib/api";
+import { getMacroAreas, getMacroAreasCached, getSectorProducts, getActivePools, getMyFollowedProducts, getSession, getMarketPriceSeries, getMarketIndexSectors, getMarketSelectorNav, getWatchedMaterials, getMyOrdersHistory, getMyFollowedSectors, getHomepageStats, getPriceTicker, getActivePromotions } from "@/lib/api";
+import BulkStrikePromoCard from "@/components/BulkStrikePromoCard";
 import { ytdChange } from "@/lib/priceTrend";
 import { TIERS, tierIndexFor, tierFor } from "@/lib/tiers";
 import BulkStrikeNav from "@/components/BulkStrikeNav";
@@ -143,6 +144,7 @@ export default function BulkStrikeLight() {
   // Aste attive: undefined = in caricamento, [] = nessuna, array = aste ordinate.
   // Un'unica fetch alimenta sia il box "in evidenza" sia la griglia "Aste attive ora".
   const [pools, setPools]           = useState(undefined);
+  const [promos, setPromos]         = useState(undefined); // bacheca promozioni (undefined=caricamento, []=nessuna)
   const [favIds, setFavIds]         = useState(null); // Set dei product_id preferiti (null = non loggato/non caricato)
   // Rimozione del box su schermi stretti: non basta nasconderlo via CSS, va tolto
   // dal render (stesso breakpoint 768px usato nel resto della Home).
@@ -319,6 +321,15 @@ export default function BulkStrikeLight() {
     return () => { alive = false; };
   }, []);
 
+  // Bacheca Promozioni: sconti fissi a tempo attivi, ordinati per scadenza.
+  useEffect(() => {
+    let alive = true;
+    getActivePromotions()
+      .then((ps) => { if (alive) setPromos(ps || []); })
+      .catch(() => { if (alive) setPromos([]); });
+    return () => { alive = false; };
+  }, []);
+
   // Traccia il breakpoint mobile (768px) per togliere il box dal DOM su mobile.
   useEffect(() => {
     const mq = window.matchMedia("(max-width:768px)");
@@ -431,6 +442,9 @@ export default function BulkStrikeLight() {
         .bs-cat:hover { transform:translateY(-2px); border-color:#0C4A6E; }
         .bs-cat.active { background:#0C4A6E; border-color:#0C4A6E; }
         .bs-cat-label { text-align:center; line-height:1.25; display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden; }
+        .bs-promos-row { display:flex; gap:20px; overflow-x:auto; padding:4px 2px 14px; scrollbar-width:none; scroll-snap-type:x mandatory; }
+        .bs-promos-row::-webkit-scrollbar { display:none; }
+        .bs-promos-row > * { scroll-snap-align:start; }
         .bs-section { max-width:1280px; margin:0 auto; padding:64px 24px; }
         .bs-card { background:#FFFFFF; border:1px solid ${C.border}; border-radius:16px; padding:24px; transition:box-shadow 0.2s,transform 0.2s; }
         .bs-card:hover { box-shadow:0 8px 32px rgba(14,165,233,0.10); transform:translateY(-2px); }
@@ -847,6 +861,31 @@ export default function BulkStrikeLight() {
           </div>
         )}
       </div>
+
+      {/* ── BACHECA PROMOZIONI ── (sconti fissi a tempo dei fornitori, NON aste) */}
+      {Array.isArray(promos) && promos.length > 0 && (
+        <div style={{ background:"#FFFBF5", borderTop:`1px solid ${C.border}`, borderBottom:`1px solid ${C.border}` }}>
+          <div className="bs-section" style={{ paddingTop:56, paddingBottom:56 }}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-end", marginBottom:28, flexWrap:"wrap", gap:12 }}>
+              <div>
+                <div className="bs-label" style={{ color:C.amber }}>Bacheca Promozioni</div>
+                <h2 className="bs-h2">Offerte a tempo dai fornitori</h2>
+                <p style={{ fontSize:15, color:C.muted, marginTop:8 }}>Sconti fissi a tempo limitato pubblicati dai fornitori — prezzo bloccato, niente asta.</p>
+              </div>
+              {promos.length > 3 && (
+                <button onClick={() => { window.location.href = "/promozioni"; }} style={{ display:"flex", alignItems:"center", gap:6, color:C.amber, background:"none", border:"none", fontSize:14, fontWeight:600, cursor:"pointer" }}>
+                  Vedi tutte <ChevronRight size={16} />
+                </button>
+              )}
+            </div>
+            <div className="bs-promos-row">
+              {promos.map((pr) => (
+                <BulkStrikePromoCard key={pr.id} promo={pr} width={308} />
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── PRICE CHARTS ── */}
       <div style={{ background:C.bg, borderTop:`1px solid ${C.border}`, borderBottom:`1px solid ${C.border}` }}>
