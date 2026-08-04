@@ -1069,6 +1069,20 @@ export default function ProductPage() {
                               ))}
                             </div>
                           )}
+                          {/* Link alla scheda/sito: stopPropagation così NON spuntano
+                              la checkbox del <label> (restano apribili per capire chi si sta selezionando). */}
+                          {(s.company_id || s.website) && (
+                            <div style={{ display:"flex", gap:14, marginTop:8, flexWrap:"wrap" }}>
+                              {s.company_id && (
+                                <a href={`/fornitore?id=${s.company_id}`} onClick={e => e.stopPropagation()}
+                                  style={{ fontSize:12, color:C.blue, fontWeight:700, textDecoration:"none" }}>Scheda fornitore</a>
+                              )}
+                              {s.website && (
+                                <a href={s.website} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
+                                  style={{ fontSize:12, color:C.blue, fontWeight:700, textDecoration:"none", display:"inline-flex", alignItems:"center", gap:3 }}>Sito web <ExternalLink size={11}/></a>
+                              )}
+                            </div>
+                          )}
                         </div>
                       </label>
                     );
