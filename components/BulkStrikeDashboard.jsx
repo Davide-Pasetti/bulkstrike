@@ -705,7 +705,7 @@ export default function Dashboard() {
                 ))}
               </div>
 
-              {role==="supplier" && (
+              {company?.is_supplier && (
                 <div style={{ marginBottom:18 }}>
                   <BulkStrikeBachecaNotifiche />
                 </div>
