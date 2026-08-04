@@ -332,6 +332,9 @@ export default function ProductPage() {
   const [specGradoMin, setSpecGradoMin] = useState("");
   const [specGradoMax, setSpecGradoMax] = useState("");
   const [specVarieta, setSpecVarieta] = useState("");
+  const [specDenomTipo, setSpecDenomTipo] = useState("");
+  const [specDenomTesto, setSpecDenomTesto] = useState("");
+  const [specAnnata, setSpecAnnata] = useState("");
   const [specNote, setSpecNote] = useState("");
   const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkResult, setBulkResult] = useState(null); // array risposta RPC | null
@@ -546,6 +549,9 @@ export default function ProductPage() {
         specGradoMin: specGradoMin === "" ? null : Number(specGradoMin),
         specGradoMax: specGradoMax === "" ? null : Number(specGradoMax),
         specVarieta: specVarieta.trim() || null,
+        specDenominazioneTipo: specDenomTipo || null,
+        specDenominazione: specDenomTesto.trim() || null,
+        specAnnata: specAnnata === "" ? null : Number(specAnnata),
         message: specNote.trim() || null,
       });
       setBulkResult(Array.isArray(res) ? res : []);
@@ -1434,6 +1440,23 @@ export default function ProductPage() {
 
                     <label style={specLabel}>Varietà
                       <input type="text" maxLength={200} value={specVarieta} onChange={e=>setSpecVarieta(e.target.value)} placeholder="es. Trebbiano, Sangiovese" style={specInput}/>
+                    </label>
+
+                    <div>
+                      <div style={specLabel}>Denominazione</div>
+                      <select value={specDenomTipo} onChange={e=>setSpecDenomTipo(e.target.value)} style={specInput}>
+                        <option value="">Indifferente</option>
+                        <option value="na_nc">NA/NC</option>
+                        <option value="varietale">Varietale</option>
+                        <option value="igp">IGP</option>
+                        <option value="atto_dop">Atto a DOP</option>
+                        <option value="atto_docg">Atto a DOCG</option>
+                      </select>
+                      <input type="text" maxLength={200} value={specDenomTesto} onChange={e=>setSpecDenomTesto(e.target.value)} placeholder="es. Montepulciano d'Abruzzo, Chianti..." aria-label="Dettaglio denominazione" style={{ ...specInput, marginTop:8 }}/>
+                    </div>
+
+                    <label style={specLabel}>Annata
+                      <input type="number" min={1990} max={new Date().getFullYear() + 1} step={1} value={specAnnata} onChange={e=>setSpecAnnata(e.target.value)} placeholder="es. 2024" style={specInput}/>
                     </label>
 
                     <label style={specLabel}>Note per il fornitore
