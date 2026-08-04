@@ -325,6 +325,7 @@ export default function ProductPage() {
   const [wfCountry, setWfCountry] = useState("");   // nazione selezionata
   const [wfRegion, setWfRegion] = useState("");     // regione selezionata
   const [selectedSP, setSelectedSP] = useState(() => new Set());
+  const [quantitaPartita, setQuantitaPartita] = useState("");
   const [specColore, setSpecColore] = useState("");
   const [specLavorazione, setSpecLavorazione] = useState("");
   const [specRefrigerato, setSpecRefrigerato] = useState(false);
@@ -542,6 +543,7 @@ export default function ProductPage() {
     try {
       const res = await requestSamplesBulk({
         supplierProductIds: [...selectedSP],
+        specQuantitaPartita: quantitaPartita === "" ? null : Number(quantitaPartita),
         specColore: specColore || null,
         specLavorazione: (isMostoPage ? specLavorazione : "") || null,
         specRefrigerato,
@@ -1396,6 +1398,15 @@ export default function ProductPage() {
                   <div style={{ fontSize:13, fontWeight:800, color:C.text }}>Specifiche per la richiesta</div>
                   <div style={{ fontSize:11.5, color:C.muted, marginTop:2, marginBottom:12 }}>Facoltative. Vengono inoltrate a tutti i fornitori selezionati.</div>
                   <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+                    <div>
+                      <div style={specLabel}>Quantità della partita che ti interessa acquistare</div>
+                      <div style={{ display:"flex", alignItems:"center", gap:6, marginTop:4 }}>
+                        <input type="number" min={1} max={100000} step={1} value={quantitaPartita} onChange={e=>setQuantitaPartita(e.target.value)} placeholder="es. 1000" style={{ ...specInput, marginTop:0 }}/>
+                        <span style={{ fontSize:12, color:C.muted }}>hl</span>
+                      </div>
+                      <div style={{ fontSize:11, color:C.muted, marginTop:4, lineHeight:1.4 }}>Facoltativo, solo indicativo. Il fornitore può comunicarti quanto ha realmente disponibile anche se inferiore.</div>
+                    </div>
+
                     <label style={specLabel}>Colore
                       <select value={specColore} onChange={e=>setSpecColore(e.target.value)} style={specInput}>
                         <option value="">Indifferente</option>
