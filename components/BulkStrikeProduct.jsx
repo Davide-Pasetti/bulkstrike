@@ -329,7 +329,8 @@ export default function ProductPage() {
   const [specLavorazione, setSpecLavorazione] = useState("");
   const [specRefrigerato, setSpecRefrigerato] = useState(false);
   const [specSo2, setSpecSo2] = useState("");
-  const [specGrado, setSpecGrado] = useState("");
+  const [specGradoMin, setSpecGradoMin] = useState("");
+  const [specGradoMax, setSpecGradoMax] = useState("");
   const [specVarieta, setSpecVarieta] = useState("");
   const [specNote, setSpecNote] = useState("");
   const [bulkBusy, setBulkBusy] = useState(false);
@@ -524,6 +525,9 @@ export default function ProductPage() {
   }
   async function submitBulkSample() {
     if (selectedSP.size === 0) return;
+    if (specGradoMin !== "" && specGradoMax !== "" && Number(specGradoMin) > Number(specGradoMax)) {
+      setBulkErr("Il grado minimo non può superare il massimo."); return;
+    }
     const session = await getSession().catch(() => null);
     if (!session) {
       // Conserva la selezione e porta al login.
@@ -539,7 +543,8 @@ export default function ProductPage() {
         specLavorazione: (isMostoPage ? specLavorazione : "") || null,
         specRefrigerato,
         specSo2: specSo2 === "" ? null : Number(specSo2),
-        specGrado: specGrado === "" ? null : Number(specGrado),
+        specGradoMin: specGradoMin === "" ? null : Number(specGradoMin),
+        specGradoMax: specGradoMax === "" ? null : Number(specGradoMax),
         specVarieta: specVarieta.trim() || null,
         message: specNote.trim() || null,
       });
@@ -1417,12 +1422,15 @@ export default function ProductPage() {
                       </div>
                     </label>
 
-                    <label style={specLabel}>Gradazione alcolica potenziale
+                    <div>
+                      <div style={specLabel}>{isMostoPage ? "Gradazione alcolica potenziale" : "Gradazione alcolica"}</div>
                       <div style={{ display:"flex", alignItems:"center", gap:6, marginTop:4 }}>
-                        <input type="number" min={0.1} max={25} step={0.1} value={specGrado} onChange={e=>setSpecGrado(e.target.value)} placeholder="es. 11,5" style={{ ...specInput, marginTop:0 }}/>
+                        <input type="number" min={0.1} max={25} step={0.1} value={specGradoMin} onChange={e=>setSpecGradoMin(e.target.value)} placeholder="Da (min)" aria-label="Gradazione alcolica minima" style={{ ...specInput, marginTop:0 }}/>
+                        <span style={{ fontSize:12, color:C.muted }}>–</span>
+                        <input type="number" min={0.1} max={25} step={0.1} value={specGradoMax} onChange={e=>setSpecGradoMax(e.target.value)} placeholder="A (max)" aria-label="Gradazione alcolica massima" style={{ ...specInput, marginTop:0 }}/>
                         <span style={{ fontSize:12, color:C.muted }}>% vol</span>
                       </div>
-                    </label>
+                    </div>
 
                     <label style={specLabel}>Varietà
                       <input type="text" maxLength={200} value={specVarieta} onChange={e=>setSpecVarieta(e.target.value)} placeholder="es. Trebbiano, Sangiovese" style={specInput}/>
