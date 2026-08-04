@@ -1,7 +1,17 @@
 "use client";
 import { useEffect, useState } from "react";
+import BulkStrikeNav from "@/components/BulkStrikeNav";
 import { getMyListings, getSession, closeListing, getListingSpecSchema, bachecaErrorMessage } from "@/lib/api";
 import { C, renderSpecList, prezzoUnitaLabel } from "@/components/BulkStrikeSpecFields";
+
+function Shell({ children }) {
+  return (
+    <div style={{ background: "#fff", color: C.text, minHeight: "100vh", colorScheme: "light", fontFamily: "Inter,system-ui,sans-serif" }}>
+      <BulkStrikeNav />
+      {children}
+    </div>
+  );
+}
 
 const STATO = {
   attivo: ["Attivo", "#ECFDF5", "#065F46"],
@@ -73,8 +83,9 @@ export default function BulkStrikeBachecaMiei() {
     catch (e) { setErrore(bachecaErrorMessage(e)); }
   };
 
-  if (loading) return <div style={wrap}><p style={{ color: C.muted }}>Caricamento…</p></div>;
+  if (loading) return <Shell><div style={wrap}><p style={{ color: C.muted }}>Caricamento…</p></div></Shell>;
   if (!loggato) return (
+    <Shell>
     <div style={wrap}>
       <h1 style={h1}>I miei annunci</h1>
       <div style={{ ...card, marginTop: 18 }}>
@@ -82,9 +93,11 @@ export default function BulkStrikeBachecaMiei() {
         <div style={{ marginTop: 12 }}><a href="/auth/login" style={{ background: "#0369A1", color: "#fff", borderRadius: 9, padding: "10px 18px", fontWeight: 700, fontSize: 14, textDecoration: "none" }}>Accedi</a></div>
       </div>
     </div>
+    </Shell>
   );
 
   return (
+    <Shell>
     <div style={wrap}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
         <h1 style={h1}>I miei annunci</h1>
@@ -166,6 +179,7 @@ export default function BulkStrikeBachecaMiei() {
         </div>
       )}
     </div>
+    </Shell>
   );
 }
 

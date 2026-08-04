@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState, useCallback } from "react";
+import BulkStrikeNav from "@/components/BulkStrikeNav";
 import { getBachecaFilters, getListingSpecSchema, getBachecaListings } from "@/lib/api";
 import {
   C, SpecFilterFields, filterToSpecs, renderSpecList, prezzoUnitaLabel,
@@ -157,7 +158,9 @@ export default function BulkStrikeBacheca() {
   const prodotti = settore ? settore.prodotti || [] : [];
 
   return (
-    <div style={{ maxWidth: 1180, margin: "0 auto", padding: "26px 18px 60px", fontFamily: "Inter,system-ui,sans-serif" }}>
+    <div style={{ background: "#fff", color: C.text, minHeight: "100vh", colorScheme: "light", fontFamily: "Inter,system-ui,sans-serif" }}>
+      <BulkStrikeNav />
+      <div style={{ maxWidth: 1180, margin: "0 auto", padding: "26px 18px 60px" }}>
       <style>{`
         .bc-card{background:#fff;border:1px solid ${C.border};border-radius:14px;padding:16px 18px;transition:box-shadow .15s,transform .15s;height:100%}
         .bc-card:hover{box-shadow:0 6px 22px rgba(2,132,199,.12);transform:translateY(-2px)}
@@ -269,6 +272,7 @@ export default function BulkStrikeBacheca() {
             </div>
           )}
         </section>
+      </div>
       </div>
     </div>
   );

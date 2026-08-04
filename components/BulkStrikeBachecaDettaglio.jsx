@@ -1,9 +1,19 @@
 "use client";
 import { useEffect, useState } from "react";
+import BulkStrikeNav from "@/components/BulkStrikeNav";
 import { getBachecaListing, getSession, getMyCompany, respondToListing, bachecaErrorMessage } from "@/lib/api";
 import { C, renderSpecList, prezzoUnitaLabel, PREZZO_UNITA, bachecaLabelStyle, bachecaInputStyle } from "@/components/BulkStrikeSpecFields";
 
 const UNITA = ["hl", "l", "kg", "t"];
+
+function Shell({ children }) {
+  return (
+    <div style={{ background: "#fff", color: C.text, minHeight: "100vh", colorScheme: "light", fontFamily: "Inter,system-ui,sans-serif" }}>
+      <BulkStrikeNav />
+      {children}
+    </div>
+  );
+}
 
 function Box({ tono = "info", children }) {
   const col = { info: [C.bg, C.border, C.text], warn: ["#FFFBEB", "#FDE68A", "#92400E"], ok: ["#ECFDF5", "#A7F3D0", "#065F46"] }[tono];
@@ -66,12 +76,14 @@ export default function BulkStrikeBachecaDettaglio({ id }) {
     }
   };
 
-  if (loading) return <div style={wrap}><p style={{ color: C.muted }}>Caricamento…</p></div>;
+  if (loading) return <Shell><div style={wrap}><p style={{ color: C.muted }}>Caricamento…</p></div></Shell>;
   if (!a) return (
-    <div style={wrap}>
-      <Box tono="warn">Questo annuncio non esiste, è scaduto o non è più disponibile.</Box>
-      <p style={{ marginTop: 16 }}><a href="/bacheca" style={link}>← Torna alla bacheca</a></p>
-    </div>
+    <Shell>
+      <div style={wrap}>
+        <Box tono="warn">Questo annuncio non esiste, è scaduto o non è più disponibile.</Box>
+        <p style={{ marginTop: 16 }}><a href="/bacheca" style={link}>← Torna alla bacheca</a></p>
+      </div>
+    </Shell>
   );
 
   const specs = renderSpecList(a.schema, a.specs);
@@ -80,6 +92,7 @@ export default function BulkStrikeBachecaDettaglio({ id }) {
   const attivo = a.status === "attivo" && a.giorni_rimanenti > 0;
 
   return (
+    <Shell>
     <div style={wrap}>
       <p style={{ marginBottom: 14 }}><a href="/bacheca" style={link}>← Bacheca</a></p>
 
@@ -207,6 +220,7 @@ export default function BulkStrikeBachecaDettaglio({ id }) {
       </div>
       <style>{`@media(max-width:780px){.bcd-layout{grid-template-columns:1fr!important}}`}</style>
     </div>
+    </Shell>
   );
 }
 

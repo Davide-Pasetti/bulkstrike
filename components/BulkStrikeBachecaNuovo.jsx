@@ -1,7 +1,17 @@
 "use client";
 import { useEffect, useState } from "react";
+import BulkStrikeNav from "@/components/BulkStrikeNav";
 import { getBachecaFilters, getListingSpecSchema, getSession, getMyCompany, createListing, bachecaErrorMessage } from "@/lib/api";
 import { C, SpecFormFields, formValuesToSpecs, PREZZO_UNITA, COUNTRIES, REGIONI_ITALIA, bachecaLabelStyle, bachecaInputStyle } from "@/components/BulkStrikeSpecFields";
+
+function Shell({ children }) {
+  return (
+    <div style={{ background: "#fff", color: C.text, minHeight: "100vh", colorScheme: "light", fontFamily: "Inter,system-ui,sans-serif" }}>
+      <BulkStrikeNav />
+      {children}
+    </div>
+  );
+}
 
 const UNITA = ["hl", "l", "kg", "t"];
 
@@ -76,6 +86,7 @@ export default function BulkStrikeBachecaNuovo() {
   };
 
   if (loggato === false) return (
+    <Shell>
     <div style={wrap}>
       <h1 style={h1}>Pubblica una richiesta</h1>
       <div style={{ ...box, marginTop: 18 }}>
@@ -84,9 +95,11 @@ export default function BulkStrikeBachecaNuovo() {
         <a href="/auth/login" style={{ display: "inline-block", marginTop: 12, background: "#0369A1", color: "#fff", borderRadius: 9, padding: "10px 18px", fontWeight: 700, fontSize: 14, textDecoration: "none" }}>Accedi</a>
       </div>
     </div>
+    </Shell>
   );
 
   if (fatto) return (
+    <Shell>
     <div style={wrap}>
       <div style={{ background: "#ECFDF5", border: "1px solid #A7F3D0", borderRadius: 14, padding: "26px 22px", textAlign: "center" }}>
         <div style={{ fontSize: 44, marginBottom: 8 }}>✓</div>
@@ -98,12 +111,14 @@ export default function BulkStrikeBachecaNuovo() {
         </div>
       </div>
     </div>
+    </Shell>
   );
 
   const step1ok = sectorId && productId;
   const step2ok = base.quantita !== "" && Number(base.quantita) > 0 && (!base.prezzo_max || base.prezzo_unita) && (!regioneMancante || base.regione_compratore.trim());
 
   return (
+    <Shell>
     <div style={wrap}>
       <p style={{ marginBottom: 12 }}><a href="/bacheca" style={{ color: C.dark, fontWeight: 600, textDecoration: "none", fontSize: 13 }}>← Bacheca</a></p>
       <h1 style={h1}>Pubblica una richiesta</h1>
@@ -240,6 +255,7 @@ export default function BulkStrikeBachecaNuovo() {
         </div>
       )}
     </div>
+    </Shell>
   );
 }
 
