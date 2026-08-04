@@ -7,6 +7,7 @@ import {
 } from "@/lib/api";
 import { Bell, Search, Plus, TrendingDown, Zap, Factory, Check, X, Gavel, Inbox, Clock, Boxes, ChevronRight, Trophy, Send, Package, Truck, LogOut, AlertTriangle } from "lucide-react";
 import ProfileShell from "@/components/BulkStrikeProfileShell";
+import BulkStrikeBachecaNotifiche from "@/components/BulkStrikeBachecaNotifiche";
 
 const C = { blue:"#0EA5E9", dark:"#0284C7", text:"#0F172A", muted:"#64748B", border:"#E2E8F0", bg:"#F8FAFE", green:"#059669", amber:"#D97706", red:"#DC2626", purple:"#7C3AED" };
 
@@ -703,6 +704,12 @@ export default function Dashboard() {
                   </div>
                 ))}
               </div>
+
+              {role==="supplier" && (
+                <div style={{ marginBottom:18 }}>
+                  <BulkStrikeBachecaNotifiche />
+                </div>
+              )}
 
               <div style={{ display:"flex", gap:12, alignItems:"center" }}>
                 <button onClick={saveAccount} style={{ background:"#0369A1", color:"#fff", border:"none", borderRadius:10, padding:"12px 22px", fontSize:15, fontWeight:700, cursor:"pointer", fontFamily:"Inter,system-ui" }}>Salva modifiche</button>

@@ -36,6 +36,7 @@ const FORNITORI_MENU = [
 
 // Fixed link set — same labels/order everywhere.
 const LINKS = [
+  ["Bacheca", "/bacheca"],
   ["Corrieri", "/corrieri"],
 ];
 
