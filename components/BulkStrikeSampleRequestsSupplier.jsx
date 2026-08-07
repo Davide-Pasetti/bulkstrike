@@ -77,7 +77,7 @@ export default function SampleRequestsSupplierPage({ inShell = false }) {
                   <div style={{ fontSize:13, color:C.muted, marginTop:3 }}>
                     <b style={{ color:C.text, fontWeight:600 }}>{r.counterpart_name || "Azienda acquirente"}</b>
                     {(r.counterpart_city || r.counterpart_region) && <span> · {[r.counterpart_city, r.counterpart_region].filter(Boolean).join(", ")}</span>}
-                    {" "}· richiesti <b style={{ color:C.text }}>{litri(r.quantity_l)}</b> · {dt(r.created_at)}
+                    {r.quantity_l != null && <span> · richiesti <b style={{ color:C.text }}>{litri(r.quantity_l)}</b></span>} · {dt(r.created_at)}
                   </div>
                 </div>
               </div>

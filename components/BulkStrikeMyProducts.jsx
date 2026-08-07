@@ -18,7 +18,7 @@ import {
   getSession, getMyCompany, poolErrorMessage, searchProducts,
   getMySupplierListings, addSupplierProductVariant, updateSupplierProductVariant,
   deleteSupplierProductVariant, setSupplierProductTiers,
-  upsertWineSpec, sampleErrorMessage,
+  upsertWineSpec, sampleErrorMessage, setSupplierProductSamplesEnabled,
 } from "@/lib/api";
 import { supabase } from "@/lib/supabase"; // per invocare la edge function del PDF senza toccare lib/api
 import BulkStrikeNav from "@/components/BulkStrikeNav";
@@ -103,6 +103,17 @@ export default function MyProductsPage({ inShell = false }) {
     }
     return [...map.values()];
   }, [listings]);
+
+  // Interruttore "Fornisco campioni" sulla singola variante di listino.
+  const [sampBusy, setSampBusy] = useState(() => new Set());
+  async function toggleVariantSamples(v) {
+    const next = v.samples_enabled === false; // se ora è false → riattiva
+    setListings(rows => rows.map(r => r.id === v.id ? { ...r, samples_enabled: next } : r));
+    setSampBusy(s => new Set(s).add(v.id));
+    try { await setSupplierProductSamplesEnabled(v.id, next); }
+    catch { setListings(rows => rows.map(r => r.id === v.id ? { ...r, samples_enabled: !next } : r)); }
+    finally { setSampBusy(s => { const n = new Set(s); n.delete(v.id); return n; }); }
+  }
 
   useEffect(() => {
     const q = productQuery.trim();
@@ -744,6 +755,17 @@ export default function MyProductsPage({ inShell = false }) {
                                 <button onClick={() => openEditForm(v)} title="Modifica" style={{ background:"none", border:`1px solid ${C.border}`, borderRadius:8, width:34, height:34, cursor:"pointer", color:C.muted, display:"flex", alignItems:"center", justifyContent:"center" }}><Pencil size={14}/></button>
                                 <button onClick={() => handleDelete(v.id)} title="Elimina" style={{ background:"none", border:`1px solid ${C.border}`, borderRadius:8, width:34, height:34, cursor:"pointer", color:C.red, display:"flex", alignItems:"center", justifyContent:"center" }}><Trash2 size={14}/></button>
                               </div>
+                            </div>
+                            {/* Interruttore campioni per questa variante */}
+                            <div style={{ display:"flex", alignItems:"center", gap:10, marginTop:10, paddingTop:10, borderTop:`1px solid ${C.border}` }}>
+                              <span style={{ fontSize:12.5, color:C.muted, flex:1 }}>
+                                Fornisco campioni per questa variante
+                                {v.samples_enabled === false && <span style={{ color:C.amber, fontWeight:600 }}> · disattivato</span>}
+                              </span>
+                              <button onClick={() => toggleVariantSamples(v)} disabled={sampBusy.has(v.id)} aria-label="Fornisco campioni per questa variante"
+                                style={{ width:40, height:23, borderRadius:100, border:"none", cursor:sampBusy.has(v.id)?"default":"pointer", padding:2, background:(v.samples_enabled!==false)?C.blue:"#CBD5E1", flexShrink:0 }}>
+                                <div style={{ width:19, height:19, borderRadius:"50%", background:"#fff", transform:(v.samples_enabled!==false)?"translateX(17px)":"translateX(0)", transition:"transform 0.2s", boxShadow:"0 1px 3px rgba(0,0,0,0.2)" }}/>
+                              </button>
                             </div>
                           </div>
                         );

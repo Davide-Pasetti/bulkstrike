@@ -70,7 +70,7 @@ export default function SampleRequestsBuyerPage({ inShell = false }) {
                 <div style={{ fontSize:13, color:C.muted }}>
                   <b style={{ color:C.text, fontWeight:600 }}>{r.counterpart_name || "Fornitore"}</b>
                   {(r.counterpart_city || r.counterpart_region) && <span> · {[r.counterpart_city, r.counterpart_region].filter(Boolean).join(", ")}</span>}
-                  {" "}· {litri(r.quantity_l)} · richiesto il {dt(r.created_at)}
+                  {r.quantity_l != null && <span> · {litri(r.quantity_l)}</span>} · richiesto il {dt(r.created_at)}
                 </div>
                 {r.status === "declined" && r.decline_reason && <div style={{ fontSize:12.5, color:C.red, marginTop:6 }}>Motivo: {r.decline_reason}</div>}
                 {r.status === "shipped" && r.tracking_note && <div style={{ fontSize:12.5, color:C.green, marginTop:6 }}>Tracking: {r.tracking_note}</div>}

@@ -3,7 +3,7 @@ import {
   getMyCompany, updateCompany, signOut, requestAccountDeletionCode, confirmAccountDeletion,
   getWatchedMaterials, addWatchedMaterial, removeWatchedMaterial, updateMaterialAlert,
   getNotifications, markNotificationRead, markAllNotificationsRead, subscribeNotifications,
-  getMyPools,
+  getMyPools, setCompanySamplesEnabled,
 } from "@/lib/api";
 import { Bell, Search, Plus, TrendingDown, Zap, Factory, Check, X, Gavel, Inbox, Clock, Boxes, ChevronRight, Trophy, Send, Package, Truck, LogOut, AlertTriangle } from "lucide-react";
 import ProfileShell from "@/components/BulkStrikeProfileShell";
@@ -269,11 +269,23 @@ export default function Dashboard() {
     markAllNotificationsRead().catch(()=>{});
   };
 
+  // Interruttore "Fornisco campioni" a livello azienda (companies.samples_enabled).
+  const [samplesOn, setSamplesOn] = useState(true);
+  const [samplesBusy, setSamplesBusy] = useState(false);
+  const toggleCompanySamples = async () => {
+    const next = !samplesOn;
+    setSamplesOn(next); setSamplesBusy(true);
+    try { await setCompanySamplesEnabled(next); }
+    catch { setSamplesOn(!next); }   // rollback in caso di errore
+    finally { setSamplesBusy(false); }
+  };
+
   // ── load the real company (drives role + account prefill) ──
   useEffect(() => {
     getMyCompany().then(c => {
       if (!c) return;
       setCompany(c);
+      setSamplesOn(c.samples_enabled !== false);
       setRole(!c.is_buyer && c.is_supplier ? "supplier" : "buyer");
       setAcct(a => ({
         ...a,
@@ -704,6 +716,23 @@ export default function Dashboard() {
                   </div>
                 ))}
               </div>
+
+              {company?.is_supplier && (
+                <div className="bs-card" style={{ padding:20, marginBottom:18 }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+                    <div style={{ flex:1 }}>
+                      <div style={{ fontSize:15, fontWeight:700 }}>Fornisco campioni</div>
+                      <div style={{ fontSize:12.5, color:C.muted, marginTop:2 }}>
+                        Se disattivo, la tua azienda non compare tra i fornitori campionabili di nessun prodotto. Puoi comunque disattivarli su singoli prodotti dal listino.
+                      </div>
+                    </div>
+                    <button onClick={toggleCompanySamples} disabled={samplesBusy} aria-label="Fornisco campioni"
+                      style={{ width:42, height:24, borderRadius:100, border:"none", cursor:samplesBusy?"default":"pointer", padding:2, background:samplesOn?C.blue:"#CBD5E1", flexShrink:0 }}>
+                      <div style={{ width:20, height:20, borderRadius:"50%", background:"#fff", transform:samplesOn?"translateX(18px)":"translateX(0)", transition:"transform 0.2s", boxShadow:"0 1px 3px rgba(0,0,0,0.2)" }}/>
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {company?.is_supplier && (
                 <div style={{ marginBottom:18 }}>
