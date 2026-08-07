@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { Search, ArrowRight, Check, Clock, ChevronDown, ChevronRight, ChevronUp, Star, Shield, Truck, FileText, Download, Plus, Minus, Beaker, TrendingDown, Users, Gavel, Info, ShoppingCart, Factory, ExternalLink, MessageSquare, X, Wine } from "lucide-react";
-import { getProduct, getOpenPoolForProduct, getPriceReference, getProductBreadcrumb, getSession, upsertCartItem, poolErrorMessage, searchProducts, getCart, isFollowingProduct, getMarketPriceSeries, getMarketIndexSeries, getProductSpecs, getProductCandidateSuppliers, getMyCompany, getMarketPriceSeriesByPiazza, requestSamplesBulk, getProductSuppliersForSampling, bulkSampleGlobalError, getProductSampling, getMyCompanyAddress } from "@/lib/api";
+import { getProduct, getOpenPoolForProduct, getPriceReference, getProductBreadcrumb, getSession, upsertCartItem, poolErrorMessage, searchProducts, getCart, isFollowingProduct, getMarketPriceSeries, getMarketIndexSeries, getProductSpecs, getProductCandidateSuppliers, getMyCompany, getMarketPriceSeriesByPiazza, requestSamplesBulk, bulkSampleGlobalError, getProductSampling, getMyCompanyAddress } from "@/lib/api";
 import PriceSourceNote from "@/components/PriceSourceNote";
 import CountryFlag from "@/components/CountryFlag";
 import { ytdChange } from "@/lib/priceTrend";
@@ -417,24 +417,23 @@ export default function ProductPage() {
           setSuppliers((p.suppliers || []).map(mapDbSupplier));
           setPriceRef(ref != null ? Number(ref) : null);
           setPool(mapDbPool(op));
-          // Vini/mosti sfusi: elenco fornitori (RPC dedicata) + serie prezzi per piazza.
-          // Percorso INVARIATO: continua a usare la RPC storica e il form dettagliato.
+          // Campionatura UNIFICATA: un'unica RPC per TUTTI i prodotti. Decide cosa
+          // mostrare (form dettagliato o semplificato, o riquadro grigio) ed elenca
+          // i fornitori campionabili. Il layout a due colonne è lo stesso per tutti;
+          // cambia solo se compare il blocco "Specifiche" (richiede_specifiche).
+          getProductSampling(id).then((s) => {
+            setSampling(s);
+            if (s?.fornitori) setSampleSuppliers(s.fornitori);
+          }).catch(() => setSampling(null));
+          // Indirizzo di spedizione precompilato con la sede registrata (modificabile).
+          getMyCompanyAddress().then((a) => {
+            if (!a) return;
+            const parts = [a.address, a.city, a.country].map((x) => (x || "").trim()).filter(Boolean);
+            if (parts.length) setShipAddress(parts.join(", "));
+          }).catch(() => {});
+          // Vini/mosti sfusi: in più il grafico dei prezzi per piazza.
           if (p.listing_mode === "sample_only") {
-            getProductSuppliersForSampling(id).then(setSampleSuppliers).catch(() => setSampleSuppliers([]));
             getMarketPriceSeriesByPiazza(id).then(setPiazzaData).catch(() => setPiazzaData(null));
-          } else {
-            // Materie prime industriali: un'unica RPC decide cosa mostrare
-            // (form semplificato / riquadro grigio) ed elenca i fornitori.
-            getProductSampling(id).then((s) => {
-              setSampling(s);
-              if (s?.fornitori) setSampleSuppliers(s.fornitori);
-            }).catch(() => setSampling(null));
-            // Indirizzo di spedizione precompilato con la sede registrata (modificabile).
-            getMyCompanyAddress().then((a) => {
-              if (!a) return;
-              const parts = [a.address, a.city, a.country].map((x) => (x || "").trim()).filter(Boolean);
-              if (parts.length) setShipAddress(parts.join(", "));
-            }).catch(() => {});
           }
           setCrumb(bc || null);
           setSelectedId(null);
@@ -508,6 +507,12 @@ export default function ProductPage() {
   // Campionatura (DAV-77): questi prodotti (vini/mosti sfusi) non si acquistano
   // online — niente prezzo aggregato, carrello, asta, promo. Solo richiesta campione.
   const sampleOnly = product.listing_mode === "sample_only";
+  // La distinzione fra form dettagliato (vini/mosti) e semplificato (industriali)
+  // arriva dal backend (richiede_specifiche), MAI dal nome del prodotto.
+  // showSampling = va mostrata la sezione campioni a due colonne.
+  const richiedeSpec = sampling ? !!sampling.richiede_specifiche : sampleOnly;
+  const showSampling = sampleOnly || !!sampling?.consentito;
+  const limite24h = sampling?.limite_24h ?? 5;
   // Fornitori vino dalla RPC dedicata (verificati e non). Nazione con conteggio
   // (desc); Regione dipende dalla nazione. La selezione vive in un Set
   // indipendente dal filtro: cambiando filtro le scelte non si perdono.
@@ -571,9 +576,8 @@ export default function ProductPage() {
         specDenominazione: specDenomTesto.trim() || null,
         specAnnata: specAnnata === "" ? null : Number(specAnnata),
         message: specNote.trim() || null,
-        // Solo il form semplificato espone l'indirizzo; sui vini resta invariato
-        // (indirizzo dedotto dal backend, nessun campo mostrato).
-        shippingAddress: (!sampleOnly && shipAddress.trim()) ? shipAddress.trim() : null,
+        // L'indirizzo è ora sempre presente nel form; se vuoto il backend usa la sede.
+        shippingAddress: shipAddress.trim() || null,
       });
       setBulkResult(Array.isArray(res) ? res : []);
       // Dopo un invio riuscito: svuota le checkbox (le specifiche restano compilate).
@@ -1027,7 +1031,7 @@ export default function ProductPage() {
             {/* CAMPIONATURA — vini/mosti sfusi (DAV-77): filtro Nazione/Regione +
                 lista fornitori selezionabili. La richiesta cumulativa è nella
                 card sticky della colonna destra. */}
-            {sampleOnly && (<>
+            {showSampling && (<>
               {/* FILTRO — due soli campi: Nazione (con conteggio) e Regione (dipendente). */}
               <div style={{ border:`1px solid ${C.border}`, borderRadius:12, padding:14, marginBottom:14, background:C.bg }}>
                 <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
@@ -1122,9 +1126,11 @@ export default function ProductPage() {
                 </div>
               )}
 
-              <div style={{ fontSize:12.5, color:C.muted, lineHeight:1.6, background:C.bg, border:`1px solid ${C.border}`, borderRadius:10, padding:"12px 14px", marginBottom:28 }}>
-                Vini e mosti sfusi non si acquistano online: seleziona i fornitori e richiedi un campione, poi concludi la trattativa direttamente con loro.
-              </div>
+              {sampleOnly && (
+                <div style={{ fontSize:12.5, color:C.muted, lineHeight:1.6, background:C.bg, border:`1px solid ${C.border}`, borderRadius:10, padding:"12px 14px", marginBottom:28 }}>
+                  Vini e mosti sfusi non si acquistano online: seleziona i fornitori e richiedi un campione, poi concludi la trattativa direttamente con loro.
+                </div>
+              )}
             </>)}
 
             {/* SEGNALA UN FORNITORE — solo quando il prodotto non ha alcun fornitore
@@ -1383,37 +1389,24 @@ export default function ProductPage() {
                 (visto dal vivo con l'Acido citrico). Con 1 solo fornitore resta
                 il flusso Acquisto di gruppo (router sotto); col divieto di legge
                 resta il box normativo. */}
-            {sampleOnly && (
+            {/* SEZIONE CAMPIONI (colonna destra) — layout UNICO per vini/mosti e
+                materie prime. Il blocco "Specifiche" appare solo se richiede_specifiche. */}
+            {sampling && !sampleOnly && !sampling.consentito ? (
+              <div style={{ border:`1px solid ${C.border}`, borderRadius:14, padding:"16px 18px", background:C.bg }}>
+                <div style={{ fontSize:15, fontWeight:800, color:C.text, marginBottom:6, display:"flex", alignItems:"center", gap:8 }}><Beaker size={17}/> Richiedi campioni</div>
+                <div style={{ fontSize:13.5, color:C.muted, lineHeight:1.6 }}>
+                  {sampling.messaggio || "Per questo prodotto non è possibile richiedere campioni al momento."}
+                </div>
+              </div>
+            ) : showSampling ? (
               <div style={{ border:"1px solid #FBCFE8", borderRadius:14, padding:16, background:"#FDF2F8" }}>
-                {/* (a) IL PULSANTE, in cima */}
-                <button onClick={submitBulkSample} disabled={selectedSP.size === 0 || bulkBusy}
-                  style={{ width:"100%", background:(selectedSP.size===0||bulkBusy)?"#E9AEC6":"#9D174D", color:"#fff", border:"none", borderRadius:10, padding:"13px", fontSize:14.5, fontWeight:700, cursor:(selectedSP.size===0||bulkBusy)?"default":"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:8, fontFamily:"Inter,system-ui" }}>
-                  <Beaker size={16}/> {bulkBusy ? "Invio…" : `Richiedi campionatura ai fornitori selezionati (${selectedSP.size})`}
-                </button>
+                <div style={{ fontSize:15, fontWeight:800, color:"#9D174D", marginBottom:14 }}>
+                  Richiedi campionatura ai fornitori selezionati ({selectedSP.size})
+                </div>
 
-                {bulkErr && <div style={{ marginTop:10, fontSize:13, color:C.red }}>{bulkErr}</div>}
-                {bulkResult && (() => {
-                  const created = bulkResult.filter(r => r.status === "created");
-                  const failed = bulkResult.filter(r => r.status !== "created");
-                  return (
-                    <div style={{ marginTop:10, background:"#fff", border:`1px solid ${C.border}`, borderRadius:10, padding:"10px 12px" }}>
-                      <div style={{ fontSize:13.5, fontWeight:700, color:C.text }}>
-                        {created.length > 0 ? `Richiesta inviata a ${created.length} ${created.length===1?"fornitore":"fornitori"}.` : "Nessuna richiesta inviata."}
-                      </div>
-                      {failed.length > 0 && (<>
-                        <div style={{ fontSize:12.5, color:C.text, marginTop:6 }}>
-                          {failed.length} non {failed.length===1?"è andata":"sono andate"} a buon fine: {bulkSampleErrorText(failed[0].error_message)}
-                        </div>
-                        <div style={{ fontSize:11.5, color:C.muted, marginTop:6, lineHeight:1.5 }}>
-                          Non contattati: {failed.map(r => supplierNameById(r.supplier_product_id)).join(", ")}.
-                        </div>
-                      </>)}
-                    </div>
-                  );
-                })()}
-
-                {/* (b) Specifiche per la richiesta */}
-                <div style={{ marginTop:16 }}>
+                {/* (1) Specifiche per la richiesta — SOLO vini/mosti (richiede_specifiche) */}
+                {richiedeSpec && (
+                <div style={{ marginBottom:16 }}>
                   <div style={{ fontSize:13, fontWeight:800, color:C.text }}>Specifiche per la richiesta</div>
                   <div style={{ fontSize:11.5, color:C.muted, marginTop:2, marginBottom:12 }}>Facoltative. Vengono inoltrate a tutti i fornitori selezionati.</div>
                   <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
@@ -1488,14 +1481,59 @@ export default function ProductPage() {
                     <label style={specLabel}>Annata
                       <input type="number" min={1990} max={new Date().getFullYear() + 1} step={1} value={specAnnata} onChange={e=>setSpecAnnata(e.target.value)} placeholder="es. 2024" style={specInput}/>
                     </label>
-
-                    <label style={specLabel}>Note per il fornitore
-                      <textarea value={specNote} onChange={e=>setSpecNote(e.target.value)} rows={3} style={{ ...specInput, resize:"vertical", fontFamily:"Inter,system-ui" }}/>
-                    </label>
                   </div>
                 </div>
+                )}
+
+                {/* (2) Indirizzo di spedizione — sempre presente, precompilato */}
+                <label style={specLabel}>Indirizzo di spedizione
+                  <input value={shipAddress} onChange={e=>setShipAddress(e.target.value)} placeholder="Via, città, nazione" style={specInput}/>
+                </label>
+                <div style={{ fontSize:11, color:C.muted, marginTop:4, marginBottom:12 }}>Precompilato con la sede della tua azienda. Se lo lasci vuoto lo completiamo noi.</div>
+
+                {/* (3) Note per il fornitore — sempre presente */}
+                <label style={specLabel}>Note per il fornitore
+                  <textarea value={specNote} onChange={e=>setSpecNote(e.target.value)} rows={3} maxLength={2000}
+                    placeholder={richiedeSpec ? "" : "Descrivi l'uso previsto, il grado di purezza che ti serve o qualsiasi altra informazione utile al fornitore."}
+                    style={{ ...specInput, resize:"vertical", fontFamily:"Inter,system-ui" }}/>
+                </label>
+
+                {/* (4) Pulsante di invio */}
+                <button onClick={submitBulkSample} disabled={selectedSP.size === 0 || bulkBusy}
+                  style={{ width:"100%", marginTop:12, background:(selectedSP.size===0||bulkBusy)?"#E9AEC6":"#9D174D", color:"#fff", border:"none", borderRadius:10, padding:"13px", fontSize:14.5, fontWeight:700, cursor:(selectedSP.size===0||bulkBusy)?"default":"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:8, fontFamily:"Inter,system-ui" }}>
+                  <Beaker size={16}/> {bulkBusy ? "Invio…" : `Richiedi campioni ai fornitori selezionati (${selectedSP.size})`}
+                </button>
+
+                {bulkErr && <div style={{ marginTop:10, fontSize:13, color:C.red }}>{bulkErr}</div>}
+                {bulkResult && (() => {
+                  const created = bulkResult.filter(r => r.status === "created");
+                  const failed = bulkResult.filter(r => r.status !== "created");
+                  return (
+                    <div style={{ marginTop:10, background:"#fff", border:`1px solid ${C.border}`, borderRadius:10, padding:"10px 12px" }}>
+                      <div style={{ fontSize:13.5, fontWeight:700, color:C.text }}>
+                        {created.length > 0 ? `Richiesta inviata a ${created.length} ${created.length===1?"fornitore":"fornitori"}.` : "Nessuna richiesta inviata."}
+                      </div>
+                      {failed.length > 0 && (<>
+                        <div style={{ fontSize:12.5, color:C.text, marginTop:6 }}>
+                          {failed.length} non {failed.length===1?"è andata":"sono andate"} a buon fine: {bulkSampleErrorText(failed[0].error_message)}
+                        </div>
+                        <div style={{ fontSize:11.5, color:C.muted, marginTop:6, lineHeight:1.5 }}>
+                          Non contattati: {failed.map(r => supplierNameById(r.supplier_product_id)).join(", ")}.
+                        </div>
+                      </>)}
+                    </div>
+                  );
+                })()}
+
+                {/* (5) limite 24h + (6) spese a carico del cliente */}
+                <div style={{ fontSize:11.5, color:C.muted, marginTop:12, textAlign:"center" }}>
+                  Massimo {limite24h} richieste di campionatura ogni 24 ore.
+                </div>
+                <div style={{ fontSize:11.5, color:C.muted, marginTop:4, textAlign:"center" }}>
+                  Le spese di spedizione del campione sono a carico del cliente.
+                </div>
               </div>
-            )}
+            ) : null}
             {!sampleOnly && !pool.exists && !auctionBlocked && !groupBuy && (
               /* Sfondo #FBF7FF: lo stesso rosino della palette viola gia' usato
                  dal box asta ("Asta a ribasso disponibile") nella pagina aste. */
@@ -1600,159 +1638,6 @@ export default function ProductPage() {
               })()}
             </div>
             ))}
-
-            {/* CAMPIONATURA — materie prime industriali. Cosa mostrare lo decide
-                get_product_sampling: riquadro grigio se non consentito, altrimenti
-                il form SEMPLIFICATO (solo fornitori + indirizzo + note). Il ramo
-                vini/mosti resta separato e invariato (sampleOnly). */}
-            {!sampleOnly && sampling && (
-              <div style={{ border:`1px solid ${C.border}`, borderRadius:14, padding:18, marginBottom:28 }}>
-                <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:2 }}>
-                  <Beaker size={18} color={C.blue} />
-                  <span style={{ fontSize:16, fontWeight:800, color:C.text }}>Richiedi campioni</span>
-                </div>
-
-                {!sampling.consentito ? (
-                  <div style={{ marginTop:12, background:C.bg, border:`1px solid ${C.border}`, borderRadius:10, padding:"16px 18px", color:C.muted, fontSize:13.5, lineHeight:1.6 }}>
-                    {sampling.messaggio || "Per questo prodotto non è possibile richiedere campioni al momento."}
-                  </div>
-                ) : (<>
-                  <div style={{ fontSize:13, color:C.muted, margin:"6px 0 14px", lineHeight:1.55 }}>
-                    Seleziona uno o più fornitori e invia la richiesta in un colpo solo.
-                  </div>
-
-                  {/* FILTRO Nazione/Regione (stesso comportamento dei vini) */}
-                  <div style={{ border:`1px solid ${C.border}`, borderRadius:12, padding:14, marginBottom:14, background:C.bg }}>
-                    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
-                      <span style={{ fontSize:12, fontWeight:700, color:C.muted, textTransform:"uppercase", letterSpacing:"0.04em" }}>Filtra i fornitori</span>
-                      {sampleFilterActive && <button onClick={() => { setWfCountry(""); setWfRegion(""); }} style={{ background:"none", border:"none", color:C.blue, fontSize:12.5, fontWeight:700, cursor:"pointer" }}>Azzera</button>}
-                    </div>
-                    <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))", gap:10 }}>
-                      <div>
-                        <label style={{ display:"block", fontSize:11, color:C.muted, fontWeight:600, marginBottom:4 }}>Nazione</label>
-                        <select value={wfCountry} onChange={e => { setWfCountry(e.target.value); setWfRegion(""); }}
-                          style={{ width:"100%", padding:"8px 10px", border:`1px solid ${C.border}`, borderRadius:7, fontSize:13, background:"#fff", color:C.text, cursor:"pointer" }}>
-                          <option value="">Tutte le nazioni</option>
-                          {sampleNazioni.map(([c, n]) => <option key={c} value={c}>{c} ({n})</option>)}
-                        </select>
-                      </div>
-                      <div>
-                        <label style={{ display:"block", fontSize:11, color:C.muted, fontWeight:600, marginBottom:4 }}>Regione</label>
-                        <select value={wfRegion} disabled={!wfCountry} onChange={e => setWfRegion(e.target.value)}
-                          style={{ width:"100%", padding:"8px 10px", border:`1px solid ${C.border}`, borderRadius:7, fontSize:13, background:!wfCountry?"#F1F5F9":"#fff", color:!wfCountry?C.muted:C.text, cursor:!wfCountry?"not-allowed":"pointer" }}>
-                          <option value="">Tutte le regioni</option>
-                          {sampleRegioni.map(r => <option key={r} value={r}>{r}</option>)}
-                        </select>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* CONTEGGIO + seleziona/deseleziona tutti i filtrati */}
-                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:12, flexWrap:"wrap", marginBottom:12 }}>
-                    <span style={{ fontSize:14, fontWeight:700, color:C.text }}>
-                      {sampleFilterActive ? `${filteredSampleSuppliers.length} fornitori (su ${sampleSuppliers.length})` : `${sampleSuppliers.length} fornitori`}
-                    </span>
-                    {filteredSampleSuppliers.length > 0 && (
-                      <button onClick={toggleSelectAllFiltered} style={{ background:"none", border:"none", color:C.blue, fontSize:13, fontWeight:700, cursor:"pointer" }}>
-                        {allFilteredSelected ? "Deseleziona tutti" : "Seleziona tutti i fornitori filtrati"}
-                      </button>
-                    )}
-                  </div>
-
-                  {filteredSampleSuppliers.length === 0 ? (
-                    <div style={{ border:`1px dashed ${C.border}`, borderRadius:14, padding:"28px 20px", textAlign:"center", color:C.muted, marginBottom:16 }}>
-                      Nessun fornitore corrisponde ai filtri. <span onClick={() => { setWfCountry(""); setWfRegion(""); }} style={{ color:C.blue, fontWeight:700, cursor:"pointer" }}>Azzera i filtri</span>
-                    </div>
-                  ) : (
-                    <div style={{ display:"flex", flexDirection:"column", gap:10, marginBottom:16 }}>
-                      {filteredSampleSuppliers.map(s => {
-                        const sel = selectedSP.has(s.supplier_product_id);
-                        const place = [s.city, s.region, s.country].filter(Boolean).join(", ");
-                        return (
-                          <label key={s.supplier_product_id} style={{ display:"flex", gap:12, alignItems:"flex-start", border:`1px solid ${sel ? C.blue : C.border}`, borderRadius:12, padding:"14px 16px", background:sel?"#EFF6FF":"#fff", cursor:"pointer" }}>
-                            <input type="checkbox" checked={sel} onChange={() => toggleSP(s.supplier_product_id)} aria-label={`Seleziona ${s.legal_name}`} style={{ width:17, height:17, accentColor:C.blue, cursor:"pointer", flexShrink:0, marginTop:2 }}/>
-                            <div style={{ flex:1, minWidth:0 }}>
-                              <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap", marginBottom:3 }}>
-                                <span style={{ fontSize:15, fontWeight:800, color:C.text }}>{s.legal_name}</span>
-                                {s.verified
-                                  ? <span className="bs-chip" style={{ background:"#ECFDF5", color:C.green }}><Check size={11}/> Verificato</span>
-                                  : <span className="bs-chip" style={{ background:"#FEF3C7", color:C.amber }}>Non verificato</span>}
-                                <SupplierTypeBadges roles={s.roles} type={s.supplier_type} />
-                              </div>
-                              <div style={{ fontSize:12.5, color:C.muted, display:"flex", alignItems:"center", gap:6, flexWrap:"wrap" }}>
-                                <CountryFlag code={s.country_iso2} country={s.country} size={12} />
-                                <span>{place || s.country || "—"}</span>
-                              </div>
-                              {(s.company_id || s.website) && (
-                                <div style={{ display:"flex", gap:14, marginTop:8, flexWrap:"wrap" }}>
-                                  {s.company_id && (
-                                    <a href={`/fornitore?id=${s.company_id}`} onClick={e => e.stopPropagation()}
-                                      style={{ fontSize:12, color:C.blue, fontWeight:700, textDecoration:"none" }}>Scheda fornitore</a>
-                                  )}
-                                  {s.website && (
-                                    <a href={s.website} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
-                                      style={{ fontSize:12, color:C.blue, fontWeight:700, textDecoration:"none", display:"inline-flex", alignItems:"center", gap:3 }}>Sito web <ExternalLink size={11}/></a>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                          </label>
-                        );
-                      })}
-                    </div>
-                  )}
-
-                  {/* INDIRIZZO DI SPEDIZIONE — precompilato, modificabile */}
-                  <div style={{ marginBottom:14 }}>
-                    <label style={specLabel}>Indirizzo di spedizione
-                      <input value={shipAddress} onChange={e => setShipAddress(e.target.value)} placeholder="Via, città, nazione" style={specInput}/>
-                    </label>
-                    <div style={{ fontSize:11.5, color:C.muted, marginTop:4 }}>Precompilato con la sede della tua azienda. Se lo lasci vuoto lo completiamo noi.</div>
-                  </div>
-
-                  {/* NOTE (unico campo libero) */}
-                  <div style={{ marginBottom:14 }}>
-                    <label style={specLabel}>Note per il fornitore
-                      <textarea value={specNote} onChange={e => setSpecNote(e.target.value)} maxLength={2000} rows={4}
-                        placeholder="Descrivi l'uso previsto, il grado di purezza che ti serve o qualsiasi altra informazione utile al fornitore."
-                        style={{ ...specInput, resize:"vertical" }}/>
-                    </label>
-                  </div>
-
-                  {bulkErr && <div style={{ marginBottom:10, fontSize:13, color:C.red }}>{bulkErr}</div>}
-                  {bulkResult && (() => {
-                    const created = bulkResult.filter(r => r.status === "created");
-                    const failed = bulkResult.filter(r => r.status !== "created");
-                    return (
-                      <div style={{ marginBottom:12, background:"#fff", border:`1px solid ${C.border}`, borderRadius:10, padding:"10px 12px" }}>
-                        <div style={{ fontSize:13.5, fontWeight:700, color:C.text }}>
-                          {created.length > 0 ? `Richiesta inviata a ${created.length} ${created.length===1?"fornitore":"fornitori"}.` : "Nessuna richiesta inviata."}
-                        </div>
-                        {failed.length > 0 && (<>
-                          <div style={{ fontSize:12.5, color:C.text, marginTop:6 }}>
-                            {failed.length} non {failed.length===1?"è andata":"sono andate"} a buon fine: {bulkSampleErrorText(failed[0].error_message)}
-                          </div>
-                          <div style={{ fontSize:11.5, color:C.muted, marginTop:6, lineHeight:1.5 }}>
-                            Non contattati: {failed.map(r => supplierNameById(r.supplier_product_id)).join(", ")}.
-                          </div>
-                        </>)}
-                      </div>
-                    );
-                  })()}
-
-                  <button onClick={submitBulkSample} disabled={selectedSP.size === 0 || bulkBusy}
-                    style={{ width:"100%", background:(selectedSP.size===0||bulkBusy)?"#93C5DD":C.dark, color:"#fff", border:"none", borderRadius:10, padding:"13px", fontSize:14.5, fontWeight:700, cursor:(selectedSP.size===0||bulkBusy)?"default":"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:8, fontFamily:"Inter,system-ui" }}>
-                    <Beaker size={16}/> {bulkBusy ? "Invio…" : selectedSP.size > 0 ? `Richiedi campioni ai fornitori selezionati (${selectedSP.size})` : "Seleziona almeno un fornitore"}
-                  </button>
-                  <div style={{ fontSize:11.5, color:C.muted, marginTop:8, textAlign:"center" }}>
-                    Massimo {sampling.limite_24h} richieste di campionatura ogni 24 ore.
-                  </div>
-                  <div style={{ fontSize:11.5, color:C.muted, marginTop:4, textAlign:"center" }}>
-                    Le condizioni di spedizione del campione vengono concordate direttamente con il fornitore.
-                  </div>
-                </>)}
-              </div>
-            )}
 
             {/* PRICE HISTORY — vini/mosti: grafico per PIAZZA (nascosto se non ci
                 sono ancora dati); altri prodotti: mercato €/unità o indice. */}
