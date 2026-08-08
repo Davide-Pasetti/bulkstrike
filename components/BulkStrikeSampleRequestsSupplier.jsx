@@ -5,12 +5,13 @@
 // date le stampiglia il DB; ogni cambio di stato invia l'email all'acquirente.
 import { useState, useEffect } from "react";
 import { Check, X, Beaker, Truck, AlertTriangle, MapPin } from "lucide-react";
-import { getSession, getMyCompany, getMySampleRequests, updateSampleRequest, sampleErrorMessage } from "@/lib/api";
+import { getSession, getMyCompany, getMySampleRequests, updateSampleRequest, sampleErrorMessage, respondSampleRequest, sampleRespondError } from "@/lib/api";
 import BulkStrikeNav from "@/components/BulkStrikeNav";
 
 const C = { blue:"#0EA5E9", text:"#0F172A", muted:"#64748B", border:"#E2E8F0", bg:"#F8FAFE", green:"#059669", red:"#DC2626", amber:"#D97706", wine:"#9D174D" };
 const dt = (iso) => iso ? new Date(iso).toLocaleDateString("it-IT", { day:"2-digit", month:"2-digit", year:"numeric" }) : "—";
 const litri = (n) => `${Number(n).toLocaleString("it-IT", { minimumFractionDigits:0, maximumFractionDigits:2 })} l`;
+const eur = (n) => "€" + Number(n).toLocaleString("it-IT", { minimumFractionDigits:2, maximumFractionDigits:2 });
 
 const STATUS = {
   pending:   { label:"In attesa di risposta", bg:"#FFFBEB", fg:C.amber },
@@ -50,11 +51,18 @@ export default function SampleRequestsSupplierPage({ inShell = false }) {
     catch (e) { setErr(sampleErrorMessage(e)); }
     setBusyId(null);
   }
+  // Risposta alla richiesta pending: accetta (chi paga la spedizione) o rifiuta.
+  async function respondi(id, esito, speseACarico = null, motivo = null) {
+    setBusyId(id); setErr("");
+    try { await respondSampleRequest({ request:id, esito, speseACarico, motivo }); setMode(null); setText(""); await load(); }
+    catch (e) { setErr(sampleRespondError(e)); }
+    setBusyId(null);
+  }
 
   const Body = (
     <div style={{ maxWidth:1000, margin:"0 auto", padding: inShell ? 0 : "0 20px" }}>
       <h1 style={{ fontSize:26, fontWeight:800, color:C.text, margin:"0 0 6px" }}>Richieste di campionatura</h1>
-      <p style={{ fontSize:14, color:C.muted, marginBottom:20 }}>Le richieste di campione ricevute sui tuoi vini e mosti sfusi. Rispondi o segna la spedizione: l'acquirente riceve una email a ogni aggiornamento.</p>
+      <p style={{ fontSize:14, color:C.muted, marginBottom:20 }}>Le richieste di campione ricevute sui tuoi prodotti. Rispondi o segna la spedizione: l'acquirente riceve una email a ogni aggiornamento.</p>
       {err && <div style={{ background:"#FEF2F2", color:C.red, border:"1px solid #FECACA", borderRadius:10, padding:"10px 14px", fontSize:14, marginBottom:16 }}>{err}</div>}
 
       {loading ? <div style={{ color:C.muted, fontSize:14 }}>Carico…</div>
@@ -91,10 +99,10 @@ export default function SampleRequestsSupplierPage({ inShell = false }) {
 
               {mode?.id === r.id ? (
                 <div style={{ display:"flex", gap:8, flexWrap:"wrap", alignItems:"center", marginTop:6 }}>
-                  <input value={text} onChange={(e) => setText(e.target.value)} placeholder={mode.kind === "decline" ? "Motivo del rifiuto (obbligatorio)" : "Corriere e n° spedizione (facoltativo)"}
+                  <input value={text} onChange={(e) => setText(e.target.value)} placeholder={mode.kind === "decline" ? "Motivo del rifiuto (facoltativo)" : "Corriere e n° spedizione (facoltativo)"}
                     style={{ flex:1, minWidth:220, padding:"9px 12px", border:`1px solid ${C.border}`, borderRadius:8, fontSize:14 }} />
                   {mode.kind === "decline" ? (
-                    <button onClick={() => { if (!text.trim()) { setErr("Indica il motivo del rifiuto."); return; } act(r.id, { status:"declined", decline_reason:text.trim() }); }} disabled={busyId === r.id}
+                    <button onClick={() => respondi(r.id, "rifiuta", null, text.trim() || null)} disabled={busyId === r.id}
                       style={{ background:C.red, color:"#fff", border:"none", borderRadius:8, padding:"9px 16px", fontSize:14, fontWeight:700, cursor:"pointer" }}>Conferma rifiuto</button>
                   ) : (
                     <button onClick={() => act(r.id, { status:"shipped", tracking_note:text.trim() || null })} disabled={busyId === r.id}
@@ -103,11 +111,18 @@ export default function SampleRequestsSupplierPage({ inShell = false }) {
                   <button onClick={() => { setMode(null); setText(""); }} style={{ background:"none", color:C.muted, border:`1px solid ${C.border}`, borderRadius:8, padding:"9px 16px", fontSize:14, cursor:"pointer" }}>Annulla</button>
                 </div>
               ) : r.status === "pending" ? (
-                <div style={{ display:"flex", gap:10, marginTop:6 }}>
-                  <button onClick={() => act(r.id, { status:"accepted" })} disabled={busyId === r.id}
-                    style={{ background:C.green, color:"#fff", border:"none", borderRadius:8, padding:"9px 18px", fontSize:14, fontWeight:700, cursor:"pointer", display:"inline-flex", alignItems:"center", gap:6 }}><Check size={15}/> Accetta</button>
-                  <button onClick={() => { setMode({ id:r.id, kind:"decline" }); setText(""); setErr(""); }} disabled={busyId === r.id}
-                    style={{ background:"#fff", color:C.red, border:"1px solid #FECACA", borderRadius:8, padding:"9px 18px", fontSize:14, fontWeight:700, cursor:"pointer", display:"inline-flex", alignItems:"center", gap:6 }}><X size={15}/> Rifiuta</button>
+                <div style={{ marginTop:6 }}>
+                  <div style={{ fontSize:12.5, color:C.muted, marginBottom:8 }}>Se accetti, scegli chi paga la spedizione del campione:</div>
+                  <div style={{ display:"flex", gap:10, flexWrap:"wrap" }}>
+                    <button onClick={() => respondi(r.id, "accetta", "fornitore")} disabled={busyId === r.id}
+                      style={{ background:C.green, color:"#fff", border:"none", borderRadius:8, padding:"9px 16px", fontSize:14, fontWeight:700, cursor:"pointer", display:"inline-flex", alignItems:"center", gap:6 }}><Check size={15}/> Offro io la spedizione</button>
+                    <button onClick={() => respondi(r.id, "accetta", "cliente")} disabled={busyId === r.id}
+                      style={{ background:C.blue, color:"#fff", border:"none", borderRadius:8, padding:"9px 16px", fontSize:14, fontWeight:700, cursor:"pointer" }}>
+                      Addebito la spedizione al cliente{r.shipping_quote_amount != null ? ` (${eur(r.shipping_quote_amount)} + IVA)` : ""}
+                    </button>
+                    <button onClick={() => { setMode({ id:r.id, kind:"decline" }); setText(""); setErr(""); }} disabled={busyId === r.id}
+                      style={{ background:"#fff", color:C.red, border:"1px solid #FECACA", borderRadius:8, padding:"9px 16px", fontSize:14, fontWeight:700, cursor:"pointer", display:"inline-flex", alignItems:"center", gap:6 }}><X size={15}/> Rifiuta</button>
+                  </div>
                 </div>
               ) : r.status === "accepted" ? (
                 <div style={{ marginTop:6 }}>

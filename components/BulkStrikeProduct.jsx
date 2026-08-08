@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { Search, ArrowRight, Check, Clock, ChevronDown, ChevronRight, ChevronUp, Star, Shield, Truck, FileText, Download, Plus, Minus, Beaker, TrendingDown, Users, Gavel, Info, ShoppingCart, Factory, ExternalLink, MessageSquare, X, Wine } from "lucide-react";
-import { getProduct, getOpenPoolForProduct, getPriceReference, getProductBreadcrumb, getSession, upsertCartItem, poolErrorMessage, searchProducts, getCart, isFollowingProduct, getMarketPriceSeries, getMarketIndexSeries, getProductSpecs, getProductCandidateSuppliers, getMyCompany, getMarketPriceSeriesByPiazza, requestSamplesBulk, bulkSampleGlobalError, getProductSampling, getMyCompanyAddress } from "@/lib/api";
+import { getProduct, getOpenPoolForProduct, getPriceReference, getProductBreadcrumb, getSession, upsertCartItem, poolErrorMessage, searchProducts, getCart, isFollowingProduct, getMarketPriceSeries, getMarketIndexSeries, getProductSpecs, getProductCandidateSuppliers, getMyCompany, getMarketPriceSeriesByPiazza, requestSamplesBulk, bulkSampleGlobalError, getProductSampling } from "@/lib/api";
 import PriceSourceNote from "@/components/PriceSourceNote";
 import CountryFlag from "@/components/CountryFlag";
 import { ytdChange } from "@/lib/priceTrend";
@@ -323,7 +323,6 @@ export default function ProductPage() {
   // specifiche della richiesta cumulativa.
   const [sampleSuppliers, setSampleSuppliers] = useState([]);
   const [sampling, setSampling] = useState(null);   // get_product_sampling per le materie prime (purchase)
-  const [shipAddress, setShipAddress] = useState(""); // indirizzo di spedizione (solo form semplificato)
   const [wfCountry, setWfCountry] = useState("");   // nazione selezionata
   const [wfRegion, setWfRegion] = useState("");     // regione selezionata
   const [selectedSP, setSelectedSP] = useState(() => new Set());
@@ -425,12 +424,6 @@ export default function ProductPage() {
             setSampling(s);
             if (s?.fornitori) setSampleSuppliers(s.fornitori);
           }).catch(() => setSampling(null));
-          // Indirizzo di spedizione precompilato con la sede registrata (modificabile).
-          getMyCompanyAddress().then((a) => {
-            if (!a) return;
-            const parts = [a.address, a.city, a.country].map((x) => (x || "").trim()).filter(Boolean);
-            if (parts.length) setShipAddress(parts.join(", "));
-          }).catch(() => {});
           // Vini/mosti sfusi: in più il grafico dei prezzi per piazza.
           if (p.listing_mode === "sample_only") {
             getMarketPriceSeriesByPiazza(id).then(setPiazzaData).catch(() => setPiazzaData(null));
@@ -548,6 +541,9 @@ export default function ProductPage() {
     if (/duplicate key|unique/i.test(msg)) return "Hai già una richiesta di campionatura aperta per questo fornitore.";
     return msg;
   }
+  // Non invia più la richiesta: porta alla pagina di riepilogo/spedizione, dove il
+  // cliente sceglie destinazione e corriere. I dati (fornitori scelti, note, spec)
+  // viaggiano in sessionStorage.
   async function submitBulkSample() {
     if (selectedSP.size === 0) return;
     if (specGradoMin !== "" && specGradoMax !== "" && Number(specGradoMin) > Number(specGradoMax)) {
@@ -560,32 +556,20 @@ export default function ProductPage() {
       window.location.href = "/auth/login";
       return;
     }
-    setBulkBusy(true); setBulkErr(""); setBulkResult(null);
-    try {
-      const res = await requestSamplesBulk({
-        supplierProductIds: [...selectedSP],
-        specQuantitaPartita: quantitaPartita === "" ? null : Number(quantitaPartita),
-        specColore: specColore || null,
-        specLavorazione: (isMostoPage ? specLavorazione : "") || null,
-        specRefrigerato,
-        specSo2: specSo2 === "" ? null : Number(specSo2),
-        specGradoMin: specGradoMin === "" ? null : Number(specGradoMin),
-        specGradoMax: specGradoMax === "" ? null : Number(specGradoMax),
-        specVarieta: specVarieta.trim() || null,
-        specDenominazioneTipo: specDenomTipo || null,
-        specDenominazione: specDenomTesto.trim() || null,
-        specAnnata: specAnnata === "" ? null : Number(specAnnata),
-        message: specNote.trim() || null,
-        // L'indirizzo è ora sempre presente nel form; se vuoto il backend usa la sede.
-        shippingAddress: shipAddress.trim() || null,
-      });
-      setBulkResult(Array.isArray(res) ? res : []);
-      // Dopo un invio riuscito: svuota le checkbox (le specifiche restano compilate).
-      setSelectedSP(new Set());
-    } catch (e) {
-      setBulkErr(bulkSampleGlobalError(e));
-    }
-    setBulkBusy(false);
+    const checkout = {
+      productId,
+      productName: product.name,
+      supplierProductIds: [...selectedSP],
+      note: specNote,
+      richiedeSpec,
+      specs: richiedeSpec ? {
+        quantitaPartita, colore: specColore, lavorazione: isMostoPage ? specLavorazione : "",
+        refrigerato: specRefrigerato, so2: specSo2, gradoMin: specGradoMin, gradoMax: specGradoMax,
+        varieta: specVarieta, denomTipo: specDenomTipo, denomTesto: specDenomTesto, annata: specAnnata,
+      } : null,
+    };
+    try { sessionStorage.setItem("bs_sample_checkout", JSON.stringify(checkout)); } catch { /* no-op */ }
+    window.location.href = "/richiesta-campioni";
   }
   const specLabel = { display:"block", fontSize:12, fontWeight:600, color:C.muted };
   const specInput = { marginTop:4, width:"100%", minWidth:0, padding:"8px 10px", border:`1px solid ${C.border}`, borderRadius:7, fontSize:13, background:"#fff", color:C.text };
@@ -1485,13 +1469,8 @@ export default function ProductPage() {
                 </div>
                 )}
 
-                {/* (2) Indirizzo di spedizione — sempre presente, precompilato */}
-                <label style={specLabel}>Indirizzo di spedizione
-                  <input value={shipAddress} onChange={e=>setShipAddress(e.target.value)} placeholder="Via, città, nazione" style={specInput}/>
-                </label>
-                <div style={{ fontSize:11, color:C.muted, marginTop:4, marginBottom:12 }}>Precompilato con la sede della tua azienda. Se lo lasci vuoto lo completiamo noi.</div>
-
-                {/* (3) Note per il fornitore — sempre presente */}
+                {/* (2) Note per il fornitore — sempre presente (l'indirizzo si sceglie
+                    nella pagina di riepilogo/spedizione, insieme al corriere) */}
                 <label style={specLabel}>Note per il fornitore
                   <textarea value={specNote} onChange={e=>setSpecNote(e.target.value)} rows={3} maxLength={2000}
                     placeholder={richiedeSpec ? "" : "Descrivi l'uso previsto, il grado di purezza che ti serve o qualsiasi altra informazione utile al fornitore."}
