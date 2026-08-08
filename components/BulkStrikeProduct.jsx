@@ -1500,9 +1500,14 @@ export default function ProductPage() {
 
                 {/* (4) Pulsante di invio */}
                 <button onClick={submitBulkSample} disabled={selectedSP.size === 0 || bulkBusy}
-                  style={{ width:"100%", marginTop:12, background:(selectedSP.size===0||bulkBusy)?"#E9AEC6":"#9D174D", color:"#fff", border:"none", borderRadius:10, padding:"13px", fontSize:14.5, fontWeight:700, cursor:(selectedSP.size===0||bulkBusy)?"default":"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:8, fontFamily:"Inter,system-ui" }}>
+                  style={{ width:"100%", marginTop:12, background:(selectedSP.size===0||bulkBusy)?"#E9AEC6":"#9D174D", color:"#fff", border:"none", borderRadius:10, padding:"13px", fontSize:14.5, fontWeight:700, cursor:(selectedSP.size===0||bulkBusy)?"not-allowed":"pointer", opacity:(selectedSP.size===0||bulkBusy)?0.55:1, display:"flex", alignItems:"center", justifyContent:"center", gap:8, fontFamily:"Inter,system-ui" }}>
                   <Beaker size={16}/> {bulkBusy ? "Invio…" : `Richiedi campioni ai fornitori selezionati (${selectedSP.size})`}
                 </button>
+                {selectedSP.size === 0 && (
+                  <div style={{ fontSize:12, color:C.muted, marginTop:8, textAlign:"center", lineHeight:1.5 }}>
+                    Seleziona almeno un fornitore dall'elenco a sinistra per procedere.
+                  </div>
+                )}
 
                 {bulkErr && <div style={{ marginTop:10, fontSize:13, color:C.red }}>{bulkErr}</div>}
                 {bulkResult && (() => {
