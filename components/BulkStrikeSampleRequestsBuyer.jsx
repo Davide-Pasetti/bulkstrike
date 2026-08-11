@@ -135,7 +135,12 @@ export default function SampleRequestsBuyerPage({ inShell = false }) {
     </div>
   ) : (
     <div style={{ display:"grid", gap:12 }}>
-      {orders.map((o) => (
+      {orders.map((o) => {
+        // Importo da pagare = totale + commissioni di servizio (stessa cifra del
+        // pannello di pagamento). Fallback a `totale` se il campo non è ancora presente.
+        const totPag = o.totale_da_pagare ?? o.totale;
+        const comm = Number(totPag || 0) - Number(o.totale || 0);
+        return (
         <div key={o.id} style={{ background:"#fff", border:`1px solid ${C.border}`, borderRadius:14, padding:16 }}>
           <div style={{ display:"flex", justifyContent:"space-between", gap:12, flexWrap:"wrap", marginBottom:6 }}>
             <div>
@@ -149,8 +154,8 @@ export default function SampleRequestsBuyerPage({ inShell = false }) {
               </div>
             </div>
             <div style={{ textAlign:"right" }}>
-              <div className="bs-num" style={{ fontSize:17, fontWeight:800, color:C.text, fontFamily:"'JetBrains Mono',ui-monospace,monospace" }}>{eur(o.totale)}</div>
-              <div style={{ fontSize:11, color:C.muted }}>spedizione {eur(o.spedizione)} + IVA {eur(o.iva)}</div>
+              <div className="bs-num" style={{ fontSize:17, fontWeight:800, color:C.text, fontFamily:"'JetBrains Mono',ui-monospace,monospace" }}>{eur(totPag)}</div>
+              <div style={{ fontSize:11, color:C.muted }}>spedizione {eur(o.spedizione)} + IVA {eur(o.iva)}{comm > 0.005 ? ` + commissioni ${eur(comm)}` : ""}</div>
             </div>
           </div>
           {o.shipping_address && <div style={{ fontSize:12.5, color:C.muted, marginBottom:8 }}>Spedizione a: {o.shipping_address}</div>}
@@ -164,14 +169,15 @@ export default function SampleRequestsBuyerPage({ inShell = false }) {
               <>
                 <button onClick={() => startPayment(o.id)} disabled={payBusy}
                   style={{ background:"#0369A1", color:"#fff", border:"none", borderRadius:9, padding:"11px 20px", fontSize:14, fontWeight:700, cursor:payBusy?"default":"pointer", opacity:payBusy?0.6:1, display:"inline-flex", alignItems:"center", gap:8 }}>
-                  <CreditCard size={15}/> {payBusy && payOrderId === o.id ? "Preparazione…" : `Paga la spedizione (${eur(o.totale)})`}
+                  <CreditCard size={15}/> {payBusy && payOrderId === o.id ? "Preparazione…" : `Paga la spedizione (${eur(totPag)})`}
                 </button>
                 {payOrderId === o.id && payErr && <div style={{ marginTop:8, fontSize:13, color:C.red }}>{payErr}</div>}
               </>
             )
           )}
         </div>
-      ))}
+        );
+      })}
     </div>
   );
 
