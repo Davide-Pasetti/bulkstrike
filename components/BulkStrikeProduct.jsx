@@ -524,11 +524,32 @@ export default function ProductPage() {
   }), [sampleSuppliers, wfCountry, wfRegion]);
   const sampleFilterActive = !!(wfCountry || wfRegion);
   const toggleSP = (id) => setSelectedSP(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
-  const allFilteredSelected = filteredSampleSuppliers.length > 0 && filteredSampleSuppliers.every(s => selectedSP.has(s.supplier_product_id));
+  // Lista UNICA di fornitori (solo con showSampling): parte dai campionabili
+  // filtrati, esclude quello "In evidenza" e distingue chi ha già un prezzo
+  // (riga d'acquisto) da chi non ce l'ha (riga campione). I fornitori con
+  // prezzo NON hanno la checkbox: si comprano, non si campionano.
+  const pricedCompanyIds = useMemo(() => new Set(others.map(o => o.company_id).filter(Boolean)), [others]);
+  const selectableSamples = useMemo(() => filteredSampleSuppliers.filter(s =>
+    s.company_id !== featured?.company_id && !pricedCompanyIds.has(s.company_id)
+  ), [filteredSampleSuppliers, featured, pricedCompanyIds]);
+  const unifiedSuppliers = useMemo(() => {
+    const pricedByCid = new Map(others.map(o => [o.company_id, o]));
+    return filteredSampleSuppliers
+      .filter(s => s.company_id !== featured?.company_id)
+      .map(s => ({ s, priced: pricedByCid.get(s.company_id) || null }))
+      .sort((a, b) => {
+        if (a.priced && b.priced) return a.priced.calc.preVatKg - b.priced.calc.preVatKg;
+        if (a.priced) return -1;
+        if (b.priced) return 1;
+        return 0; // senza prezzo: mantiene l'ordine della RPC (verificati prima)
+      });
+  }, [others, featured, filteredSampleSuppliers]);
+  // "Seleziona tutti" agisce solo sui campionabili senza prezzo (gli unici con checkbox).
+  const allFilteredSelected = selectableSamples.length > 0 && selectableSamples.every(s => selectedSP.has(s.supplier_product_id));
   const toggleSelectAllFiltered = () => setSelectedSP(prev => {
     const n = new Set(prev);
-    if (allFilteredSelected) filteredSampleSuppliers.forEach(s => n.delete(s.supplier_product_id));
-    else filteredSampleSuppliers.forEach(s => n.add(s.supplier_product_id));
+    if (allFilteredSelected) selectableSamples.forEach(s => n.delete(s.supplier_product_id));
+    else selectableSamples.forEach(s => n.add(s.supplier_product_id));
     return n;
   });
   const supplierNameById = (id) => (sampleSuppliers.find(s => s.supplier_product_id === id)?.legal_name) || "Fornitore";
@@ -972,7 +993,11 @@ export default function ProductPage() {
               )}
             </div>
 
-            {/* OTHER SUPPLIERS */}
+            </>) : null}
+
+            {/* ALTRI FORNITORI CON PREZZO — solo quando NON c'è campionatura; con
+                campionatura confluiscono nella lista UNICA più sotto (con filtro). */}
+            {!sampleOnly && featured && !showSampling && (<>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12, flexWrap:"wrap", gap:8 }}>
               <div style={{ fontSize:12, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.08em", color:C.muted }}>Altri {others.length} fornitori per {(qty/1000)}t</div>
               <span style={{ fontSize:12, color:C.muted }}>Ordinati per costo (merce + spedizione) · IVA esclusa</span>
@@ -1010,11 +1035,12 @@ export default function ProductPage() {
                 </div>
               ))}
             </div>
-            </>) : null}
+            </>)}
 
-            {/* CAMPIONATURA — vini/mosti sfusi (DAV-77): filtro Nazione/Regione +
-                lista fornitori selezionabili. La richiesta cumulativa è nella
-                card sticky della colonna destra. */}
+            {/* FORNITORI — lista UNICA con filtro (Nazione/Regione). Un fornitore
+                con prezzo appare come riga d'acquisto; senza prezzo come riga
+                campione (checkbox + "Richiedi un preventivo"). La richiesta
+                cumulativa di campioni è nella card sticky della colonna destra. */}
             {showSampling && (<>
               {/* FILTRO — due soli campi: Nazione (con conteggio) e Regione (dipendente). */}
               <div style={{ border:`1px solid ${C.border}`, borderRadius:12, padding:14, marginBottom:14, background:C.bg }}>
@@ -1045,9 +1071,9 @@ export default function ProductPage() {
               {/* CONTEGGIO + seleziona/deseleziona tutti i filtrati */}
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:12, flexWrap:"wrap", marginBottom:12 }}>
                 <span style={{ fontSize:14, fontWeight:700, color:C.text }}>
-                  {sampleFilterActive ? `${filteredSampleSuppliers.length} fornitori (su ${sampleSuppliers.length})` : `${sampleSuppliers.length} fornitori`}
+                  {sampleFilterActive ? `${unifiedSuppliers.length} fornitori (su ${sampleSuppliers.filter(s => s.company_id !== featured?.company_id).length})` : `${unifiedSuppliers.length} fornitori`}
                 </span>
-                {filteredSampleSuppliers.length > 0 && (
+                {selectableSamples.length > 0 && (
                   <button onClick={toggleSelectAllFiltered} style={{ background:"none", border:"none", color:C.blue, fontSize:13, fontWeight:700, cursor:"pointer" }}>
                     {allFilteredSelected ? "Deseleziona tutti" : "Seleziona tutti i fornitori filtrati"}
                   </button>
@@ -1058,13 +1084,45 @@ export default function ProductPage() {
                 <div style={{ border:`1px dashed ${C.border}`, borderRadius:14, padding:"28px 20px", textAlign:"center", color:C.muted, marginBottom:16 }}>
                   Nessun fornitore per questo prodotto.
                 </div>
-              ) : filteredSampleSuppliers.length === 0 ? (
+              ) : unifiedSuppliers.length === 0 ? (
                 <div style={{ border:`1px dashed ${C.border}`, borderRadius:14, padding:"28px 20px", textAlign:"center", color:C.muted, marginBottom:16 }}>
                   Nessun fornitore corrisponde ai filtri. <span onClick={() => { setWfCountry(""); setWfRegion(""); }} style={{ color:C.blue, fontWeight:700, cursor:"pointer" }}>Azzera i filtri</span>
                 </div>
               ) : (
                 <div style={{ display:"flex", flexDirection:"column", gap:10, marginBottom:16 }}>
-                  {filteredSampleSuppliers.map(s => {
+                  {unifiedSuppliers.map(({ s, priced }) => priced ? (
+                    /* RIGA D'ACQUISTO — fornitore con prezzo: si compra, niente checkbox. */
+                    <div key={s.supplier_product_id} className="bs-supplier-row">
+                      <div>
+                        <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:3 }}>
+                          <SupplierName name={priced.name} companyId={priced.company_id} className="bs-suplink" style={{ fontSize:15, fontWeight:700 }}/><CountryFlag country={priced.origin} size={13} />
+                        </div>
+                        <div style={{ display:"flex", alignItems:"center", gap:8, fontSize:12, color:C.muted, flexWrap:"wrap" }}>
+                          <span style={{ display:"flex", alignItems:"center", gap:3 }}><Star size={11} fill={C.amber} color={C.amber}/> {priced.rating.toFixed(1)}</span>
+                          <span>{priced.type}</span>
+                        </div>
+                      </div>
+                      <div className="bs-col-hide" style={{ textAlign:"center" }}>
+                        <div style={{ fontSize:11, color:C.muted }}>Purezza</div>
+                        <div style={{ fontSize:14, fontWeight:600 }}>{priced.purity}</div>
+                      </div>
+                      <div className="bs-col-hide" style={{ textAlign:"center" }}>
+                        <div style={{ fontSize:11, color:C.muted, display:"flex", alignItems:"center", justifyContent:"center", gap:3 }}><Truck size={11}/></div>
+                        <div style={{ fontSize:13, fontWeight:600 }}>{priced.delivery}</div>
+                      </div>
+                      <div style={{ textAlign:"center" }}>
+                        <div style={{ fontSize:11, color:C.muted }}>Costo/kg *</div>
+                        <div className="bs-num" style={{ fontSize:18, fontWeight:800, color:C.blue }}>{eurKg(priced.calc.preVatKg)}</div>
+                      </div>
+                      <div className="bs-col-hide" style={{ textAlign:"center" }}>
+                        <div style={{ fontSize:11, color:C.muted }}>Merce + spedizione</div>
+                        <div className="bs-num" style={{ fontSize:13, fontWeight:600 }}>{eur(priced.calc.product)} + {eur(priced.calc.shipping)}</div>
+                        {consolidatedWith(priced.company_id) && <div style={{ fontSize:10, color:C.green, fontWeight:700, marginTop:2 }}>spedizione consolidabile</div>}
+                      </div>
+                      <button className="bs-btn-ghost" onClick={() => { setSelectedId(priced.id); setSelectedFormatIdx(0); window.scrollTo({top:0,behavior:"smooth"}); }}>Seleziona</button>
+                    </div>
+                  ) : (() => {
+                    /* RIGA CAMPIONE — fornitore senza prezzo: checkbox + "Richiedi un preventivo". */
                     const sel = selectedSP.has(s.supplier_product_id);
                     const place = [s.city, s.region, s.country].filter(Boolean).join(", ");
                     return (
@@ -1089,8 +1147,7 @@ export default function ProductPage() {
                               ))}
                             </div>
                           )}
-                          {/* Link alla scheda/sito: stopPropagation così NON spuntano
-                              la checkbox del <label> (restano apribili per capire chi si sta selezionando). */}
+                          {/* Link + "Richiedi un preventivo": stopPropagation così NON spuntano la checkbox del label. */}
                           {(s.company_id || s.website) && (
                             <div style={{ display:"flex", gap:14, marginTop:8, flexWrap:"wrap" }}>
                               {s.company_id && (
@@ -1101,12 +1158,16 @@ export default function ProductPage() {
                                 <a href={s.website} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
                                   style={{ fontSize:12, color:C.blue, fontWeight:700, textDecoration:"none", display:"inline-flex", alignItems:"center", gap:3 }}>Sito web <ExternalLink size={11}/></a>
                               )}
+                              {s.website && (
+                                <a href={s.website} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
+                                  style={{ fontSize:12, color:"#9D174D", fontWeight:700, textDecoration:"none", display:"inline-flex", alignItems:"center", gap:3 }}>Richiedi un preventivo <ExternalLink size={11}/></a>
+                              )}
                             </div>
                           )}
                         </div>
                       </label>
                     );
-                  })}
+                  })())}
                 </div>
               )}
 
@@ -1141,7 +1202,7 @@ export default function ProductPage() {
                 caso raro/transitorio (l'approvazione admin rende visibile il
                 listino già compilato), ma se esiste resta distinto dalla sezione
                 "Fornitori non verificati": qui la verifica c'è, manca il listino. */}
-            {!sampleOnly && verifiedUnpriced.length > 0 && (
+            {!sampleOnly && !showSampling && verifiedUnpriced.length > 0 && (
               <div style={{ border:`1px solid ${C.border}`, borderRadius:14, padding:"18px 20px", marginBottom:28 }}>
                 <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:6 }}>
                   <Factory size={17} color={C.muted} />
@@ -1175,7 +1236,7 @@ export default function ProductPage() {
                 ancora controllato. Niente prezzo né escrow, ma si contattano con
                 la messaggistica INTERNA (mascheramento DAV-23) — mai col mailto
                 esterno, che resta solo per i "Fornitori individuati" qui sotto. */}
-            {!sampleOnly && unverifiedSuppliers.length > 0 && (
+            {!sampleOnly && !showSampling && unverifiedSuppliers.length > 0 && (
               <div style={{ border:`1px solid ${C.border}`, borderRadius:14, padding:"18px 20px", marginBottom:28 }}>
                 <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:6 }}>
                   <Factory size={17} color={C.muted} />
