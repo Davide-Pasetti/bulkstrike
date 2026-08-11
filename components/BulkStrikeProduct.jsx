@@ -1373,8 +1373,114 @@ export default function ProductPage() {
                 (visto dal vivo con l'Acido citrico). Con 1 solo fornitore resta
                 il flusso Acquisto di gruppo (router sotto); col divieto di legge
                 resta il box normativo. */}
-            {/* SEZIONE CAMPIONI (colonna destra) — layout UNICO per vini/mosti e
-                materie prime. Il blocco "Specifiche" appare solo se richiede_specifiche. */}
+            {!sampleOnly && !pool.exists && !auctionBlocked && !groupBuy && (
+              /* Sfondo #FBF7FF: lo stesso rosino della palette viola gia' usato
+                 dal box asta ("Asta a ribasso disponibile") nella pagina aste. */
+              <div style={{ border:`1px dashed ${C.border}`, borderRadius:14, padding:"22px 18px", textAlign:"center", color:C.muted, background:"#FBF7FF" }}>
+                <Beaker size={26} color={C.muted} style={{ marginBottom:8 }} />
+                <div style={{ fontSize:15, fontWeight:700, color:C.text, marginBottom:4 }}>
+                  {featured ? "Apri un'asta a ribasso" : "Nessun fornitore quotato per questo prodotto"}
+                </div>
+                {auctionRestricted ? (
+                  <div style={{ fontSize:13, marginTop:6, lineHeight:1.55 }}>
+                    La normativa italiana vieta l'acquisto di prodotti agricoli e alimentari tramite aste elettroniche a doppio ribasso, quindi non è possibile aprire un'asta a ribasso su questo prodotto. Resta disponibile solo con Acquisto Rapido, quando un fornitore è quotato.
+                  </div>
+                ) : (<>
+                <div style={{ fontSize:13, marginBottom:14 }}>
+                  {featured
+                    ? "Non c'è ancora un'asta attiva per questo prodotto: aprila tu — aggreghi la domanda e i fornitori certificati competono al ribasso."
+                    : "Puoi comunque aprire un'asta a ribasso: aggreghi la domanda e i fornitori certificati competono al ribasso."}
+                </div>
+                {canOpenPool
+                  ? <button onClick={goToOpenAuction} style={{ background:C.purple, color:"#fff", border:"none", borderRadius:9, padding:"12px 22px", fontSize:14, fontWeight:700, cursor:"pointer", display:"inline-flex", alignItems:"center", gap:7, fontFamily:"Inter,system-ui" }}><Gavel size={16}/> Prosegui per aprire l'asta <ArrowRight size={15}/></button>
+                  : <button disabled style={{ background:"transparent", color:C.purple, border:`1.5px solid ${C.purple}`, borderRadius:9, padding:"12px 22px", fontSize:14, fontWeight:700, cursor:"not-allowed", display:"inline-flex", alignItems:"center", gap:7, fontFamily:"Inter,system-ui" }}><Gavel size={16}/> Quantità minima non raggiunta</button>}
+                {!canOpenPool && (
+                  <div style={{ fontSize:13, marginTop:10 }}>
+                    Quantità minima per aprire l'asta: 1 pallet ({(palletKg/1000).toLocaleString("it-IT")}t)
+                  </div>
+                )}
+                </>)}
+              </div>
+            )}
+
+            {/* BOX ASTA — sopra "Andamento prezzo". Mostrato SOLO quando esiste
+                davvero un pool (aggregazione: "attiva / Vai alla pagina"),
+                oppure per i casi speciali: divieto di legge (auctionBlocked) e
+                Acquisto di gruppo con 1 solo fornitore (groupBuy, dove il
+                router resta l'ingresso per aprirlo). Mai insieme al box
+                "Apri un'asta" qui sopra. */}
+            {!sampleOnly && (pool.exists || auctionBlocked || groupBuy) && (auctionBlocked ? (
+              /* DIVIETO DI LEGGE — sostituisce il box asta per agricoli/alimentari grezzi
+                 SOLO in asta competitiva (2+ fornitori). Con 1 fornitore mostra il box
+                 "Acquisto di gruppo" (ramo else), che il divieto non vieta. */
+              <div style={{ border:`1px solid ${C.border}`, borderRadius:14, padding:16, background:C.bg }}>
+                <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:8 }}>
+                  <div style={{ width:32, height:32, borderRadius:9, background:"#F1F5F9", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+                    <Info size={16} color={C.muted}/>
+                  </div>
+                  <span style={{ fontSize:14, fontWeight:800, color:C.text }}>Asta a ribasso non disponibile</span>
+                </div>
+                <div style={{ fontSize:13, color:C.muted, lineHeight:1.55 }}>
+                  La normativa italiana vieta l'acquisto di prodotti agricoli e alimentari tramite aste elettroniche a doppio ribasso. Questo prodotto è disponibile solo con Acquisto Rapido.
+                </div>
+                <div style={{ fontSize:11, color:C.muted, opacity:0.85, lineHeight:1.5, marginTop:10, paddingTop:10, borderTop:`1px solid ${C.border}` }}>
+                  Rif. normativo: Direttiva (UE) 2019/633 del 17 aprile 2019 sulle pratiche commerciali sleali nella filiera agroalimentare; Decreto Legislativo 8 novembre 2021, n. 198, art. 5, comma 1, lett. a) (in vigore dal 15 dicembre 2021).
+                </div>
+              </div>
+            ) : (
+            <div style={{ border:`1.5px solid ${groupBuy?"#BFDBFE":`${C.purple}55`}`, borderRadius:14, padding:16, background:groupBuy?"#EFF6FF":"#FBF7FF" }}>
+              <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:12 }}>
+                <div style={{ width:32, height:32, borderRadius:9, background:groupBuy?C.blue:C.purple, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+                  {groupBuy ? <ShoppingCart size={16} color="#fff"/> : <Gavel size={16} color="#fff"/>}
+                </div>
+                <span style={{ fontSize:14, fontWeight:800, color:C.text }}>{groupBuy
+                  ? (pool.exists ? "Acquisto di gruppo attivo" : "Acquisto di gruppo disponibile")
+                  : (pool.exists ? "Asta a ribasso attiva" : "Asta a ribasso disponibile")}</span>
+              </div>
+
+              {/* MINI-WIDGET asta attiva (solo asta a ribasso, non acquisto di
+                  gruppo): stessa barra "prossimo scaglione" della pagina asta
+                  (componente condiviso, compact), prezzo sempre valorizzato e
+                  countdown alla chiusura. */}
+              {pool.exists && !groupBuy && (() => {
+                const timerIso = pool.status === "final_phase" ? pool.finalPhaseEndsAt : pool.closesAt;
+                const timer = auctionCountdown(timerIso, nowMs) || (pool.closesIn ? `Chiude tra ${pool.closesIn}` : null);
+                // Un'asta aperta ha sempre un prezzo: prezzo di partenza (listino)
+                // finché non ci sono rilanci, prezzo attuale col primo rilancio.
+                const priceLabel = pool.suppliers > 0 ? "Prezzo attuale" : "Prezzo di partenza";
+                return (
+                  <div style={{ marginBottom:14 }}>
+                    <div style={{ marginBottom:12 }}>
+                      <BulkStrikeTierProgress currentKg={pool.current} compact />
+                    </div>
+                    <div style={{ display:"flex", flexWrap:"wrap", justifyContent:"space-between", alignItems:"center", gap:6, fontSize:12.5 }}>
+                      <span style={{ color:C.text }}>{priceLabel}: <b style={{ color:C.purple }}>{eurKg(pool.bestPrice)}/kg</b></span>
+                      {timer && <span style={{ color:C.muted, display:"inline-flex", alignItems:"center", gap:4 }}><Clock size={12}/> {timer}</span>}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {(() => {
+                const canGo = pool.exists || canOpenPool;
+                const target = pool.exists ? (pool.id ? `/pool?id=${pool.id}` : null) : (productId ? `/pool?product=${productId}` : null);
+                return (<>
+                  <button onClick={() => { if (canGo && target) window.location.href = target; }} disabled={!canGo || !target}
+                    style={{ width:"100%", background:groupBuy?C.blue:C.purple, color:"#fff", border:"none", borderRadius:9, padding:"12px", fontSize:14, fontWeight:700, cursor:(canGo && target)?"pointer":"default", opacity:(canGo && target)?1:0.45, display:"flex", alignItems:"center", justifyContent:"center", gap:7, fontFamily:"Inter,system-ui" }}>
+                    {groupBuy ? "Vai all'acquisto di gruppo" : "Vai alla pagina dell'asta"} <ArrowRight size={15}/>
+                  </button>
+                  {!pool.exists && !canOpenPool && (
+                    <div style={{ fontSize:11.5, color:C.muted, marginTop:8, textAlign:"center" }}>
+                      Quantità minima {(palletKg/1000).toLocaleString("it-IT")}t (1 pallet) non ancora raggiunta.
+                    </div>
+                  )}
+                </>);
+              })()}
+            </div>
+            ))}
+
+            {/* SEZIONE CAMPIONI (colonna destra) — sotto il box asta. Layout UNICO
+                per vini/mosti e materie prime. "Specifiche" solo se richiede_specifiche. */}
             {sampling && !sampleOnly && !sampling.consentito ? (
               <div style={{ border:`1px solid ${C.border}`, borderRadius:14, padding:"16px 18px", background:C.bg }}>
                 <div style={{ fontSize:15, fontWeight:800, color:C.text, marginBottom:6, display:"flex", alignItems:"center", gap:8 }}><Beaker size={17}/> Richiedi campioni</div>
@@ -1518,110 +1624,6 @@ export default function ProductPage() {
                 </div>
               </div>
             ) : null}
-            {!sampleOnly && !pool.exists && !auctionBlocked && !groupBuy && (
-              /* Sfondo #FBF7FF: lo stesso rosino della palette viola gia' usato
-                 dal box asta ("Asta a ribasso disponibile") nella pagina aste. */
-              <div style={{ border:`1px dashed ${C.border}`, borderRadius:14, padding:"22px 18px", textAlign:"center", color:C.muted, background:"#FBF7FF" }}>
-                <Beaker size={26} color={C.muted} style={{ marginBottom:8 }} />
-                <div style={{ fontSize:15, fontWeight:700, color:C.text, marginBottom:4 }}>
-                  {featured ? "Apri un'asta a ribasso" : "Nessun fornitore quotato per questo prodotto"}
-                </div>
-                {auctionRestricted ? (
-                  <div style={{ fontSize:13, marginTop:6, lineHeight:1.55 }}>
-                    La normativa italiana vieta l'acquisto di prodotti agricoli e alimentari tramite aste elettroniche a doppio ribasso, quindi non è possibile aprire un'asta a ribasso su questo prodotto. Resta disponibile solo con Acquisto Rapido, quando un fornitore è quotato.
-                  </div>
-                ) : (<>
-                <div style={{ fontSize:13, marginBottom:14 }}>
-                  {featured
-                    ? "Non c'è ancora un'asta attiva per questo prodotto: aprila tu — aggreghi la domanda e i fornitori certificati competono al ribasso."
-                    : "Puoi comunque aprire un'asta a ribasso: aggreghi la domanda e i fornitori certificati competono al ribasso."}
-                </div>
-                {canOpenPool
-                  ? <button onClick={goToOpenAuction} style={{ background:C.purple, color:"#fff", border:"none", borderRadius:9, padding:"12px 22px", fontSize:14, fontWeight:700, cursor:"pointer", display:"inline-flex", alignItems:"center", gap:7, fontFamily:"Inter,system-ui" }}><Gavel size={16}/> Prosegui per aprire l'asta <ArrowRight size={15}/></button>
-                  : <div style={{ fontSize:12 }}>
-                      Quantità minima per aprire l'asta a ribasso:
-                      <div style={{ fontSize:15, fontWeight:800, color:C.text, margin:"3px 0" }}>1 pallet</div>
-                      ({(palletKg/1000).toLocaleString("it-IT")}t)
-                    </div>}
-                </>)}
-              </div>
-            )}
-
-            {/* BOX ASTA — sopra "Andamento prezzo". Mostrato SOLO quando esiste
-                davvero un pool (aggregazione: "attiva / Vai alla pagina"),
-                oppure per i casi speciali: divieto di legge (auctionBlocked) e
-                Acquisto di gruppo con 1 solo fornitore (groupBuy, dove il
-                router resta l'ingresso per aprirlo). Mai insieme al box
-                "Apri un'asta" qui sopra. */}
-            {!sampleOnly && (pool.exists || auctionBlocked || groupBuy) && (auctionBlocked ? (
-              /* DIVIETO DI LEGGE — sostituisce il box asta per agricoli/alimentari grezzi
-                 SOLO in asta competitiva (2+ fornitori). Con 1 fornitore mostra il box
-                 "Acquisto di gruppo" (ramo else), che il divieto non vieta. */
-              <div style={{ border:`1px solid ${C.border}`, borderRadius:14, padding:16, background:C.bg }}>
-                <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:8 }}>
-                  <div style={{ width:32, height:32, borderRadius:9, background:"#F1F5F9", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
-                    <Info size={16} color={C.muted}/>
-                  </div>
-                  <span style={{ fontSize:14, fontWeight:800, color:C.text }}>Asta a ribasso non disponibile</span>
-                </div>
-                <div style={{ fontSize:13, color:C.muted, lineHeight:1.55 }}>
-                  La normativa italiana vieta l'acquisto di prodotti agricoli e alimentari tramite aste elettroniche a doppio ribasso. Questo prodotto è disponibile solo con Acquisto Rapido.
-                </div>
-                <div style={{ fontSize:11, color:C.muted, opacity:0.85, lineHeight:1.5, marginTop:10, paddingTop:10, borderTop:`1px solid ${C.border}` }}>
-                  Rif. normativo: Direttiva (UE) 2019/633 del 17 aprile 2019 sulle pratiche commerciali sleali nella filiera agroalimentare; Decreto Legislativo 8 novembre 2021, n. 198, art. 5, comma 1, lett. a) (in vigore dal 15 dicembre 2021).
-                </div>
-              </div>
-            ) : (
-            <div style={{ border:`1.5px solid ${groupBuy?"#BFDBFE":`${C.purple}55`}`, borderRadius:14, padding:16, background:groupBuy?"#EFF6FF":"#FBF7FF" }}>
-              <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:12 }}>
-                <div style={{ width:32, height:32, borderRadius:9, background:groupBuy?C.blue:C.purple, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
-                  {groupBuy ? <ShoppingCart size={16} color="#fff"/> : <Gavel size={16} color="#fff"/>}
-                </div>
-                <span style={{ fontSize:14, fontWeight:800, color:C.text }}>{groupBuy
-                  ? (pool.exists ? "Acquisto di gruppo attivo" : "Acquisto di gruppo disponibile")
-                  : (pool.exists ? "Asta a ribasso attiva" : "Asta a ribasso disponibile")}</span>
-              </div>
-
-              {/* MINI-WIDGET asta attiva (solo asta a ribasso, non acquisto di
-                  gruppo): stessa barra "prossimo scaglione" della pagina asta
-                  (componente condiviso, compact), prezzo sempre valorizzato e
-                  countdown alla chiusura. */}
-              {pool.exists && !groupBuy && (() => {
-                const timerIso = pool.status === "final_phase" ? pool.finalPhaseEndsAt : pool.closesAt;
-                const timer = auctionCountdown(timerIso, nowMs) || (pool.closesIn ? `Chiude tra ${pool.closesIn}` : null);
-                // Un'asta aperta ha sempre un prezzo: prezzo di partenza (listino)
-                // finché non ci sono rilanci, prezzo attuale col primo rilancio.
-                const priceLabel = pool.suppliers > 0 ? "Prezzo attuale" : "Prezzo di partenza";
-                return (
-                  <div style={{ marginBottom:14 }}>
-                    <div style={{ marginBottom:12 }}>
-                      <BulkStrikeTierProgress currentKg={pool.current} compact />
-                    </div>
-                    <div style={{ display:"flex", flexWrap:"wrap", justifyContent:"space-between", alignItems:"center", gap:6, fontSize:12.5 }}>
-                      <span style={{ color:C.text }}>{priceLabel}: <b style={{ color:C.purple }}>{eurKg(pool.bestPrice)}/kg</b></span>
-                      {timer && <span style={{ color:C.muted, display:"inline-flex", alignItems:"center", gap:4 }}><Clock size={12}/> {timer}</span>}
-                    </div>
-                  </div>
-                );
-              })()}
-
-              {(() => {
-                const canGo = pool.exists || canOpenPool;
-                const target = pool.exists ? (pool.id ? `/pool?id=${pool.id}` : null) : (productId ? `/pool?product=${productId}` : null);
-                return (<>
-                  <button onClick={() => { if (canGo && target) window.location.href = target; }} disabled={!canGo || !target}
-                    style={{ width:"100%", background:groupBuy?C.blue:C.purple, color:"#fff", border:"none", borderRadius:9, padding:"12px", fontSize:14, fontWeight:700, cursor:(canGo && target)?"pointer":"default", opacity:(canGo && target)?1:0.45, display:"flex", alignItems:"center", justifyContent:"center", gap:7, fontFamily:"Inter,system-ui" }}>
-                    {groupBuy ? "Vai all'acquisto di gruppo" : "Vai alla pagina dell'asta"} <ArrowRight size={15}/>
-                  </button>
-                  {!pool.exists && !canOpenPool && (
-                    <div style={{ fontSize:11.5, color:C.muted, marginTop:8, textAlign:"center" }}>
-                      Quantità minima {(palletKg/1000).toLocaleString("it-IT")}t (1 pallet) non ancora raggiunta.
-                    </div>
-                  )}
-                </>);
-              })()}
-            </div>
-            ))}
 
             {/* PRICE HISTORY — vini/mosti: grafico per PIAZZA (nascosto se non ci
                 sono ancora dati); altri prodotti: mercato €/unità o indice. */}
