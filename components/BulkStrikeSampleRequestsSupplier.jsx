@@ -116,10 +116,17 @@ export default function SampleRequestsSupplierPage({ inShell = false }) {
                   <div style={{ display:"flex", gap:10, flexWrap:"wrap" }}>
                     <button onClick={() => respondi(r.id, "accetta", "fornitore")} disabled={busyId === r.id}
                       style={{ background:C.green, color:"#fff", border:"none", borderRadius:8, padding:"9px 16px", fontSize:14, fontWeight:700, cursor:"pointer", display:"inline-flex", alignItems:"center", gap:6 }}><Check size={15}/> Offro io la spedizione</button>
-                    <button onClick={() => respondi(r.id, "accetta", "cliente")} disabled={busyId === r.id}
-                      style={{ background:C.blue, color:"#fff", border:"none", borderRadius:8, padding:"9px 16px", fontSize:14, fontWeight:700, cursor:"pointer" }}>
-                      Addebito la spedizione al cliente{r.shipping_quote_amount != null ? ` (${eur(r.shipping_quote_amount)} + IVA)` : ""}
-                    </button>
+                    {r.shipping_quote_amount != null ? (
+                      <button onClick={() => respondi(r.id, "accetta", "cliente")} disabled={busyId === r.id}
+                        style={{ background:C.blue, color:"#fff", border:"none", borderRadius:8, padding:"9px 16px", fontSize:14, fontWeight:700, cursor:"pointer" }}>
+                        Addebito la spedizione al cliente ({eur(r.shipping_quote_amount)} + IVA)
+                      </button>
+                    ) : (
+                      <button disabled title="Nessun preventivo di spedizione per questa richiesta"
+                        style={{ background:"#E2E8F0", color:C.muted, border:"none", borderRadius:8, padding:"9px 16px", fontSize:14, fontWeight:700, cursor:"not-allowed" }}>
+                        Addebito al cliente (nessun preventivo)
+                      </button>
+                    )}
                     <button onClick={() => { setMode({ id:r.id, kind:"decline" }); setText(""); setErr(""); }} disabled={busyId === r.id}
                       style={{ background:"#fff", color:C.red, border:"1px solid #FECACA", borderRadius:8, padding:"9px 16px", fontSize:14, fontWeight:700, cursor:"pointer", display:"inline-flex", alignItems:"center", gap:6 }}><X size={15}/> Rifiuta</button>
                   </div>
