@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { Search, ArrowRight, Check, Clock, ChevronDown, ChevronRight, ChevronUp, Star, Shield, Truck, FileText, Download, Plus, Minus, Beaker, TrendingDown, Users, Gavel, Info, ShoppingCart, Factory, ExternalLink, MessageSquare, X, Wine } from "lucide-react";
-import { getProduct, getOpenPoolForProduct, getPriceReference, getProductBreadcrumb, getSession, upsertCartItem, poolErrorMessage, searchProducts, getCart, isFollowingProduct, getMarketPriceSeries, getMarketIndexSeries, getProductSpecs, getProductCandidateSuppliers, getMyCompany, getMarketPriceSeriesByPiazza, requestSamplesBulk, bulkSampleGlobalError, getProductSampling } from "@/lib/api";
+import { getProduct, getOpenPoolForProduct, getPriceReference, getProductBreadcrumb, getSession, upsertCartItem, poolErrorMessage, searchProducts, getCart, isFollowingProduct, getMarketPriceSeries, getMarketIndexSeries, getProductSpecs, getProductCandidateSuppliers, getMyCompany, getMarketPriceSeriesByPiazza, requestSamplesBulk, bulkSampleGlobalError, getProductSampling, requestSupplierContact, supplierContactError } from "@/lib/api";
 import PriceSourceNote from "@/components/PriceSourceNote";
 import CountryFlag from "@/components/CountryFlag";
 import { ytdChange } from "@/lib/priceTrend";
@@ -341,6 +341,13 @@ export default function ProductPage() {
   const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkResult, setBulkResult] = useState(null); // array risposta RPC | null
   const [bulkErr, setBulkErr] = useState("");
+  // Modulo "Richiedi un preventivo" (fornitori senza prezzo): pannello inline per riga.
+  const [quoteFor, setQuoteFor] = useState(null);        // supplier_product_id della riga aperta
+  const [quoteMsg, setQuoteMsg] = useState("");
+  const [quoteConsent, setQuoteConsent] = useState(false);
+  const [quoteBusy, setQuoteBusy] = useState(false);
+  const [quoteErr, setQuoteErr] = useState("");
+  const [quoteSent, setQuoteSent] = useState(() => new Set()); // company_id già contattati in questa sessione
   const [piazzaData, setPiazzaData] = useState(null);
   const [selectedPiazze, setSelectedPiazze] = useState([]); // piazze mostrate sul grafico vino
   useEffect(() => { if (productId) isFollowingProduct(productId).then(setFollowingProduct).catch(() => {}); }, [productId]);
@@ -591,6 +598,21 @@ export default function ProductPage() {
     };
     try { sessionStorage.setItem("bs_sample_checkout", JSON.stringify(checkout)); } catch { /* no-op */ }
     window.location.href = "/richiesta-campioni";
+  }
+  // "Richiedi un preventivo": apre il pannello (login richiesto) o invia la richiesta.
+  async function openQuote(spId) {
+    if (!(await requireAuth())) return; // sloggato → /registrati
+    setQuoteFor(spId); setQuoteMsg(""); setQuoteConsent(false); setQuoteErr("");
+  }
+  async function submitQuote(companyId) {
+    if (quoteMsg.trim().length < 10 || !quoteConsent) return;
+    setQuoteBusy(true); setQuoteErr("");
+    try {
+      await requestSupplierContact({ targetCompanyId: companyId, productId, message: quoteMsg.trim() });
+      setQuoteSent(prev => new Set(prev).add(companyId));
+      setQuoteFor(null); setQuoteMsg(""); setQuoteConsent(false);
+    } catch (e) { setQuoteErr(supplierContactError(e)); }
+    setQuoteBusy(false);
   }
   const specLabel = { display:"block", fontSize:12, fontWeight:600, color:C.muted };
   const specInput = { marginTop:4, width:"100%", minWidth:0, padding:"8px 10px", border:`1px solid ${C.border}`, borderRadius:7, fontSize:13, background:"#fff", color:C.text };
@@ -1126,7 +1148,8 @@ export default function ProductPage() {
                     const sel = selectedSP.has(s.supplier_product_id);
                     const place = [s.city, s.region, s.country].filter(Boolean).join(", ");
                     return (
-                      <label key={s.supplier_product_id} style={{ display:"flex", gap:12, alignItems:"flex-start", border:`1px solid ${sel ? "#9D174D" : C.border}`, borderRadius:12, padding:"14px 16px", background:sel?"#FDF2F8":"#fff", cursor:"pointer" }}>
+                      <div key={s.supplier_product_id} style={{ display:"flex", flexDirection:"column" }}>
+                      <label style={{ display:"flex", gap:12, alignItems:"flex-start", border:`1px solid ${sel ? "#9D174D" : C.border}`, borderRadius:12, padding:"14px 16px", background:sel?"#FDF2F8":"#fff", cursor:"pointer" }}>
                         <input type="checkbox" checked={sel} onChange={() => toggleSP(s.supplier_product_id)} aria-label={`Seleziona ${s.legal_name}`} style={{ width:17, height:17, accentColor:"#9D174D", cursor:"pointer", flexShrink:0, marginTop:2 }}/>
                         <div style={{ flex:1, minWidth:0 }}>
                           <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap", marginBottom:3 }}>
@@ -1149,7 +1172,7 @@ export default function ProductPage() {
                           )}
                           {/* Link + "Richiedi un preventivo": stopPropagation così NON spuntano la checkbox del label. */}
                           {(s.company_id || s.website) && (
-                            <div style={{ display:"flex", gap:14, marginTop:8, flexWrap:"wrap" }}>
+                            <div style={{ display:"flex", gap:14, marginTop:8, flexWrap:"wrap", alignItems:"center" }}>
                               {s.company_id && (
                                 <a href={`/fornitore?id=${s.company_id}`} onClick={e => e.stopPropagation()}
                                   style={{ fontSize:12, color:C.blue, fontWeight:700, textDecoration:"none" }}>Scheda fornitore</a>
@@ -1158,14 +1181,37 @@ export default function ProductPage() {
                                 <a href={s.website} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
                                   style={{ fontSize:12, color:C.blue, fontWeight:700, textDecoration:"none", display:"inline-flex", alignItems:"center", gap:3 }}>Sito web <ExternalLink size={11}/></a>
                               )}
-                              {s.website && (
-                                <a href={s.website} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
-                                  style={{ fontSize:12, color:"#9D174D", fontWeight:700, textDecoration:"none", display:"inline-flex", alignItems:"center", gap:3 }}>Richiedi un preventivo <ExternalLink size={11}/></a>
+                              {s.company_id && (quoteSent.has(s.company_id)
+                                ? <span style={{ fontSize:12, color:C.green, fontWeight:700, display:"inline-flex", alignItems:"center", gap:3 }}><Check size={11}/> Richiesta inviata</span>
+                                : <button type="button" onClick={e => { e.preventDefault(); e.stopPropagation(); openQuote(s.supplier_product_id); }}
+                                    style={{ background:"none", border:"none", padding:0, fontSize:12, color:"#9D174D", fontWeight:700, cursor:"pointer" }}>Richiedi un preventivo</button>
                               )}
                             </div>
                           )}
                         </div>
                       </label>
+                      {quoteFor === s.supplier_product_id && (
+                        <div style={{ border:"1px solid #FBCFE8", borderRadius:12, padding:14, marginTop:8, background:"#FDF2F8" }}>
+                          <div style={{ fontSize:13, fontWeight:700, color:C.text, marginBottom:8 }}>Richiedi un preventivo a {s.legal_name}</div>
+                          <textarea value={quoteMsg} onChange={e => setQuoteMsg(e.target.value)} maxLength={2000} rows={3}
+                            placeholder="Descrivi cosa ti serve: quantità indicativa, uso previsto, tempistiche…"
+                            style={{ width:"100%", padding:"9px 11px", border:`1px solid ${C.border}`, borderRadius:8, fontSize:13.5, resize:"vertical", fontFamily:"Inter,system-ui", color:C.text, boxSizing:"border-box" }}/>
+                          <label style={{ display:"flex", alignItems:"flex-start", gap:8, marginTop:10, fontSize:12.5, color:C.text, cursor:"pointer" }}>
+                            <input type="checkbox" checked={quoteConsent} onChange={e => setQuoteConsent(e.target.checked)} style={{ marginTop:2, accentColor:C.blue, flexShrink:0 }}/>
+                            <span>Autorizzo BulkStrike a contattare {s.legal_name} per mio conto.</span>
+                          </label>
+                          {quoteErr && <div style={{ marginTop:8, fontSize:12.5, color:C.red }}>{quoteErr}</div>}
+                          <div style={{ display:"flex", gap:8, marginTop:10 }}>
+                            <button type="button" onClick={() => submitQuote(s.company_id)} disabled={quoteBusy || quoteMsg.trim().length < 10 || !quoteConsent}
+                              style={{ background:(quoteBusy || quoteMsg.trim().length < 10 || !quoteConsent) ? "#E9AEC6" : "#9D174D", color:"#fff", border:"none", borderRadius:8, padding:"9px 16px", fontSize:13.5, fontWeight:700, cursor:(quoteBusy || quoteMsg.trim().length < 10 || !quoteConsent) ? "default" : "pointer" }}>
+                              {quoteBusy ? "Invio…" : "Invia richiesta"}
+                            </button>
+                            <button type="button" onClick={() => { setQuoteFor(null); setQuoteErr(""); }}
+                              style={{ background:"none", border:`1px solid ${C.border}`, color:C.muted, borderRadius:8, padding:"9px 14px", fontSize:13.5, fontWeight:600, cursor:"pointer" }}>Annulla</button>
+                          </div>
+                        </div>
+                      )}
+                      </div>
                     );
                   })())}
                 </div>
