@@ -95,14 +95,15 @@ function IndicatorChart({ row }) {
     );
   }
   const isIndex = (data.tipo || row.tipo) !== "prezzo";
+  const sym = (data.valuta || row.valuta) === "USD" ? "$" : "€";
   return (
     <div style={{ padding: "6px 2px 2px" }}>
       <ResponsiveContainer width="100%" height={240}>
         <LineChart data={series} margin={{ top: 6, right: 8, bottom: 0, left: -6 }}>
           <XAxis dataKey="t" tick={{ fill: C.muted, fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={monthLabel} minTickGap={28} />
-          <YAxis tick={{ fill: C.muted, fontSize: 11, fontFamily: "JetBrains Mono" }} axisLine={false} tickLine={false} domain={["auto", "auto"]} tickFormatter={(v) => (isIndex ? Number(v).toFixed(0) : `€${Number(v).toFixed(1)}`)} />
+          <YAxis tick={{ fill: C.muted, fontSize: 11, fontFamily: "JetBrains Mono" }} axisLine={false} tickLine={false} domain={["auto", "auto"]} tickFormatter={(v) => (isIndex ? Number(v).toFixed(0) : `${sym}${Number(v).toFixed(Number(v) < 10 ? 2 : 0)}`)} />
           <Tooltip contentStyle={{ background: "#fff", border: `1px solid ${C.border}`, borderRadius: 10, fontSize: 12 }} labelFormatter={monthLabel}
-            formatter={(val) => [isIndex ? Number(val).toFixed(1) : `€${Number(val).toFixed(2)}`, data.unita || row.unita]} />
+            formatter={(val) => [isIndex ? Number(val).toFixed(1) : `${sym}${Number(val).toFixed(2)}`, data.unita || row.unita]} />
           <Line type="monotone" dataKey="v" name={row.nome} stroke={C.purple} strokeWidth={2.4} dot={false} activeDot={{ r: 4 }} connectNulls />
         </LineChart>
       </ResponsiveContainer>
