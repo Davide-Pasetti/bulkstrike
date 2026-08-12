@@ -13,6 +13,7 @@ import { ChevronRight, X, Flame, Package, SlidersHorizontal, ShieldCheck, Gavel,
 import { getCatalog, getMacroAreas, getChemicalClasses, getMyFollowedProducts, getMyFollowedSectors, followSector, unfollowSector, getSession } from "@/lib/api";
 import BulkStrikeNav from "@/components/BulkStrikeNav";
 import ProductFollowButton from "@/components/BulkStrikeProductFollow";
+import BulkStrikeCatalogFilters from "@/components/BulkStrikeCatalogFilters";
 import { BSIcon } from "@/components/BSLogo";
 import { IvaChip } from "@/components/BulkStrikeBadges";
 
@@ -222,134 +223,19 @@ export default function CatalogPage() {
         <div style={{ fontSize: 11, color: C.muted, marginBottom: 16 }}>* Prezzi IVA esclusa · spedizione esclusa (calcolate al checkout)</div>
 
         <div className="cat-layout">
-          {/* SIDEBAR FILTRI */}
-          <aside className="cat-sidebar">
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-              <div style={{ fontSize: 15, fontWeight: 800 }}>Filtri</div>
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                {activeCount > 0 && <span onClick={clearFilters} style={{ fontSize: 12, color: C.blue, cursor: "pointer", fontWeight: 600 }}>Pulisci</span>}
-                <button className="cat-filter-toggle" onClick={() => setShowFilters(false)} style={{ background: "transparent", border: "none", cursor: "pointer", padding: 0 }}><X size={20} color={C.muted} /></button>
-              </div>
-            </div>
-
-            {/* solo preferiti — il banner sopra la lista rimanda proprio a questo
-                controllo. Stessa posizione/stile di "solo con asta attiva", in
-                cima al pannello. Utente anonimo: click → login (come la stella
-                sulle card). Loggato senza preferiti: disabilitato, con invito. */}
-            <label
-              onClick={!loggedIn ? (e) => { e.preventDefault(); window.location.href = "/auth/login"; } : undefined}
-              title={!loggedIn ? "Accedi per filtrare i tuoi preferiti" : !hasFavs ? "Aggiungi preferiti con la stella ⭐ sulle card" : favOnly ? "Mostra tutte le materie prime" : "Mostra solo i preferiti"}
-              style={{ display: "flex", alignItems: "center", gap: 9, padding: "10px 12px", border: `1px solid ${favActive ? "#FDE68A" : C.border}`, borderRadius: 10, cursor: (loggedIn && !hasFavs) ? "not-allowed" : "pointer", background: favActive ? "#FEF3C7" : "#fff", marginBottom: 10, opacity: (loggedIn && !hasFavs) ? 0.55 : 1 }}>
-              <input type="checkbox" checked={favActive} disabled={loggedIn && !hasFavs} onChange={(e) => { if (loggedIn && hasFavs) setFavOnly(e.target.checked); }} style={{ accentColor: "#D97706", width: 16, height: 16 }} />
-              <Star size={15} fill={favActive ? "#D97706" : "none"} color={favActive ? "#D97706" : C.amber} />
-              <span style={{ fontSize: 13, fontWeight: 600, color: favActive ? "#B45309" : C.text }}>Preferiti</span>
-            </label>
-
-            {/* pool attivo */}
-            <label style={{ display: "flex", alignItems: "center", gap: 9, padding: "10px 12px", border: `1px solid ${poolOnly ? "#0EA5E9" : C.border}`, borderRadius: 10, cursor: "pointer", background: poolOnly ? "#EFF6FF" : "#fff", marginBottom: 10 }}>
-              <input type="checkbox" checked={poolOnly} onChange={(e) => setPoolOnly(e.target.checked)} style={{ accentColor: C.blue, width: 16, height: 16 }} />
-              <Flame size={15} color={poolOnly ? C.blue : C.amber} />
-              <span style={{ fontSize: 13, fontWeight: 600, color: poolOnly ? "#0369A1" : C.text }}>Aste attive</span>
-            </label>
-
-            {/* prezzo disponibile — sostituisce il vecchio range min/max €/kg:
-                mostra solo i prodotti con almeno un prezzo pubblicato da un
-                fornitore verificato (le altre card riportano "da €—/kg") */}
-            <label style={{ display: "flex", alignItems: "center", gap: 9, padding: "10px 12px", border: `1px solid ${priceOnly ? "#0EA5E9" : C.border}`, borderRadius: 10, cursor: "pointer", background: priceOnly ? "#EFF6FF" : "#fff", marginBottom: 18 }}>
-              <input type="checkbox" checked={priceOnly} onChange={(e) => setPriceOnly(e.target.checked)} style={{ accentColor: C.blue, width: 16, height: 16 }} />
-              <Tag size={15} color={priceOnly ? C.blue : C.muted} />
-              <span style={{ fontSize: 13, fontWeight: 600, color: priceOnly ? "#0369A1" : C.text }}>Prezzo disponibile</span>
-            </label>
-
-            {/* macro-aree + settori — un'unica tendina "Settore", stesso pattern
-                delle tendine Famiglia chimica / Tipo di materiale (chiusa di default) */}
-            <div onClick={() => setOpenAree(v => !v)}
-              style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 10px", borderRadius: 8, cursor: "pointer", fontSize: 12.5, fontWeight: 700, color: C.text }}>
-              <span style={{ flex: 1 }}>Settore</span>
-              <ChevronRight size={14} color={C.muted} style={{ transform: openAree ? "rotate(90deg)" : "none", transition: "transform 0.15s" }} />
-            </div>
-            {openAree && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 2, padding: "2px 0 6px 6px" }}>
-              {macros.map(m => {
-                const on = activeMacro === m.slug;
-                return (
-                  <div key={m.id}>
-                    <div onClick={() => { const next = on ? null : m.slug; setActiveMacro(next); setActiveSector(null); }}
-                      style={{ display: "flex", alignItems: "center", gap: 9, padding: "8px 10px", borderRadius: 8, cursor: "pointer", background: on ? "#EFF6FF" : "transparent", fontSize: 13, fontWeight: on ? 700 : 500, color: on ? "#0369A1" : C.text }}>
-                      <span style={{ fontSize: 15 }}>{m.icon || "📦"}</span>
-                      <span style={{ flex: 1 }}>{m.name}</span>
-                      <ChevronRight size={14} color={C.muted} style={{ transform: on ? "rotate(90deg)" : "none", transition: "transform 0.15s" }} />
-                    </div>
-                    {on && (
-                      <div style={{ display: "flex", flexDirection: "column", gap: 1, padding: "4px 0 8px 14px", borderLeft: `2px solid ${C.border}`, marginLeft: 14 }}>
-                        {(m.sub_areas || [])
-                          .filter(s => (s.product_count || 0) > 0)
-                          // I settori preferiti salgono in cima (a parità, ordine originale).
-                          .sort((a, b) => (followedSectorIds?.has(b.id) ? 1 : 0) - (followedSectorIds?.has(a.id) ? 1 : 0))
-                          .map(s => {
-                          const son = activeSector === s.slug;
-                          const fav = !!(followedSectorIds && followedSectorIds.has(s.id));
-                          return (
-                            <div key={s.id} onClick={() => setActiveSector(son ? null : s.slug)}
-                              style={{ display: "flex", alignItems: "center", gap: 7, padding: "6px 10px", borderRadius: 7, cursor: "pointer", background: son ? "#DBEAFE" : "transparent", fontSize: 12.5, fontWeight: son ? 700 : 500, color: son ? "#0369A1" : C.muted }}>
-                              <span>{s.icon || "•"}</span>
-                              <span style={{ flex: 1 }}>{s.name}</span>
-                              <span style={{ fontSize: 11, color: C.muted }}>{s.product_count}</span>
-                              <button onClick={(e) => toggleSectorFollow(e, s)} aria-pressed={fav}
-                                title={fav ? "Rimuovi dai settori preferiti" : "Aggiungi ai settori preferiti"}
-                                style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", background: "transparent", border: "none", cursor: "pointer", padding: 2, flexShrink: 0 }}>
-                                <Star size={13} fill={fav ? "#D97706" : "none"} color={fav ? "#D97706" : C.muted} />
-                              </button>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-            )}
-
-            {/* tassonomia chimica — 2 tendine (Famiglia chimica / Tipo di
-                materiale) senza intestazione di sezione, allo stesso livello
-                della tendina Settore. Multi-selezione con semantica OR. */}
-            {chemGroups.length > 0 && (
-              <div>
-                {chemGroups.map(g => {
-                  const gopen = openChemGroups.has(g.slug);
-                  return (
-                    <div key={g.slug} style={{ marginBottom: 4 }}>
-                      <div onClick={() => toggleChemGroup(g.slug)}
-                        style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 10px", borderRadius: 8, cursor: "pointer", fontSize: 12.5, fontWeight: 700, color: C.text }}>
-                        <span style={{ flex: 1 }}>{g.name}</span>
-                        <ChevronRight size={14} color={C.muted} style={{ transform: gopen ? "rotate(90deg)" : "none", transition: "transform 0.15s" }} />
-                      </div>
-                      {gopen && (
-                        <div style={{ display: "flex", flexDirection: "column", gap: 1, padding: "2px 0 6px 6px" }}>
-                          {(g.classes || []).map(c => {
-                            const con = activeClasses.has(c.slug);
-                            return (
-                              <label key={c.slug}
-                                style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", borderRadius: 7, cursor: "pointer", background: con ? "#DBEAFE" : "transparent", fontSize: 12.5, fontWeight: con ? 700 : 500, color: con ? "#0369A1" : C.muted }}>
-                                <input type="checkbox" checked={con} onChange={() => toggleClass(c.slug)} style={{ accentColor: C.blue, width: 14, height: 14, flexShrink: 0 }} />
-                                <span style={{ flex: 1 }}>{c.name}</span>
-                                <span style={{ fontSize: 11, color: C.muted }}>{c.product_count}</span>
-                              </label>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-
-            <button className="cat-filter-toggle" onClick={() => setShowFilters(false)} style={{ marginTop: 18, width: "100%", justifyContent: "center", padding: "12px", borderRadius: 9, border: "none", background: "#0369A1", color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
-              Mostra {filtered.length} risultati
-            </button>
-          </aside>
+          {/* SIDEBAR FILTRI (componente condiviso con /andamento-prezzi) */}
+          <BulkStrikeCatalogFilters
+            activeCount={activeCount} clearFilters={clearFilters} setShowFilters={setShowFilters}
+            favActive={favActive} loggedIn={loggedIn} hasFavs={hasFavs} favOnly={favOnly} setFavOnly={setFavOnly}
+            poolOnly={poolOnly} setPoolOnly={setPoolOnly}
+            priceOnly={priceOnly} setPriceOnly={setPriceOnly}
+            openAree={openAree} setOpenAree={setOpenAree}
+            macros={macros} activeMacro={activeMacro} setActiveMacro={setActiveMacro} activeSector={activeSector} setActiveSector={setActiveSector}
+            followedSectorIds={followedSectorIds} toggleSectorFollow={toggleSectorFollow}
+            chemGroups={chemGroups} openChemGroups={openChemGroups} toggleChemGroup={toggleChemGroup}
+            activeClasses={activeClasses} toggleClass={toggleClass}
+            resultsCount={filtered.length}
+          />
 
           {/* GRIGLIA PRODOTTI */}
           <main>

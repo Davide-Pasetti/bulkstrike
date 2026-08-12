@@ -13,10 +13,12 @@
 import { useState, useEffect, useMemo } from "react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { Search, ChevronDown, ChevronRight, TrendingDown, TrendingUp, Activity } from "lucide-react";
-import { getPriceScreener, getProductPriceHistory, getMarketPriceSeries, getMarketIndexSeries, getMacroAreas } from "@/lib/api";
+import { getPriceScreener, getProductPriceHistory, getMarketPriceSeries, getMarketIndexSeries, getMacroAreas, getCatalog, getChemicalClasses, getMyFollowedProducts, getMyFollowedSectors, followSector, unfollowSector, getSession } from "@/lib/api";
 import { ytdChange } from "@/lib/priceTrend";
 import PriceSourceNote from "@/components/PriceSourceNote";
 import BulkStrikeNav from "@/components/BulkStrikeNav";
+import BulkStrikeCatalogFilters from "@/components/BulkStrikeCatalogFilters";
+import { Star } from "lucide-react";
 
 const C = { blue: "#0EA5E9", dark: "#0284C7", purple: "#7C3AED", text: "#0F172A", muted: "#64748B", border: "#E2E8F0", bg: "#F8FAFE", green: "#059669", red: "#DC2626", card: "#fff" };
 const eurKg = (n) => "€" + Number(n).toLocaleString("it-IT", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -144,106 +146,191 @@ function ExpandedChart({ row }) {
 }
 
 export default function AndamentoPrezziPage() {
-  const [rows, setRows] = useState(null);
+  const [rows, setRows] = useState(null);          // get_price_screener
+  const [catalog, setCatalog] = useState([]);      // get_catalog (per settore/famiglia)
   const [macros, setMacros] = useState([]);
-  const [activeMacro, setActiveMacro] = useState(null); // slug | null (Tutti)
-  const [q, setQ] = useState("");
+  const [chemGroups, setChemGroups] = useState([]);
   const [expanded, setExpanded] = useState(null);
 
-  useEffect(() => { getPriceScreener().then(setRows).catch(() => setRows([])); }, []);
-  useEffect(() => { getMacroAreas().then(setMacros).catch(() => {}); }, []);
+  // Filtri: stessi del catalogo, senza "Aste attive" (non pertinente allo storico).
+  const [q, setQ] = useState("");
+  const [activeMacro, setActiveMacro] = useState(null);
+  const [activeSector, setActiveSector] = useState(null);
+  const [activeClasses, setActiveClasses] = useState(() => new Set());
+  const [openAree, setOpenAree] = useState(false);
+  const [openChemGroups, setOpenChemGroups] = useState(() => new Set());
+  const [priceOnly, setPriceOnly] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
+  const [favOnly, setFavOnly] = useState(true);    // Preferiti selezionato di default
+  const [followedIds, setFollowedIds] = useState(null);
+  const [followedSectorIds, setFollowedSectorIds] = useState(null);
+  const [loggedIn, setLoggedIn] = useState(false);
+
+  useEffect(() => {
+    getPriceScreener().then(setRows).catch(() => setRows([]));
+    getCatalog().then(c => setCatalog(c || [])).catch(() => setCatalog([]));
+    getMacroAreas().then(setMacros).catch(() => {});
+    getChemicalClasses().then(g => setChemGroups(g || [])).catch(() => {});
+    getMyFollowedSectors().then(list => setFollowedSectorIds(new Set((list || []).map(x => x.sector_id)))).catch(() => setFollowedSectorIds(new Set()));
+    getSession().then(s => {
+      if (!s) { setLoggedIn(false); return; }
+      setLoggedIn(true);
+      getMyFollowedProducts().then(list => setFollowedIds(new Set((list || []).map(x => x.product_id)))).catch(() => setFollowedIds(new Set()));
+    }).catch(() => setLoggedIn(false));
+  }, []);
+
+  const hasFavs = !!(followedIds && followedIds.size > 0);
+  const favActive = loggedIn && hasFavs && favOnly;
+
+  // Le righe screener espongono solo macro_slugs/best_price: le arricchisco con
+  // settore/famiglia chimica dal catalogo (stesso id) per far funzionare i filtri.
+  const rowsEnriched = useMemo(() => {
+    if (!rows) return [];
+    const catMap = new Map((catalog || []).map(p => [p.id, p]));
+    return rows.map(r => {
+      const cat = catMap.get(r.id) || {};
+      return {
+        ...r,
+        macros: (cat.macros && cat.macros.length ? cat.macros : (r.macro_slugs || [])),
+        sectors: cat.sectors || [],
+        chemical_classes: cat.chemical_classes || [],
+        best_price: r.best_price ?? cat.best_price ?? null,
+      };
+    });
+  }, [rows, catalog]);
 
   const filtered = useMemo(() => {
-    if (!rows) return [];
+    let list = rowsEnriched;
     const qq = q.trim().toLowerCase();
-    let list = rows.filter(r =>
-      (!activeMacro || (Array.isArray(r.macro_slugs) && r.macro_slugs.includes(activeMacro))) &&
-      (!qq || (r.name || "").toLowerCase().includes(qq))
-    );
-    // Prima i prodotti con almeno una linea (storico o riferimento esterno), poi il resto.
+    if (qq) list = list.filter(r => (r.name || "").toLowerCase().includes(qq));
+    if (activeMacro) list = list.filter(r => (r.macros || []).includes(activeMacro));
+    if (activeSector) list = list.filter(r => (r.sectors || []).includes(activeSector));
+    if (activeClasses.size) list = list.filter(r => (r.chemical_classes || []).some(c => activeClasses.has(c)));
+    if (favActive) list = list.filter(r => followedIds.has(r.id));
+    if (priceOnly) list = list.filter(r => r.best_price != null);
     const cover = (r) => (r.has_history ? 2 : 0) + (r.external ? 1 : 0);
-    return list.sort((a, b) => (cover(b) - cover(a)) || (a.name || "").localeCompare(b.name || ""));
-  }, [rows, activeMacro, q]);
+    return [...list].sort((a, b) => (cover(b) - cover(a)) || (a.name || "").localeCompare(b.name || ""));
+  }, [rowsEnriched, q, activeMacro, activeSector, activeClasses, favActive, priceOnly, followedIds]);
 
   const covered = filtered.filter(r => r.has_history || r.external).length;
 
+  const toggleClass = (slug) => setActiveClasses(prev => { const n = new Set(prev); n.has(slug) ? n.delete(slug) : n.add(slug); return n; });
+  const toggleChemGroup = (slug) => setOpenChemGroups(prev => { const n = new Set(prev); n.has(slug) ? n.delete(slug) : n.add(slug); return n; });
+  // Stella settore: stesso comportamento del catalogo (ottimistico + rollback→login).
+  const toggleSectorFollow = (e, sector) => {
+    e.stopPropagation();
+    const wasOn = !!(followedSectorIds && followedSectorIds.has(sector.id));
+    const flipSector = (on) => setFollowedSectorIds(prev => { const n = new Set(prev || []); on ? n.add(sector.id) : n.delete(sector.id); return n; });
+    const sectorProductIds = (catalog || []).filter(p => (p.sectors || []).includes(sector.slug)).map(p => p.id);
+    const prevProducts = followedIds;
+    flipSector(!wasOn);
+    setFollowedIds(prev => { const n = new Set(prev || []); sectorProductIds.forEach(id => { wasOn ? n.delete(id) : n.add(id); }); return n; });
+    (wasOn ? unfollowSector(sector.id) : followSector(sector.id))
+      .then(() => getMyFollowedProducts().then(list => setFollowedIds(new Set((list || []).map(x => x.product_id)))).catch(() => {}))
+      .catch(() => { flipSector(wasOn); setFollowedIds(prevProducts); window.location.href = "/auth/login"; });
+  };
+  const clearFilters = () => { setQ(""); setActiveMacro(null); setActiveSector(null); setActiveClasses(new Set()); setPriceOnly(false); };
+  const activeCount = (activeMacro ? 1 : 0) + (activeSector ? 1 : 0) + activeClasses.size + (priceOnly ? 1 : 0);
+
   return (
     <div style={{ minHeight: "100vh", background: C.bg, fontFamily: "Inter, system-ui, sans-serif", color: C.text }}>
-      <BulkStrikeNav />
-      <div style={{ maxWidth: 1080, margin: "0 auto", padding: "28px 20px 64px" }}>
-        <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: "0.09em", color: C.blue, textTransform: "uppercase", marginBottom: 6 }}>Andamento prezzi</div>
-        <h1 style={{ fontSize: 30, fontWeight: 800, letterSpacing: "-0.02em", margin: "0 0 8px" }}>Prezzi di mercato delle materie prime</h1>
-        <p style={{ fontSize: 14.5, color: C.muted, lineHeight: 1.6, maxWidth: 720, margin: "0 0 22px" }}>
-          Il prezzo reale sulla piattaforma BulkStrike affiancato, dove disponibile, al riferimento di mercato esterno (ISMEA/CUN per gli agricoli, indici settoriali Eurostat per gli altri comparti). La copertura cresce nel tempo.
-        </p>
-
-        {/* Filtro macro-aree */}
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
-          <button onClick={() => setActiveMacro(null)} style={chip(activeMacro === null)}>Tutti i settori</button>
-          {macros.map(m => (
-            <button key={m.slug} onClick={() => setActiveMacro(m.slug)} style={chip(activeMacro === m.slug)}>{m.name}</button>
-          ))}
-        </div>
-
-        {/* Ricerca */}
-        <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#fff", border: `1px solid ${C.border}`, borderRadius: 10, padding: "9px 12px", marginBottom: 8, maxWidth: 360 }}>
-          <Search size={16} color={C.muted} />
-          <input value={q} onChange={e => setQ(e.target.value)} placeholder="Cerca materia prima…" style={{ border: "none", outline: "none", fontSize: 14, width: "100%", fontFamily: "Inter, system-ui" }} />
-        </div>
-        <div style={{ fontSize: 12, color: C.muted, marginBottom: 12 }}>{rows == null ? "Caricamento…" : `${filtered.length} prodotti · ${covered} con andamento disponibile`}</div>
-
-        {/* Tabella screener */}
-        <div style={{ background: "#fff", border: `1px solid ${C.border}`, borderRadius: 14, overflow: "hidden" }}>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 130px 120px 150px 34px", gap: 10, padding: "11px 16px", borderBottom: `1px solid ${C.border}`, fontSize: 11, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: "0.04em" }}>
-            <span>Materia prima</span>
-            <span style={{ textAlign: "right" }}>Prezzo BulkStrike</span>
-            <span style={{ textAlign: "right" }}>Var. da gennaio</span>
-            <span>Andamento</span>
-            <span />
-          </div>
-          {rows == null ? (
-            <div style={{ padding: 24, fontSize: 13, color: C.muted }}>Caricamento…</div>
-          ) : filtered.length === 0 ? (
-            <div style={{ padding: 24, fontSize: 13, color: C.muted }}>Nessun prodotto per questo filtro.</div>
-          ) : filtered.map(r => {
-            const open = expanded === r.id;
-            return (
-              <div key={r.id} style={{ borderBottom: `1px solid #F1F5F9` }}>
-                <div onClick={() => setExpanded(open ? null : r.id)}
-                  className="ap-row"
-                  style={{ display: "grid", gridTemplateColumns: "1fr 130px 120px 150px 34px", gap: 10, padding: "12px 16px", alignItems: "center", cursor: "pointer", background: open ? C.bg : "#fff" }}>
-                  <div>
-                    <div style={{ fontSize: 14.5, fontWeight: 600 }}>{r.name}</div>
-                    {r.primary_macro && <div style={{ fontSize: 11.5, color: C.muted, marginTop: 1 }}>{r.primary_macro}</div>}
-                  </div>
-                  <div className="bs-num" style={{ textAlign: "right", fontSize: 15, fontWeight: 700, color: r.best_price != null ? C.text : "#94A3B8" }}>{r.best_price != null ? eurKg(r.best_price) : "—"}</div>
-                  <div style={{ textAlign: "right", fontSize: 13.5 }}><VarPill v={r.ext_ytd} /></div>
-                  <div><CoverageBadges row={r} /></div>
-                  <div style={{ display: "flex", justifyContent: "center", color: C.muted }}>{open ? <ChevronDown size={17} /> : <ChevronRight size={17} />}</div>
-                </div>
-                {open && <div style={{ padding: "4px 16px 18px", background: C.bg }}><ExpandedChart row={r} /></div>}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
       <style>{`
+        .cat-layout { display:grid; grid-template-columns:264px 1fr; gap:24px; }
+        .cat-sidebar { position:sticky; top:80px; align-self:start; max-height:calc(100vh - 96px); overflow-y:auto; }
+        .cat-filter-toggle { display:none; }
+        @media (max-width:860px) {
+          .cat-layout { grid-template-columns:1fr; }
+          .cat-sidebar { position:fixed; inset:0; z-index:200; background:#fff; max-height:none; padding:20px; display:${showFilters ? "block" : "none"}; }
+          .cat-filter-toggle { display:inline-flex; }
+        }
         .ap-row:hover { background: ${C.bg} !important; }
         @media (max-width:768px){
           .ap-row { grid-template-columns: 1fr auto 26px !important; }
           .ap-row > div:nth-child(3), .ap-row > div:nth-child(4) { display:none; }
         }
       `}</style>
+      <BulkStrikeNav />
+      <div style={{ maxWidth: 1280, margin: "0 auto", padding: "28px 20px 64px" }}>
+        <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: "0.09em", color: C.blue, textTransform: "uppercase", marginBottom: 6 }}>Andamento prezzi</div>
+        <h1 style={{ fontSize: 30, fontWeight: 800, letterSpacing: "-0.02em", margin: "0 0 8px" }}>Prezzi di mercato delle materie prime</h1>
+        <p style={{ fontSize: 14.5, color: C.muted, lineHeight: 1.6, maxWidth: 720, margin: "0 0 22px" }}>
+          Il prezzo reale sulla piattaforma BulkStrike affiancato, dove disponibile, al riferimento di mercato esterno (ISMEA/CUN per gli agricoli, indici settoriali Eurostat per gli altri comparti). La copertura cresce nel tempo.
+        </p>
+
+        {/* toolbar: apri filtri (mobile) + ricerca */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
+          <button className="cat-filter-toggle" onClick={() => setShowFilters(true)} style={{ alignItems: "center", gap: 7, padding: "8px 14px", borderRadius: 9, border: `1px solid ${C.border}`, background: "#fff", cursor: "pointer", fontSize: 13, fontWeight: 600, color: C.text }}>
+            Filtri{activeCount > 0 ? ` · ${activeCount}` : ""}
+          </button>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#fff", border: `1px solid ${C.border}`, borderRadius: 10, padding: "9px 12px", flex: 1, minWidth: 220, maxWidth: 420 }}>
+            <Search size={16} color={C.muted} />
+            <input value={q} onChange={e => setQ(e.target.value)} placeholder="Cerca materia prima…" style={{ border: "none", outline: "none", fontSize: 14, width: "100%", fontFamily: "Inter, system-ui", background: "transparent", color: C.text }} />
+          </div>
+        </div>
+
+        <div className="cat-layout">
+          <BulkStrikeCatalogFilters
+            showPool={false}
+            activeCount={activeCount} clearFilters={clearFilters} setShowFilters={setShowFilters}
+            favActive={favActive} loggedIn={loggedIn} hasFavs={hasFavs} favOnly={favOnly} setFavOnly={setFavOnly}
+            poolOnly={false} setPoolOnly={() => {}}
+            priceOnly={priceOnly} setPriceOnly={setPriceOnly}
+            openAree={openAree} setOpenAree={setOpenAree}
+            macros={macros} activeMacro={activeMacro} setActiveMacro={setActiveMacro} activeSector={activeSector} setActiveSector={setActiveSector}
+            followedSectorIds={followedSectorIds} toggleSectorFollow={toggleSectorFollow}
+            chemGroups={chemGroups} openChemGroups={openChemGroups} toggleChemGroup={toggleChemGroup}
+            activeClasses={activeClasses} toggleClass={toggleClass}
+            resultsCount={filtered.length}
+          />
+
+          <main>
+            <div style={{ fontSize: 12, color: C.muted, marginBottom: 12 }}>{rows == null ? "Caricamento…" : `${filtered.length} prodotti · ${covered} con andamento disponibile`}</div>
+
+            {/* Preferiti attivo ma nessun preferito: invito, non tabella vuota. */}
+            {loggedIn && followedIds && !hasFavs && favOnly && (
+              <div style={{ display: "flex", alignItems: "center", gap: 10, background: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: 12, padding: "12px 16px", marginBottom: 14, fontSize: 13.5, color: "#92400E" }}>
+                <Star size={17} color="#D97706" style={{ flexShrink: 0 }} />
+                <span>Non segui ancora nessuna materia prima. Aggiungile con la <b>stella</b> ⭐ dal <a href="/catalogo" style={{ color: "#B45309", fontWeight: 700 }}>catalogo</a> per ritrovarle qui filtrate come <b>Preferiti</b>.</span>
+              </div>
+            )}
+
+            {/* Tabella screener */}
+            <div style={{ background: "#fff", border: `1px solid ${C.border}`, borderRadius: 14, overflow: "hidden" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 130px 120px 150px 34px", gap: 10, padding: "11px 16px", borderBottom: `1px solid ${C.border}`, fontSize: 11, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                <span>Materia prima</span>
+                <span style={{ textAlign: "right" }}>Prezzo BulkStrike</span>
+                <span style={{ textAlign: "right" }}>Var. da gennaio</span>
+                <span>Andamento</span>
+                <span />
+              </div>
+              {rows == null ? (
+                <div style={{ padding: 24, fontSize: 13, color: C.muted }}>Caricamento…</div>
+              ) : filtered.length === 0 ? (
+                <div style={{ padding: 24, fontSize: 13, color: C.muted }}>{favActive ? "Nessun prodotto tra i tuoi preferiti per questo filtro." : "Nessun prodotto per questo filtro."}</div>
+              ) : filtered.map(r => {
+                const open = expanded === r.id;
+                return (
+                  <div key={r.id} style={{ borderBottom: `1px solid #F1F5F9` }}>
+                    <div onClick={() => setExpanded(open ? null : r.id)}
+                      className="ap-row"
+                      style={{ display: "grid", gridTemplateColumns: "1fr 130px 120px 150px 34px", gap: 10, padding: "12px 16px", alignItems: "center", cursor: "pointer", background: open ? C.bg : "#fff" }}>
+                      <div>
+                        <div style={{ fontSize: 14.5, fontWeight: 600 }}>{r.name}</div>
+                        {r.primary_macro && <div style={{ fontSize: 11.5, color: C.muted, marginTop: 1 }}>{r.primary_macro}</div>}
+                      </div>
+                      <div className="bs-num" style={{ textAlign: "right", fontSize: 15, fontWeight: 700, color: r.best_price != null ? C.text : "#94A3B8" }}>{r.best_price != null ? eurKg(r.best_price) : "—"}</div>
+                      <div style={{ textAlign: "right", fontSize: 13.5 }}><VarPill v={r.ext_ytd} /></div>
+                      <div><CoverageBadges row={r} /></div>
+                      <div style={{ display: "flex", justifyContent: "center", color: C.muted }}>{open ? <ChevronDown size={17} /> : <ChevronRight size={17} />}</div>
+                    </div>
+                    {open && <div style={{ padding: "4px 16px 18px", background: C.bg }}><ExpandedChart row={r} /></div>}
+                  </div>
+                );
+              })}
+            </div>
+          </main>
+        </div>
+      </div>
     </div>
   );
-}
-
-function chip(active) {
-  return {
-    padding: "7px 13px", borderRadius: 100, fontSize: 12.5, fontWeight: 600, cursor: "pointer",
-    fontFamily: "Inter, system-ui", whiteSpace: "nowrap",
-    background: active ? C.blue : "#fff", color: active ? "#fff" : C.muted,
-    border: `1px solid ${active ? C.blue : C.border}`,
-  };
 }
