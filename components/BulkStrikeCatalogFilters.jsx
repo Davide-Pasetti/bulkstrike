@@ -37,7 +37,7 @@ export default function BulkStrikeCatalogFilters({
         onClick={!loggedIn ? (e) => { e.preventDefault(); window.location.href = "/auth/login"; } : undefined}
         title={!loggedIn ? "Accedi per filtrare i tuoi preferiti" : !hasFavs ? "Aggiungi preferiti con la stella ⭐ sulle card" : favOnly ? "Mostra tutte le materie prime" : "Mostra solo i preferiti"}
         style={{ display: "flex", alignItems: "center", gap: 9, padding: "10px 12px", border: `1px solid ${favActive ? "#FDE68A" : C.border}`, borderRadius: 10, cursor: (loggedIn && !hasFavs) ? "not-allowed" : "pointer", background: favActive ? "#FEF3C7" : "#fff", marginBottom: 10, opacity: (loggedIn && !hasFavs) ? 0.55 : 1 }}>
-        <input type="checkbox" checked={favActive} disabled={loggedIn && !hasFavs} onChange={(e) => { if (loggedIn && hasFavs) setFavOnly(e.target.checked); }} style={{ accentColor: "#D97706", width: 16, height: 16 }} />
+        <input type="checkbox" checked={favActive} disabled={loggedIn && !hasFavs} onChange={(e) => { if (loggedIn && hasFavs) setFavOnly(e.target.checked); }} style={{ accentColor: "#D97706", colorScheme: "light", width: 16, height: 16 }} />
         <Star size={15} fill={favActive ? "#D97706" : "none"} color={favActive ? "#D97706" : C.amber} />
         <span style={{ fontSize: 13, fontWeight: 600, color: favActive ? "#B45309" : C.text }}>Preferiti</span>
       </label>
@@ -45,7 +45,7 @@ export default function BulkStrikeCatalogFilters({
       {/* pool attivo — opzionale (nascosto su andamento-prezzi) */}
       {showPool && (
         <label style={{ display: "flex", alignItems: "center", gap: 9, padding: "10px 12px", border: `1px solid ${poolOnly ? "#0EA5E9" : C.border}`, borderRadius: 10, cursor: "pointer", background: poolOnly ? "#EFF6FF" : "#fff", marginBottom: 10 }}>
-          <input type="checkbox" checked={poolOnly} onChange={(e) => setPoolOnly(e.target.checked)} style={{ accentColor: C.blue, width: 16, height: 16 }} />
+          <input type="checkbox" checked={poolOnly} onChange={(e) => setPoolOnly(e.target.checked)} style={{ accentColor: C.blue, colorScheme: "light", width: 16, height: 16 }} />
           <Flame size={15} color={poolOnly ? C.blue : C.amber} />
           <span style={{ fontSize: 13, fontWeight: 600, color: poolOnly ? "#0369A1" : C.text }}>Aste attive</span>
         </label>
@@ -53,7 +53,7 @@ export default function BulkStrikeCatalogFilters({
 
       {/* prezzo disponibile */}
       <label style={{ display: "flex", alignItems: "center", gap: 9, padding: "10px 12px", border: `1px solid ${priceOnly ? "#0EA5E9" : C.border}`, borderRadius: 10, cursor: "pointer", background: priceOnly ? "#EFF6FF" : "#fff", marginBottom: 18 }}>
-        <input type="checkbox" checked={priceOnly} onChange={(e) => setPriceOnly(e.target.checked)} style={{ accentColor: C.blue, width: 16, height: 16 }} />
+        <input type="checkbox" checked={priceOnly} onChange={(e) => setPriceOnly(e.target.checked)} style={{ accentColor: C.blue, colorScheme: "light", width: 16, height: 16 }} />
         <Tag size={15} color={priceOnly ? C.blue : C.muted} />
         <span style={{ fontSize: 13, fontWeight: 600, color: priceOnly ? "#0369A1" : C.text }}>Prezzo disponibile</span>
       </label>
@@ -125,7 +125,7 @@ export default function BulkStrikeCatalogFilters({
                       return (
                         <label key={c.slug}
                           style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", borderRadius: 7, cursor: "pointer", background: con ? "#DBEAFE" : "transparent", fontSize: 12.5, fontWeight: con ? 700 : 500, color: con ? "#0369A1" : C.muted }}>
-                          <input type="checkbox" checked={con} onChange={() => toggleClass(c.slug)} style={{ accentColor: C.blue, width: 14, height: 14, flexShrink: 0 }} />
+                          <input type="checkbox" checked={con} onChange={() => toggleClass(c.slug)} style={{ accentColor: C.blue, colorScheme: "light", width: 14, height: 14, flexShrink: 0 }} />
                           <span style={{ flex: 1 }}>{c.name}</span>
                           <span style={{ fontSize: 11, color: C.muted }}>{c.product_count}</span>
                         </label>
