@@ -502,8 +502,6 @@ export default function ProductPage() {
     return filteredSuppliers.map(s => ({ ...s, calc: compute(s, qty) })).sort((a,b) => a.calc.preVatKg - b.calc.preVatKg);
   }, [filteredSuppliers, qty]);
 
-  const featured = (selectedId ? ranked.find(s => s.id === selectedId) : ranked[0]) || null;
-  const others = featured ? ranked.filter(s => s.id !== featured.id) : [];
   // Campionatura (DAV-77): questi prodotti (vini/mosti sfusi) non si acquistano
   // online — niente prezzo aggregato, carrello, asta, promo. Solo richiesta campione.
   const sampleOnly = product.listing_mode === "sample_only";
@@ -531,18 +529,14 @@ export default function ProductPage() {
   }), [sampleSuppliers, wfCountry, wfRegion]);
   const sampleFilterActive = !!(wfCountry || wfRegion);
   const toggleSP = (id) => setSelectedSP(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
-  // Lista UNICA di fornitori (solo con showSampling): parte dai campionabili
-  // filtrati, esclude quello "In evidenza" e distingue chi ha già un prezzo
-  // (riga d'acquisto) da chi non ce l'ha (riga campione). I fornitori con
-  // prezzo NON hanno la checkbox: si comprano, non si campionano.
-  const pricedCompanyIds = useMemo(() => new Set(others.map(o => o.company_id).filter(Boolean)), [others]);
-  const selectableSamples = useMemo(() => filteredSampleSuppliers.filter(s =>
-    s.company_id !== featured?.company_id && !pricedCompanyIds.has(s.company_id)
-  ), [filteredSampleSuppliers, featured, pricedCompanyIds]);
+  // Lista UNICA di fornitori (con showSampling): parte dai campionabili filtrati
+  // e a ognuno attacca il suo prezzo se il company_id ha un listino. È l'UNICA
+  // lista: nessuna box "In evidenza" separata sopra: un solo fornitore con prezzo
+  // alla volta è mostrato in grande (espanso) dentro la lista, tutti gli altri
+  // come riga compatta. Il filtro Nazione/Regione vale per TUTTI, espanso incluso.
   const unifiedSuppliers = useMemo(() => {
-    const pricedByCid = new Map(others.map(o => [o.company_id, o]));
+    const pricedByCid = new Map(ranked.map(o => [o.company_id, o]));
     return filteredSampleSuppliers
-      .filter(s => s.company_id !== featured?.company_id)
       .map(s => ({ s, priced: pricedByCid.get(s.company_id) || null }))
       .sort((a, b) => {
         if (a.priced && b.priced) return a.priced.calc.preVatKg - b.priced.calc.preVatKg;
@@ -550,8 +544,26 @@ export default function ProductPage() {
         if (b.priced) return 1;
         return 0; // senza prezzo: mantiene l'ordine della RPC (verificati prima)
       });
-  }, [others, featured, filteredSampleSuppliers]);
-  // "Seleziona tutti" agisce solo sui campionabili senza prezzo (gli unici con checkbox).
+  }, [ranked, filteredSampleSuppliers]);
+  // Fornitori con prezzo effettivamente visibili (già ordinati per costo).
+  const pricedInList = useMemo(() => unifiedSuppliers.filter(u => u.priced).map(u => u.priced), [unifiedSuppliers]);
+  // Il più conveniente TRA I FILTRATI: porta il badge "★ Più conveniente" dove si
+  // trova (espanso o compatto) e NON segue la selezione dell'utente.
+  const cheapestFilteredId = pricedInList.length ? pricedInList[0].id : null;
+  // "In evidenza": in modalità campioni è il fornitore con prezzo espanso nella
+  // lista — quello scelto dall'utente se è tra i filtrati con prezzo, altrimenti
+  // il più conveniente filtrato (se il filtro esclude il più economico, il box
+  // grande passa da solo al primo che corrisponde). Fuori dalla campionatura
+  // resta la logica classica: selezionato dall'utente o primo del ranking.
+  const featured = showSampling
+    ? ((selectedId ? pricedInList.find(p => p.id === selectedId) : null) || pricedInList[0] || null)
+    : ((selectedId ? ranked.find(s => s.id === selectedId) : ranked[0]) || null);
+  const others = featured ? ranked.filter(s => s.id !== featured.id) : [];
+  // Selezione campioni: vale per TUTTI i fornitori filtrati, anche chi ha già un
+  // prezzo (un cliente può voler comunque un campione prima di comprare) e anche
+  // l'espanso. Ogni riga ha già il suo supplier_product_id perché la lista parte
+  // dai fornitori campionabili: la checkbox funziona senza dati aggiuntivi.
+  const selectableSamples = filteredSampleSuppliers;
   const allFilteredSelected = selectableSamples.length > 0 && selectableSamples.every(s => selectedSP.has(s.supplier_product_id));
   const toggleSelectAllFiltered = () => setSelectedSP(prev => {
     const n = new Set(prev);
@@ -940,7 +952,7 @@ export default function ProductPage() {
               </div>
             )}
 
-            {!sampleOnly && featured ? (<>
+            {!sampleOnly && !showSampling && featured ? (<>
             <div style={{ fontSize:12, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.08em", color:C.blue, marginBottom:10 }}>In evidenza</div>
             <div style={{ border:`2px solid ${C.blue}`, borderRadius:16, padding:24, marginBottom:24, position:"relative", boxShadow:"0 8px 30px rgba(14,165,233,0.10)" }}>
               <div style={{ position:"absolute", top:-12, left:20, display:"flex", gap:8 }}>
@@ -1093,7 +1105,7 @@ export default function ProductPage() {
               {/* CONTEGGIO + seleziona/deseleziona tutti i filtrati */}
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:12, flexWrap:"wrap", marginBottom:12 }}>
                 <span style={{ fontSize:14, fontWeight:700, color:C.text }}>
-                  {sampleFilterActive ? `${unifiedSuppliers.length} fornitori (su ${sampleSuppliers.filter(s => s.company_id !== featured?.company_id).length})` : `${unifiedSuppliers.length} fornitori`}
+                  {sampleFilterActive ? `${unifiedSuppliers.length} fornitori (su ${sampleSuppliers.length})` : `${unifiedSuppliers.length} fornitori`}
                 </span>
                 {selectableSamples.length > 0 && (
                   <button onClick={toggleSelectAllFiltered} style={{ background:"none", border:"none", color:C.blue, fontSize:13, fontWeight:700, cursor:"pointer" }}>
@@ -1112,40 +1124,138 @@ export default function ProductPage() {
                 </div>
               ) : (
                 <div style={{ display:"flex", flexDirection:"column", gap:10, marginBottom:16 }}>
-                  {unifiedSuppliers.map(({ s, priced }) => priced ? (
-                    /* RIGA D'ACQUISTO — fornitore con prezzo: si compra, niente checkbox. */
-                    <div key={s.supplier_product_id} className="bs-supplier-row">
-                      <div>
-                        <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:3 }}>
-                          <SupplierName name={priced.name} companyId={priced.company_id} className="bs-suplink" style={{ fontSize:15, fontWeight:700 }}/><CountryFlag country={priced.origin} size={13} />
-                        </div>
-                        <div style={{ display:"flex", alignItems:"center", gap:8, fontSize:12, color:C.muted, flexWrap:"wrap" }}>
-                          <span style={{ display:"flex", alignItems:"center", gap:3 }}><Star size={11} fill={C.amber} color={C.amber}/> {priced.rating.toFixed(1)}</span>
-                          <span>{priced.type}</span>
-                        </div>
-                      </div>
-                      <div className="bs-col-hide" style={{ textAlign:"center" }}>
-                        <div style={{ fontSize:11, color:C.muted }}>Purezza</div>
-                        <div style={{ fontSize:14, fontWeight:600 }}>{priced.purity}</div>
-                      </div>
-                      <div className="bs-col-hide" style={{ textAlign:"center" }}>
-                        <div style={{ fontSize:11, color:C.muted, display:"flex", alignItems:"center", justifyContent:"center", gap:3 }}><Truck size={11}/></div>
-                        <div style={{ fontSize:13, fontWeight:600 }}>{priced.delivery}</div>
-                      </div>
-                      <div style={{ textAlign:"center" }}>
-                        <div style={{ fontSize:11, color:C.muted }}>Costo/kg *</div>
-                        <div className="bs-num" style={{ fontSize:18, fontWeight:800, color:C.blue }}>{eurKg(priced.calc.preVatKg)}</div>
-                      </div>
-                      <div className="bs-col-hide" style={{ textAlign:"center" }}>
-                        <div style={{ fontSize:11, color:C.muted }}>Merce + spedizione</div>
-                        <div className="bs-num" style={{ fontSize:13, fontWeight:600 }}>{eur(priced.calc.product)} + {eur(priced.calc.shipping)}</div>
-                        {consolidatedWith(priced.company_id) && <div style={{ fontSize:10, color:C.green, fontWeight:700, marginTop:2 }}>spedizione consolidabile</div>}
-                      </div>
-                      <button className="bs-btn-ghost" onClick={() => { setSelectedId(priced.id); setSelectedFormatIdx(0); window.scrollTo({top:0,behavior:"smooth"}); }}>Seleziona</button>
-                    </div>
-                  ) : (() => {
-                    /* RIGA CAMPIONE — fornitore senza prezzo: checkbox + "Richiedi un preventivo". */
+                  {unifiedSuppliers.map(({ s, priced }) => {
                     const sel = selectedSP.has(s.supplier_product_id);
+                    const isExpanded = priced && featured && priced.id === featured.id;
+                    /* FORNITORE CON PREZZO ESPANSO — box grande, ma nella sua posizione
+                       nella lista (nessuno scrollTo, nessun riordino): un solo fornitore
+                       espanso alla volta. Il badge "★ Più conveniente" segue il più
+                       economico filtrato, NON la selezione. La checkbox c'è anche qui:
+                       si può campionare pure un fornitore con prezzo. */
+                    if (isExpanded) {
+                      return (
+                        <div key={s.supplier_product_id} style={{ border:`2px solid ${C.blue}`, borderRadius:16, padding:24, position:"relative", boxShadow:"0 8px 30px rgba(14,165,233,0.10)" }}>
+                          <div style={{ position:"absolute", top:-12, left:20, display:"flex", gap:8 }}>
+                            {priced.id===cheapestFilteredId
+                              ? <span style={{ background:C.green, color:"#fff", borderRadius:100, padding:"4px 12px", fontSize:12, fontWeight:700 }}>★ Più conveniente</span>
+                              : <span style={{ background:"#0369A1", color:"#fff", borderRadius:100, padding:"4px 12px", fontSize:12, fontWeight:700 }}>Selezionato da te</span>}
+                          </div>
+
+                          <label style={{ display:"inline-flex", alignItems:"center", gap:8, marginBottom:16, fontSize:13, fontWeight:600, color: sel ? "#9D174D" : C.muted, cursor:"pointer" }}>
+                            <input type="checkbox" checked={sel} onChange={() => toggleSP(s.supplier_product_id)} aria-label={`Campiona ${priced.name}`} style={{ width:16, height:16, accentColor:"#9D174D", cursor:"pointer", flexShrink:0 }}/>
+                            Richiedi anche un campione da questo fornitore
+                          </label>
+
+                          <div style={{ display:"flex", justifyContent:"space-between", gap:16, flexWrap:"wrap", marginBottom:18 }}>
+                            <div>
+                              <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:4 }}>
+                                <SupplierName name={priced.name} companyId={priced.company_id} className="bs-suplink" style={{ fontSize:20, fontWeight:800 }}/>
+                                <CountryFlag country={priced.origin} size={16} />
+                              </div>
+                              <div style={{ display:"flex", alignItems:"center", gap:12, fontSize:13, color:C.muted, flexWrap:"wrap" }}>
+                                <span style={{ display:"flex", alignItems:"center", gap:4 }}><Star size={13} fill={C.amber} color={C.amber}/> <b style={{ color:C.text }}>{priced.rating.toFixed(1)}</b> ({priced.reviews})</span>
+                                <span>{priced.origin}</span>
+                                <span>{priced.type}</span>
+                                <span style={{ display:"flex", alignItems:"center", gap:4 }}><Truck size={13}/> {priced.delivery}</span>
+                              </div>
+                              <SupplierLoginHint/>
+                            </div>
+                          </div>
+
+                          {/* MATERIA PRIMA + SPEDIZIONE, sempre visibili — IVA esclusa (quella si calcola al checkout) */}
+                          <div className="bs-feature-grid">
+                            <div style={{ background:C.bg, borderRadius:12, padding:"16px 18px" }}>
+                              <div style={{ fontSize:12, color:C.muted, marginBottom:10, fontWeight:600 }}>Materia prima + spedizione · {(qty/1000)}t</div>
+                              <div style={{ display:"flex", flexDirection:"column", gap:7 }}>
+                                <Row label={`Prodotto (${eurKg(priced.calc.unit)}/kg)`} val={eur(priced.calc.product)} />
+                                <Row label="Spedizione alla tua sede" val={eur(priced.calc.shipping)} />
+                                {consolidatedWith(priced.company_id) && (
+                                  <div style={{ fontSize:11, color:C.green, fontWeight:700, display:"flex", alignItems:"center", gap:4 }}><Check size={11}/> Si unisce alla spedizione di ciò che hai già nel carrello da questo fornitore</div>
+                                )}
+                                <div style={{ borderTop:`1px solid ${C.border}`, marginTop:4, paddingTop:9, display:"flex", justifyContent:"space-between", alignItems:"baseline" }}>
+                                  <span style={{ fontSize:14, fontWeight:700 }}>Totale <IvaChip style={{ verticalAlign: "baseline" }} /></span>
+                                  <span className="bs-num" style={{ fontSize:24, fontWeight:800, color:C.text }}>{eur(priced.calc.preVat)}</span>
+                                </div>
+                              </div>
+                              <div style={{ fontSize:11, color:C.muted, marginTop:8 }}>L'IVA la vedi nel riepilogo al checkout, dopo aver scelto l'indirizzo.</div>
+                            </div>
+                            <div style={{ textAlign:"center" }}>
+                              <div style={{ fontSize:12, color:C.muted }}>Costo</div>
+                              <div className="bs-num" style={{ fontSize:40, fontWeight:800, color:C.blue, lineHeight:1.1 }}>{eurKg(priced.calc.preVatKg)}</div>
+                              <div style={{ fontSize:13, color:C.muted, marginBottom:14 }}>/kg · spedizione inclusa <IvaChip /></div>
+                              <button className="bs-btn" onClick={handleBuyNow} disabled={busy || !featured} style={{ width:"100%", fontSize:16, padding:"14px", opacity:(busy||!featured)?0.6:1, cursor:(busy||!featured)?"default":"pointer" }}>Acquista ora <ArrowRight size={18}/></button>
+                              <button onClick={handleAddToCart} disabled={busy || !featured} style={{ width:"100%", marginTop:8, background:"transparent", color:C.blue, border:`1.5px solid ${C.blue}`, borderRadius:10, padding:"12px", fontSize:14.5, fontWeight:700, cursor:(busy||!featured)?"default":"pointer", opacity:(busy||!featured)?0.6:1, display:"flex", alignItems:"center", justifyContent:"center", gap:8, fontFamily:"Inter,system-ui" }}><ShoppingCart size={16}/> Aggiungi al carrello</button>
+                              {cartOk && <div style={{ marginTop:8, fontSize:12.5, color:C.green, fontWeight:700, display:"flex", alignItems:"center", gap:5 }}><Check size={13}/> Aggiunto! <span onClick={() => { window.location.href = "/carrello"; }} style={{ cursor:"pointer", textDecoration:"underline" }}>Vai al carrello</span></div>}
+                              {actionMsg && <div style={{ marginTop:8, fontSize:12, color:C.red, fontWeight:600 }}>{actionMsg}</div>}
+                              {pool.exists && !auctionBlocked && (
+                              <div style={{ marginTop:10, fontSize:13 }}>
+                                <span style={{ color:C.muted }}>oppure </span>
+                                <span onClick={goToPool} style={{ color:groupBuy?C.blue:C.purple, fontWeight:600, cursor:"pointer" }}>{groupBuy ? "c'è un acquisto di gruppo attivo" : "c'è un'asta a ribasso attiva"}: ora {eurKg(pool.bestPrice)}/kg →</span>
+                              </div>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* certs */}
+                          <div style={{ display:"flex", gap:8, marginTop:16, flexWrap:"wrap", alignItems:"center" }}>
+                            <span style={{ fontSize:12, color:C.muted, display:"flex", alignItems:"center", gap:4 }}><Shield size={13}/> Certificazioni:</span>
+                            {priced.certs.map(c => <span key={c} className="bs-chip" style={{ background:"#ECFDF5", color:C.green }}><Check size={10}/> {c}</span>)}
+                            <span style={{ marginLeft:"auto", fontSize:12, color:C.muted }}>Purezza <b style={{ color:C.text }}>{priced.purity}</b></span>
+                          </div>
+
+                          {/* variante: granulometria, purezza, colore, ecc. — libere per fornitore */}
+                          {Object.keys(priced.variantAttributes || {}).length > 0 && (
+                            <div style={{ display:"flex", gap:8, marginTop:10, flexWrap:"wrap", alignItems:"center" }}>
+                              {Object.entries(priced.variantAttributes).map(([k,v]) => (
+                                <span key={k} className="bs-chip" style={{ background:"#F1F5F9", color:C.text }}>{k}: <b>{String(v)}</b></span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    }
+                    /* FORNITORE CON PREZZO COMPATTO — riga sintetica con checkbox campione
+                       e "Seleziona" che lo espande QUI, sul posto (niente scrollTo). */
+                    if (priced) {
+                      return (
+                        <div key={s.supplier_product_id} style={{ display:"flex", alignItems:"stretch", gap:10 }}>
+                          <label style={{ display:"flex", alignItems:"center", paddingLeft:2, cursor:"pointer" }}>
+                            <input type="checkbox" checked={sel} onChange={() => toggleSP(s.supplier_product_id)} aria-label={`Campiona ${priced.name}`} style={{ width:17, height:17, accentColor:"#9D174D", cursor:"pointer", flexShrink:0 }}/>
+                          </label>
+                          <div className="bs-supplier-row" style={{ flex:1, minWidth:0, background: sel ? "#FDF2F8" : undefined, borderColor: sel ? "#9D174D" : undefined }}>
+                            <div>
+                              <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:3 }}>
+                                <SupplierName name={priced.name} companyId={priced.company_id} className="bs-suplink" style={{ fontSize:15, fontWeight:700 }}/><CountryFlag country={priced.origin} size={13} />
+                              </div>
+                              <div style={{ display:"flex", alignItems:"center", gap:8, fontSize:12, color:C.muted, flexWrap:"wrap" }}>
+                                <span style={{ display:"flex", alignItems:"center", gap:3 }}><Star size={11} fill={C.amber} color={C.amber}/> {priced.rating.toFixed(1)}</span>
+                                <span>{priced.type}</span>
+                                {priced.id===cheapestFilteredId && <span className="bs-chip" style={{ background:"#ECFDF5", color:C.green }}>★ Più conveniente</span>}
+                              </div>
+                            </div>
+                            <div className="bs-col-hide" style={{ textAlign:"center" }}>
+                              <div style={{ fontSize:11, color:C.muted }}>Purezza</div>
+                              <div style={{ fontSize:14, fontWeight:600 }}>{priced.purity}</div>
+                            </div>
+                            <div className="bs-col-hide" style={{ textAlign:"center" }}>
+                              <div style={{ fontSize:11, color:C.muted, display:"flex", alignItems:"center", justifyContent:"center", gap:3 }}><Truck size={11}/></div>
+                              <div style={{ fontSize:13, fontWeight:600 }}>{priced.delivery}</div>
+                            </div>
+                            <div style={{ textAlign:"center" }}>
+                              <div style={{ fontSize:11, color:C.muted }}>Costo/kg *</div>
+                              <div className="bs-num" style={{ fontSize:18, fontWeight:800, color:C.blue }}>{eurKg(priced.calc.preVatKg)}</div>
+                            </div>
+                            <div className="bs-col-hide" style={{ textAlign:"center" }}>
+                              <div style={{ fontSize:11, color:C.muted }}>Merce + spedizione</div>
+                              <div className="bs-num" style={{ fontSize:13, fontWeight:600 }}>{eur(priced.calc.product)} + {eur(priced.calc.shipping)}</div>
+                              {consolidatedWith(priced.company_id) && <div style={{ fontSize:10, color:C.green, fontWeight:700, marginTop:2 }}>spedizione consolidabile</div>}
+                            </div>
+                            <button className="bs-btn-ghost" onClick={() => { setSelectedId(priced.id); setSelectedFormatIdx(0); }}>Seleziona</button>
+                          </div>
+                        </div>
+                      );
+                    }
+                    /* RIGA CAMPIONE — fornitore senza prezzo: checkbox + "Richiedi un preventivo". */
                     const place = [s.city, s.region, s.country].filter(Boolean).join(", ");
                     return (
                       <div key={s.supplier_product_id} style={{ display:"flex", flexDirection:"column" }}>
@@ -1213,7 +1323,7 @@ export default function ProductPage() {
                       )}
                       </div>
                     );
-                  })())}
+                  })}
                 </div>
               )}
 
