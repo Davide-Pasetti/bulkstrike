@@ -10,7 +10,7 @@
 // Se manca A → solo B; se manca B → solo A; se mancano entrambe → messaggio,
 // mai grafico vuoto. Dicitura fonte solo sotto il dato esterno.
 // ============================================================
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { Search, ChevronDown, ChevronRight, TrendingDown, TrendingUp, Activity } from "lucide-react";
 import { getPriceScreener, getProductPriceHistory, getMarketPriceSeries, getMarketIndexSeries, getMacroAreas, getCatalog, getChemicalClasses, getMyFollowedProducts, getMyFollowedSectors, followSector, unfollowSector, getSession } from "@/lib/api";
@@ -165,6 +165,8 @@ export default function AndamentoPrezziPage() {
   const [followedIds, setFollowedIds] = useState(null);
   const [followedSectorIds, setFollowedSectorIds] = useState(null);
   const [loggedIn, setLoggedIn] = useState(false);
+  const [sessionReady, setSessionReady] = useState(false);
+  const didAutoExpand = useRef(false);
 
   useEffect(() => {
     getPriceScreener().then(setRows).catch(() => setRows([]));
@@ -173,10 +175,11 @@ export default function AndamentoPrezziPage() {
     getChemicalClasses().then(g => setChemGroups(g || [])).catch(() => {});
     getMyFollowedSectors().then(list => setFollowedSectorIds(new Set((list || []).map(x => x.sector_id)))).catch(() => setFollowedSectorIds(new Set()));
     getSession().then(s => {
+      setSessionReady(true);
       if (!s) { setLoggedIn(false); return; }
       setLoggedIn(true);
       getMyFollowedProducts().then(list => setFollowedIds(new Set((list || []).map(x => x.product_id)))).catch(() => setFollowedIds(new Set()));
-    }).catch(() => setLoggedIn(false));
+    }).catch(() => { setLoggedIn(false); setSessionReady(true); });
   }, []);
 
   const hasFavs = !!(followedIds && followedIds.size > 0);
@@ -214,6 +217,16 @@ export default function AndamentoPrezziPage() {
 
   const covered = filtered.filter(r => r.has_history || r.external).length;
 
+  // All'apertura espande il grafico del PRIMO prodotto in elenco, così è subito
+  // chiaro che le righe sono espandibili. Aspetta che sessione e preferiti siano
+  // risolti, per rispettare il default "Preferiti" (evita di aprire un prodotto
+  // che poi il filtro preferiti nasconderebbe). Solo la prima volta.
+  useEffect(() => {
+    if (didAutoExpand.current || rows == null || !sessionReady) return;
+    if (loggedIn && followedIds == null) return; // preferiti ancora in caricamento
+    if (filtered.length > 0) { setExpanded(filtered[0].id); didAutoExpand.current = true; }
+  }, [rows, sessionReady, loggedIn, followedIds, filtered]);
+
   const toggleClass = (slug) => setActiveClasses(prev => { const n = new Set(prev); n.has(slug) ? n.delete(slug) : n.add(slug); return n; });
   const toggleChemGroup = (slug) => setOpenChemGroups(prev => { const n = new Set(prev); n.has(slug) ? n.delete(slug) : n.add(slug); return n; });
   // Stella settore: stesso comportamento del catalogo (ottimistico + rollback→login).
@@ -233,7 +246,7 @@ export default function AndamentoPrezziPage() {
   const activeCount = (activeMacro ? 1 : 0) + (activeSector ? 1 : 0) + activeClasses.size + (priceOnly ? 1 : 0);
 
   return (
-    <div style={{ minHeight: "100vh", background: C.bg, fontFamily: "Inter, system-ui, sans-serif", color: C.text }}>
+    <div style={{ minHeight: "100vh", background: C.bg, fontFamily: "Inter, system-ui, sans-serif", color: C.text, colorScheme: "light" }}>
       <style>{`
         .cat-layout { display:grid; grid-template-columns:264px 1fr; gap:24px; }
         .cat-sidebar { position:sticky; top:80px; align-self:start; max-height:calc(100vh - 96px); overflow-y:auto; }
