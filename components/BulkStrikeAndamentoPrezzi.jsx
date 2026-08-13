@@ -13,7 +13,7 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { Search, ChevronDown, ChevronRight, TrendingDown, TrendingUp, Activity, Star, X } from "lucide-react";
-import { getIndicatorScreener, getIndicatorSeries } from "@/lib/api";
+import { getIndicatorScreener, getIndicatorSeries, getMyFollowedIndicators, getSession } from "@/lib/api";
 import BulkStrikeNav from "@/components/BulkStrikeNav";
 
 const C = { blue: "#0EA5E9", dark: "#0284C7", purple: "#7C3AED", text: "#0F172A", muted: "#64748B", border: "#E2E8F0", bg: "#F8FAFE", green: "#059669", red: "#DC2626", card: "#fff" };
@@ -163,8 +163,23 @@ export default function AndamentoPrezziPage() {
   const [freqSel, setFreqSel] = useState(() => new Set());
   const [openGroups, setOpenGroups] = useState(() => new Set(["fam"]));
   const didAutoExpand = useRef(false);
+  // Preferiti (nuova semantica): indicatori legati ai prodotti seguiti. ON di
+  // default come nel catalogo; per l'anonimo o chi non segue nulla è inattivo.
+  const [favOnly, setFavOnly] = useState(true);
+  const [loggedIn, setLoggedIn] = useState(false);
+  const [followedInd, setFollowedInd] = useState(null); // Set di slug, null = in caricamento
 
-  useEffect(() => { getIndicatorScreener().then(setRows).catch(() => setRows([])); }, []);
+  useEffect(() => {
+    getIndicatorScreener().then(setRows).catch(() => setRows([]));
+    getSession().then(s => {
+      if (!s) { setLoggedIn(false); return; }
+      setLoggedIn(true);
+      getMyFollowedIndicators().then(list => setFollowedInd(new Set(list || []))).catch(() => setFollowedInd(new Set()));
+    }).catch(() => setLoggedIn(false));
+  }, []);
+
+  const hasFavs = !!(followedInd && followedInd.size > 0);
+  const favActive = loggedIn && hasFavs && favOnly;
 
   const toggleSet = (setter) => (key) => setter(prev => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n; });
   const toggleFam = toggleSet(setFamSel), toggleFonte = toggleSet(setFonteSel), toggleFreq = toggleSet(setFreqSel);
@@ -179,12 +194,13 @@ export default function AndamentoPrezziPage() {
     let list = rows || [];
     const qq = q.trim().toLowerCase();
     if (qq) list = list.filter(r => (r.nome || "").toLowerCase().includes(qq));
+    if (favActive) list = list.filter(r => followedInd.has(r.slug));
     if (priceOnly) list = list.filter(r => r.tipo === "prezzo");
     if (famSel.size) list = list.filter(r => famSel.has(r.famiglia));
     if (fonteSel.size) list = list.filter(r => fonteSel.has(r.fonte));
     if (freqSel.size) list = list.filter(r => freqSel.has(r.frequenza));
     return list;
-  }, [rows, q, priceOnly, famSel, fonteSel, freqSel]);
+  }, [rows, q, favActive, followedInd, priceOnly, famSel, fonteSel, freqSel]);
 
   // Raggruppa per famiglia nell'ordine fisso; le famiglie ignote vanno in coda.
   const groups = useMemo(() => {
@@ -202,8 +218,9 @@ export default function AndamentoPrezziPage() {
 
   useEffect(() => {
     if (didAutoExpand.current || rows == null) return;
+    if (loggedIn && followedInd == null) return; // aspetta i preferiti (rispetta il default ON)
     if (flatOrder.length > 0) { setExpanded(flatOrder[0].slug); didAutoExpand.current = true; }
-  }, [rows, flatOrder]);
+  }, [rows, loggedIn, followedInd, flatOrder]);
 
   const clearFilters = () => { setQ(""); setPriceOnly(false); setFamSel(new Set()); setFonteSel(new Set()); setFreqSel(new Set()); };
   const activeCount = (priceOnly ? 1 : 0) + famSel.size + fonteSel.size + freqSel.size;
@@ -255,12 +272,15 @@ export default function AndamentoPrezziPage() {
               </div>
             </div>
 
-            {/* Preferiti — arriva con il collegamento prodotto→indicatore (fase mappatura). */}
-            <label title="Presto: filtra gli indicatori legati alle materie prime che segui" style={{ display: "flex", alignItems: "center", gap: 9, padding: "10px 12px", border: `1px solid ${C.border}`, borderRadius: 10, cursor: "not-allowed", background: "#fff", marginBottom: 10, opacity: 0.55 }}>
-              <input type="checkbox" disabled checked={false} readOnly style={{ accentColor: "#D97706", colorScheme: "light", width: 16, height: 16 }} />
-              <Star size={15} color={C.muted} />
-              <span style={{ fontSize: 13, fontWeight: 600, color: C.text, flex: 1 }}>Preferiti</span>
-              <span style={{ fontSize: 10, fontWeight: 700, color: C.muted, background: "#F1F5F9", borderRadius: 5, padding: "2px 6px" }}>presto</span>
+            {/* Preferiti — indicatori legati alle materie prime che segui.
+                Anonimo: click → login; loggato senza preferiti: disabilitato. */}
+            <label
+              onClick={!loggedIn ? (e) => { e.preventDefault(); window.location.href = "/auth/login"; } : undefined}
+              title={!loggedIn ? "Accedi per filtrare i tuoi preferiti" : !hasFavs ? "Segui materie prime con la stella ⭐ dal catalogo" : favOnly ? "Mostra tutti gli indicatori" : "Mostra solo gli indicatori dei tuoi preferiti"}
+              style={{ display: "flex", alignItems: "center", gap: 9, padding: "10px 12px", border: `1px solid ${favActive ? "#FDE68A" : C.border}`, borderRadius: 10, cursor: (loggedIn && !hasFavs) ? "not-allowed" : "pointer", background: favActive ? "#FEF3C7" : "#fff", marginBottom: 10, opacity: (loggedIn && !hasFavs) ? 0.55 : 1 }}>
+              <input type="checkbox" checked={favActive} disabled={loggedIn && !hasFavs} onChange={(e) => { if (loggedIn && hasFavs) setFavOnly(e.target.checked); }} style={{ accentColor: "#D97706", colorScheme: "light", width: 16, height: 16 }} />
+              <Star size={15} fill={favActive ? "#D97706" : "none"} color={favActive ? "#D97706" : C.muted} />
+              <span style={{ fontSize: 13, fontWeight: 600, color: favActive ? "#B45309" : C.text, flex: 1 }}>Preferiti</span>
             </label>
 
             {/* Solo prezzi (nascondi gli indici) */}
@@ -284,10 +304,18 @@ export default function AndamentoPrezziPage() {
           <main>
             <div style={{ fontSize: 12, color: C.muted, marginBottom: 12 }}>{rows == null ? "Caricamento…" : `${filtered.length} indicatori monitorati`}</div>
 
+            {/* Preferiti attivo ma nessun preferito: invito, non tabella vuota. */}
+            {loggedIn && followedInd && !hasFavs && favOnly && (
+              <div style={{ display: "flex", alignItems: "center", gap: 10, background: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: 12, padding: "12px 16px", marginBottom: 14, fontSize: 13.5, color: "#92400E" }}>
+                <Star size={17} color="#D97706" style={{ flexShrink: 0 }} />
+                <span>Non segui ancora nessuna materia prima. Aggiungile con la <b>stella</b> ⭐ dal <a href="/catalogo" style={{ color: "#B45309", fontWeight: 700 }}>catalogo</a> per vedere qui filtrati gli indicatori che le riguardano.</span>
+              </div>
+            )}
+
             {rows == null ? (
               <div style={{ padding: 24, fontSize: 13, color: C.muted }}>Caricamento…</div>
             ) : filtered.length === 0 ? (
-              <div style={{ padding: 24, fontSize: 13, color: C.muted, background: "#fff", border: `1px solid ${C.border}`, borderRadius: 14 }}>Nessun indicatore per questo filtro.</div>
+              <div style={{ padding: 24, fontSize: 13, color: C.muted, background: "#fff", border: `1px solid ${C.border}`, borderRadius: 14 }}>{favActive ? "Nessun indicatore tra i tuoi preferiti per questo filtro." : "Nessun indicatore per questo filtro."}</div>
             ) : groups.map(([famLabel, arr]) => (
               <section key={famLabel} style={{ marginBottom: 22 }}>
                 <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: "0.06em", color: C.muted, textTransform: "uppercase", margin: "0 2px 8px" }}>{famLabel}</div>
