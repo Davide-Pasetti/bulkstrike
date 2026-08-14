@@ -716,16 +716,32 @@ export default function ProductPage() {
   // Confezione definita dal fornitore per il formato corrente (pack_units): nº di
   // unità in una confezione, es. formato 1kg + pack_units 10 = "Confezione da 10".
   const packUnits = currentFormat.pack_units && currentFormat.pack_units > 0 ? Number(currentFormat.pack_units) : null;
-  // Applica la modalità confezione: fissa la quantità (Confezione/Pallet/Container)
-  // oppure lascia lo stepper libero ("sfuso"). Non tocca selectedFormatIdx.
+  // La Confezione NON nasconde lo stepper: ne cambia il MOLTIPLICATORE, cioè
+  // quante unità di formato conta 1 passo (1 confezione/pallet/container). "Sfuso" = 1.
+  const packMultFor = (mode) => mode === "pack" ? (packUnits || 1)
+    : mode === "pallet" ? unitsPerPallet
+    : mode === "c20" ? unitsPerContainer20
+    : mode === "c40" ? unitsPerContainer40 : 1;
+  const packMult = packMultFor(packMode);
+  // Etichetta dell'unità contata (singolare/plurale dove serve).
+  const packNoun = (n) => packMode === "pack" ? (n === 1 ? "confezione" : "confezioni")
+    : packMode === "pallet" ? "pallet"
+    : packMode === "c20" ? "container 20'"
+    : packMode === "c40" ? "container 40'" : "unità";
+  // Conteggio nell'unità corrente + minimo (deve coprire il minimo d'ordine in kg).
+  const packCount = Math.max(1, Math.round(unitCount / packMult));
+  const minPackCount = Math.max(1, Math.ceil(minUnits / packMult));
+  const setPackCount = (n) => setQtySafe(Math.max(minPackCount, n) * packMult * unitSizeKg);
+  // Cambio Confezione: converte il totale attuale nella nuova unità di conteggio
+  // (arrotonda al più vicino; se sotto il minimo d'ordine, per eccesso). Non tocca
+  // selectedFormatIdx. "Sfuso" incluso (moltiplicatore 1).
   const applyPackMode = (mode) => {
+    const newMult = packMultFor(mode);
+    const newMin = Math.max(1, Math.ceil(minUnits / newMult));
+    const converted = Math.max(newMin, Math.round(qty / (newMult * unitSizeKg)));
     setPackMode(mode);
     setSelectedId(null);
-    if (mode === "pack" && packUnits) setUnitCount(packUnits);
-    else if (mode === "pallet") setUnitCount(unitsPerPallet);
-    else if (mode === "c20") setUnitCount(unitsPerContainer20);
-    else if (mode === "c40") setUnitCount(unitsPerContainer40);
-    // "sfuso": quantità corrente invariata, ricompare lo stepper.
+    setQtySafe(converted * newMult * unitSizeKg);
   };
   // Soglia fasce di prezzo del fornitore espanso: se la sua ultima fascia è
   // FINITA (non Infinity) e la quantità la supera, priceForQty estende l'ultimo
@@ -971,23 +987,17 @@ export default function ProductPage() {
                 </div>
               </div>
 
-              {packMode === "sfuso" ? (<>
-                <div style={{ fontSize:12.5, fontWeight:600, color:C.muted, marginBottom:8 }}>Numero di unità · il prezzo si aggiorna in base allo scaglione di volume</div>
-                <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap" }}>
-                  <button className="bs-qty-btn" onClick={() => setUnitCount(unitCount - 1)}><Minus size={16}/></button>
-                  <div style={{ display:"flex", alignItems:"baseline", gap:6, background:"#fff", border:`1px solid ${C.border}`, borderRadius:8, padding:"8px 14px" }}>
-                    <input className="bs-num" style={{ width:60, border:"none", outline:"none", fontSize:20, fontWeight:700, color:C.text }} value={unitCount} onChange={e => setUnitCount(parseInt(e.target.value.replace(/\D/g,"")||"0"))} />
-                    <span style={{ fontSize:14, color:C.muted }}>unità</span>
-                  </div>
-                  <button className="bs-qty-btn" onClick={() => setUnitCount(unitCount + 1)}><Plus size={16}/></button>
-                  <div style={{ fontSize:13, color:C.muted, marginLeft:2 }}>= <b className="bs-num" style={{ color:C.text }}>{qty.toLocaleString("it-IT")} {massUnit}</b> totali</div>
+              <div style={{ fontSize:12.5, fontWeight:600, color:C.muted, marginBottom:8 }}>Seleziona il numero di {packNoun(2)} · il prezzo si aggiorna in base allo scaglione di volume</div>
+              <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap" }}>
+                <button className="bs-qty-btn" onClick={() => setPackCount(packCount - 1)}><Minus size={16}/></button>
+                <div style={{ display:"flex", alignItems:"baseline", gap:6, background:"#fff", border:`1px solid ${C.border}`, borderRadius:8, padding:"8px 14px" }}>
+                  <input className="bs-num" style={{ width:60, border:"none", outline:"none", fontSize:20, fontWeight:700, color:C.text }} value={packCount} onChange={e => setPackCount(parseInt(e.target.value.replace(/\D/g,"")||"0"))} />
+                  <span style={{ fontSize:14, color:C.muted }}>{packNoun(packCount)}</span>
                 </div>
-                {minUnits > 1 && <div style={{ fontSize:11.5, color:C.muted, marginTop:6 }}>Unità minima vendibile per questo fornitore: {minUnits} ({(minUnits*unitSizeKg).toLocaleString("it-IT")} {massUnit}).</div>}
-              </>) : (
-                <div style={{ fontSize:13.5, color:C.text, display:"flex", alignItems:"baseline", gap:6, flexWrap:"wrap" }}>
-                  <b className="bs-num" style={{ fontSize:18 }}>{unitCount.toLocaleString("it-IT")}</b> unità <span style={{ color:C.muted }}>= <b className="bs-num" style={{ color:C.text }}>{qty.toLocaleString("it-IT")} {massUnit}</b> totali</span>
-                </div>
-              )}
+                <button className="bs-qty-btn" onClick={() => setPackCount(packCount + 1)}><Plus size={16}/></button>
+                <div style={{ fontSize:13, color:C.muted, marginLeft:2 }}>= <b className="bs-num" style={{ color:C.text }}>{unitCount.toLocaleString("it-IT")}</b> unità · <b className="bs-num" style={{ color:C.text }}>{qty.toLocaleString("it-IT")} {massUnit}</b> totali</div>
+              </div>
+              {minPackCount > 1 && <div style={{ fontSize:11.5, color:C.muted, marginTop:6 }}>Minimo per questo fornitore: {minPackCount} {packNoun(minPackCount)} ({(minUnits*unitSizeKg).toLocaleString("it-IT")} {massUnit}).</div>}
               {/* Avviso non bloccante: quantità oltre l'ultima fascia FINITA del fornitore espanso. */}
               {overTierCap && (
                 <div style={{ display:"flex", gap:8, alignItems:"flex-start", marginTop:12, background:"#FFFBEB", border:"1px solid #FDE68A", borderRadius:10, padding:"10px 12px", fontSize:12.5, color:"#92400E", lineHeight:1.5 }}>
