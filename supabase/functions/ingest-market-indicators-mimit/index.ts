@@ -8,10 +8,11 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 //   anagrafica_impianti_attivi.csv: idImpianto|...|Tipo Impianto|...
 // Media nazionale self-service (isSelf=1) esclusi gli impianti autostradali
 // (Tipo Impianto = 'Autostradale' dall'anagrafica). Lo snapshot e' giornaliero e
-// senza storico: si salva il punto del giorno in un canale laterale (piazza='giorno')
-// e si ricalcola la HEADLINE settimanale (piazza null, lunedi' della settimana ISO)
-// come media dei giorni della settimana — curva leggibile. Licenza IODL 2.0.
-// Protetta da x-cron-secret (deploy con verify_jwt=false).
+// senza storico: NON si persiste il dato giornaliero come serie. Si scrive solo
+// UNA riga per settimana ISO (lunedi'->domenica); la media settimanale e'
+// progressiva e vive dentro raw.days {data: valore} della riga stessa. Ogni run
+// giornaliero aggiorna il valore del giorno (idempotente) e ricalcola la media.
+// Licenza IODL 2.0. Protetta da x-cron-secret (deploy con verify_jwt=false).
 
 const PREZZO = "https://www.mimit.gov.it/images/exportCSV/prezzo_alle_8.csv";
 const ANAG = "https://www.mimit.gov.it/images/exportCSV/anagrafica_impianti_attivi.csv";
@@ -106,49 +107,51 @@ Deno.serve(async (req) => {
       a.sum += p; a.count += 1;
     }
 
-    // 3) upsert dei punti GIORNALIERI (canale laterale piazza='giorno')
-    const dailyRows = [];
+    // 3) media nazionale del giorno per carburante
     const todayAvg = {};
     for (const ind of mimit) {
       const a = agg[ind.slug];
       if (!a || a.count === 0) continue;
-      const avg = Math.round((a.sum / a.count) * 1000) / 1000;
-      todayAvg[ind.slug] = { avg, n: a.count };
-      dailyRows.push({ indicator_slug: ind.slug, ref_date: refDate, piazza: "giorno", valore: avg });
+      todayAvg[ind.slug] = Math.round((a.sum / a.count) * 1000) / 1000;
     }
-    if (dailyRows.length === 0) return json({ error: "NO_DATA", refDate }, 200);
-    const { error: dErr } = await supaAdmin.rpc("upsert_indicator_history", { p_rows: dailyRows });
-    if (dErr) return json({ error: "UPSERT_DAILY_ERROR", detail: dErr.message }, 500);
+    if (Object.keys(todayAvg).length === 0) return json({ error: "NO_DATA", refDate }, 200);
 
-    // 4) ricalcola la HEADLINE settimanale (media dei giorni della settimana ISO)
+    // 4) NIENTE riga giornaliera: si scrive SOLO la riga SETTIMANALE (lunedi'->
+    // domenica). La media della settimana e' progressiva e vive dentro raw.days
+    // {data: valore} della singola riga della settimana. Ogni giorno si legge la
+    // riga esistente, si aggiorna il valore del giorno (idempotente: ri-eseguire
+    // lo stesso giorno sovrascrive) e si ricalcola la media. Cosi' non si persiste
+    // il dato giornaliero come serie, solo la settimanale (come da specifica).
     const monday = mondayOf(refDate);
     const sunday = addDays(monday, 6);
     const idToSlug = {};
     for (const ind of mimit) idToSlug[ind.id] = ind.slug;
-    const { data: weekDaily, error: rErr } = await supaAdmin
+    const { data: existing, error: rErr } = await supaAdmin
       .from("market_indicator_history")
-      .select("indicator_id, valore")
-      .eq("piazza", "giorno").gte("ref_date", monday).lte("ref_date", sunday)
+      .select("indicator_id, raw")
+      .is("piazza", null).is("variante", null).eq("ref_date", monday)
       .in("indicator_id", mimit.map((m) => m.id));
     if (rErr) return json({ error: "READ_WEEK_ERROR", detail: rErr.message }, 500);
-    const wk = {};
-    for (const row of weekDaily || []) {
-      const slug = idToSlug[row.indicator_id]; if (!slug) continue;
-      const w = wk[slug] || (wk[slug] = { sum: 0, count: 0 });
-      w.sum += Number(row.valore); w.count += 1;
-    }
-    const headRows = [];
-    for (const [slug, w] of Object.entries(wk)) {
-      headRows.push({ indicator_slug: slug, ref_date: monday, ref_date_end: sunday, valore: Math.round((w.sum / w.count) * 1000) / 1000 });
-    }
-    let upserted = 0;
-    if (headRows.length) {
-      const { data: u, error: hErr } = await supaAdmin.rpc("upsert_indicator_history", { p_rows: headRows });
-      if (hErr) return json({ error: "UPSERT_HEAD_ERROR", detail: hErr.message }, 500);
-      upserted = u;
+    const prevDays = {};
+    for (const row of existing || []) {
+      const slug = idToSlug[row.indicator_id];
+      if (slug) prevDays[slug] = (row.raw && row.raw.days) ? row.raw.days : {};
     }
 
-    return json({ ok: true, fonte: "MIMIT", refDate, week: monday, stazioniAutostradali: highway.size, todayAvg, headline: headRows, upserted });
+    const headRows = [];
+    for (const ind of mimit) {
+      const avg = todayAvg[ind.slug];
+      if (avg == null) continue;
+      const days = { ...(prevDays[ind.slug] || {}) };
+      days[refDate] = avg;                                  // aggiorna/aggiunge il giorno
+      const vals = Object.values(days).map(Number);
+      const weekAvg = Math.round((vals.reduce((s, v) => s + v, 0) / vals.length) * 1000) / 1000;
+      headRows.push({ indicator_slug: ind.slug, ref_date: monday, ref_date_end: sunday, valore: weekAvg, raw: { days } });
+    }
+    const { data: upserted, error: hErr } = await supaAdmin.rpc("upsert_indicator_history", { p_rows: headRows });
+    if (hErr) return json({ error: "UPSERT_HEAD_ERROR", detail: hErr.message }, 500);
+
+    return json({ ok: true, fonte: "MIMIT", refDate, week: monday, stazioniAutostradali: highway.size, todayAvg, headline: headRows.map(r => ({ slug: r.indicator_slug, valore: r.valore, giorni: Object.keys(r.raw.days).length })), upserted });
   } catch (e) {
     return json({ error: "INTERNAL_ERROR", detail: String(e) }, 500);
   }
