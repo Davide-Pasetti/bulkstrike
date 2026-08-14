@@ -234,7 +234,11 @@ export default function AndamentoPrezziPage() {
     if (target) {
       setExpanded(target);
       didAutoExpand.current = true;
-      setTimeout(() => { const el = document.getElementById(`ind-${target}`); if (el) el.scrollIntoView({ behavior: "smooth", block: "center" }); }, 140);
+      // Scroll SENZA "smooth": l'animazione parte mentre il grafico dell'indicatore
+      // si sta ancora caricando e in pratica non arriva mai a destinazione (verificato
+      // in produzione: la pagina restava in cima). Con un deep-link è comunque meglio
+      // atterrare già posizionati.
+      setTimeout(() => { const el = document.getElementById(`ind-${target}`); if (el) el.scrollIntoView({ block: "center" }); }, 140);
     }
   }, [rows, loggedIn, followedInd, flatOrder, deepSlug]);
 

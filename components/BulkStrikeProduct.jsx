@@ -286,7 +286,7 @@ export default function ProductPage() {
   const [selectedId, setSelectedId] = useState(null);   // null = auto best (prezzo netto piu basso)
   const [variantFilters, setVariantFilters] = useState({}); // { granulometria: "fine", ... } — un fornitore senza questa esatta variante non compare
   const [selectedFormatIdx, setSelectedFormatIdx] = useState(0); // indice del formato scelto tra quelli del fornitore in evidenza
-  const [packMode, setPackMode] = useState("sfuso"); // aggregazione: "sfuso"|"pack"|"pallet"|"c20"|"c40"
+  const [packModeRaw, setPackMode] = useState("sfuso"); // aggregazione: "sfuso"|"pack"|"pallet"|"c20"|"c40"
   const [showSpecs, setShowSpecs] = useState(false);
   const [openQa, setOpenQa] = useState(null);
 
@@ -722,6 +722,11 @@ export default function ProductPage() {
     : mode === "pallet" ? unitsPerPallet
     : mode === "c20" ? unitsPerContainer20
     : mode === "c40" ? unitsPerContainer40 : 1;
+  // Il fornitore in evidenza può cambiare (filtri, ordinamento) verso uno che per
+  // questo formato non dichiara una confezione: l'opzione "Confezione da N" sparisce
+  // dalla tendina, quindi ricadiamo su "Sfuso" invece di continuare a contare in
+  // confezioni con moltiplicatore 1 (tendina su "Sfuso" e stepper su "confezioni").
+  const packMode = (packModeRaw === "pack" && !packUnits) ? "sfuso" : packModeRaw;
   const packMult = packMultFor(packMode);
   // Etichetta dell'unità contata (singolare/plurale dove serve).
   const packNoun = (n) => packMode === "pack" ? (n === 1 ? "confezione" : "confezioni")
@@ -734,13 +739,14 @@ export default function ProductPage() {
   const setPackCount = (n) => setQtySafe(Math.max(minPackCount, n) * packMult * unitSizeKg);
   // Cambio Confezione: converte il totale attuale nella nuova unità di conteggio
   // (arrotonda al più vicino; se sotto il minimo d'ordine, per eccesso). Non tocca
-  // selectedFormatIdx. "Sfuso" incluso (moltiplicatore 1).
+  // selectedFormatIdx né il fornitore scelto — la confezione È definita dal fornitore
+  // in evidenza, deselezionarlo farebbe sparire l'opzione appena scelta.
+  // "Sfuso" incluso (moltiplicatore 1).
   const applyPackMode = (mode) => {
     const newMult = packMultFor(mode);
     const newMin = Math.max(1, Math.ceil(minUnits / newMult));
     const converted = Math.max(newMin, Math.round(qty / (newMult * unitSizeKg)));
     setPackMode(mode);
-    setSelectedId(null);
     setQtySafe(converted * newMult * unitSizeKg);
   };
   // Soglia fasce di prezzo del fornitore espanso: se la sua ultima fascia è
