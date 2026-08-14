@@ -33,7 +33,7 @@ function StatusBadge({ status, note }) {
   return <span className="mp-chip" style={{ background:"#FFFBEB", color:C.amber }}><Clock size={11}/> In verifica</span>;
 }
 
-const emptyFormat = () => ({ label:"sacco", size_kg:25 });
+const emptyFormat = () => ({ label:"sacco", size_kg:25, pack_units:"" });
 const emptyAttr = () => ({ key:"", value:"" });
 const emptyTier = () => ({ min_kg:"", max_kg:"", price_per_kg:"" });
 const emptyWine = () => ({ price_per_hl_grado:"", alcohol_degree:"", available_hl:"", vintage:"", production_zone:"", total_acidity_g_l:"", total_so2_mg_l:"", organic:false, available_until:"", notes:"" });
@@ -147,7 +147,7 @@ export default function MyProductsPage({ inShell = false }) {
     setMinOrderKg(v.min_order_kg ?? "");
     setLeadTimeDays(v.lead_time_days ?? "");
     setCertifications((v.certifications || []).join(", "));
-    setFormats(v.available_formats?.length ? v.available_formats.map(f => ({ label:f.label, size_kg:f.size_kg })) : [emptyFormat()]);
+    setFormats(v.available_formats?.length ? v.available_formats.map(f => ({ label:f.label, size_kg:f.size_kg, pack_units:f.pack_units ?? "" })) : [emptyFormat()]);
     setAttributes(Object.entries(v.variant_attributes || {}).map(([key,value]) => ({ key, value })));
     setTiers(v.price_tiers?.length ? v.price_tiers.map(t => ({ min_kg:t.min_kg, max_kg:t.max_kg ?? "", price_per_kg:t.price_per_kg })) : [emptyTier()]);
     // Prefill specifiche enologiche se è un listing a campionatura (embed 1:1).
@@ -214,7 +214,7 @@ export default function MyProductsPage({ inShell = false }) {
       min_kg: Number(t.min_kg), max_kg: t.max_kg === "" ? null : Number(t.max_kg), price_per_kg: Number(t.price_per_kg),
     }));
     if (validTiers.length === 0) { setErr("Inserisci almeno uno scaglione di prezzo (kg minimo e prezzo)."); return; }
-    const validFormats = formats.filter(f => f.label && f.size_kg).map(f => ({ label:f.label, size_kg:Number(f.size_kg) }));
+    const validFormats = formats.filter(f => f.label && f.size_kg).map(f => ({ label:f.label, size_kg:Number(f.size_kg), pack_units: f.pack_units ? Number(f.pack_units) : null }));
     const attrObj = Object.fromEntries(attributes.filter(a => a.key && a.value).map(a => [a.key.trim(), a.value.trim()]));
 
     const payload = {
@@ -265,7 +265,7 @@ export default function MyProductsPage({ inShell = false }) {
         min_order_kg: v.min_order_kg ?? null,
         lead_time_days: v.lead_time_days ?? null,
         certifications: v.certifications || [],
-        available_formats: v.available_formats?.length ? v.available_formats.map(f => ({ label:f.label, size_kg:Number(f.size_kg) })) : [emptyFormat()],
+        available_formats: v.available_formats?.length ? v.available_formats.map(f => ({ label:f.label, size_kg:Number(f.size_kg), pack_units:f.pack_units ?? "" })) : [emptyFormat()],
         variant_attributes: v.variant_attributes || {},
       };
       const row = await addSupplierProductVariant(v.product.id, payload);
@@ -645,11 +645,12 @@ export default function MyProductsPage({ inShell = false }) {
 
                 {/* FORMATI */}
                 <div style={{ marginBottom:16 }}>
-                  <label className="mp-label">Formati di vendita — a quante unità corrisponde 1 pezzo</label>
+                  <label className="mp-label">Formati di vendita — etichetta, kg/L per unità e (opzionale) quante unità in una confezione</label>
                   {formats.map((f,i) => (
-                    <div key={i} className="mp-row-grid" style={{ gridTemplateColumns:"1fr 1fr auto" }}>
+                    <div key={i} className="mp-row-grid" style={{ gridTemplateColumns:"1fr 1fr 1fr auto" }}>
                       <input className="mp-input" value={f.label} onChange={e => updateFormatRow(i, { label:e.target.value })} placeholder="Es. sacco, tanica, big bag" />
                       <input className="mp-input" type="number" value={f.size_kg} onChange={e => updateFormatRow(i, { size_kg:e.target.value })} placeholder="kg/L per unità" />
+                      <input className="mp-input" type="number" value={f.pack_units ?? ""} onChange={e => updateFormatRow(i, { pack_units:e.target.value })} placeholder="Confezione (unità, opz.)" />
                       <button onClick={() => removeFormatRow(i)} disabled={formats.length===1} style={{ background:"none", border:`1px solid ${C.border}`, borderRadius:8, width:36, height:36, cursor:formats.length===1?"default":"pointer", color:C.muted, opacity:formats.length===1?0.4:1 }}><Trash2 size={14}/></button>
                     </div>
                   ))}

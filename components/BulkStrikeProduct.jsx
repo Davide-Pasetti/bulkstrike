@@ -286,6 +286,7 @@ export default function ProductPage() {
   const [selectedId, setSelectedId] = useState(null);   // null = auto best (prezzo netto piu basso)
   const [variantFilters, setVariantFilters] = useState({}); // { granulometria: "fine", ... } — un fornitore senza questa esatta variante non compare
   const [selectedFormatIdx, setSelectedFormatIdx] = useState(0); // indice del formato scelto tra quelli del fornitore in evidenza
+  const [packMode, setPackMode] = useState("sfuso"); // aggregazione: "sfuso"|"pack"|"pallet"|"c20"|"c40"
   const [showSpecs, setShowSpecs] = useState(false);
   const [openQa, setOpenQa] = useState(null);
 
@@ -677,7 +678,15 @@ export default function ProductPage() {
   const minUnits = featured?.min_order_kg > 0 ? Math.max(1, Math.ceil(featured.min_order_kg / unitSizeKg)) : 1;
   const unitCount = Math.max(1, Math.round(qty / unitSizeKg));
   const setUnitCount = (n) => setQtySafe(Math.max(minUnits, n) * unitSizeKg);
-  const selectFormat = (idx) => { setSelectedFormatIdx(idx); setQtySafe(Math.max(minUnits, unitCount) * formats[idx].size_kg); };
+  // Cambio formato: azzera a "Sfuso" e porta la quantità al minimo d'ordine
+  // espresso nel NUOVO formato (stessi kg del minimo, ri-espressi in unità).
+  const selectFormat = (idx) => {
+    const newSize = formats[idx].size_kg;
+    const minU = featured?.min_order_kg > 0 ? Math.max(1, Math.ceil(featured.min_order_kg / newSize)) : 1;
+    setSelectedFormatIdx(idx);
+    setPackMode("sfuso");
+    setQtySafe(minU * newSize);
+  };
 
   // Divieto d'asta a ribasso per legge (prodotti agricoli/alimentari grezzi):
   // niente apertura né adesione, solo Acquisto Rapido. Rif. D.Lgs. 198/2021.
@@ -704,6 +713,20 @@ export default function ProductPage() {
   const unitsPerPallet = Math.max(1, Math.round(palletKg / unitSizeKg));
   const unitsPerContainer20 = unitsPerPallet * 11;
   const unitsPerContainer40 = unitsPerPallet * 23;
+  // Confezione definita dal fornitore per il formato corrente (pack_units): nº di
+  // unità in una confezione, es. formato 1kg + pack_units 10 = "Confezione da 10".
+  const packUnits = currentFormat.pack_units && currentFormat.pack_units > 0 ? Number(currentFormat.pack_units) : null;
+  // Applica la modalità confezione: fissa la quantità (Confezione/Pallet/Container)
+  // oppure lascia lo stepper libero ("sfuso"). Non tocca selectedFormatIdx.
+  const applyPackMode = (mode) => {
+    setPackMode(mode);
+    setSelectedId(null);
+    if (mode === "pack" && packUnits) setUnitCount(packUnits);
+    else if (mode === "pallet") setUnitCount(unitsPerPallet);
+    else if (mode === "c20") setUnitCount(unitsPerContainer20);
+    else if (mode === "c40") setUnitCount(unitsPerContainer40);
+    // "sfuso": quantità corrente invariata, ricompare lo stepper.
+  };
   // Soglia fasce di prezzo del fornitore espanso: se la sua ultima fascia è
   // FINITA (non Infinity) e la quantità la supera, priceForQty estende l'ultimo
   // prezzo → mostrato ma non confermato dal fornitore. Avviso non bloccante.
@@ -926,38 +949,45 @@ export default function ProductPage() {
                 <span className="bs-chip" style={{ background:"#EFF6FF", color:"#1D4ED8" }}>Scaglione attuale: {tierLabel(qty)}</span>
               </div>
 
-              <div style={{ fontSize:12.5, fontWeight:600, color:C.muted, marginBottom:8 }}>Seleziona formato disponibile</div>
-              <div style={{ display:"flex", gap:6, marginBottom:16, flexWrap:"wrap" }}>
-                {formats.map((f,i) => (
-                  <button key={i} onClick={() => selectFormat(i)} style={{ padding:"8px 14px", borderRadius:7, border:`1px solid ${selectedFormatIdx===i?C.blue:C.border}`, background:selectedFormatIdx===i?"#EFF6FF":"#fff", color:selectedFormatIdx===i?C.blue:C.text, fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:"Inter,system-ui" }}>
-                    {f.size_kg} {massUnit}/{f.label}
-                  </button>
-                ))}
+              {/* Due tendine in cascata: Formato (unità di vendita) → Confezione (come aggregarla) */}
+              <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))", gap:12, marginBottom:16 }}>
+                <div>
+                  <label style={{ display:"block", fontSize:12.5, fontWeight:600, color:C.muted, marginBottom:6 }}>Formato</label>
+                  <select value={selectedFormatIdx} onChange={e => selectFormat(Number(e.target.value))}
+                    style={{ width:"100%", padding:"9px 12px", borderRadius:7, border:`1px solid ${C.border}`, background:"#fff", color:C.text, fontSize:13.5, fontWeight:600, cursor:"pointer", fontFamily:"Inter,system-ui" }}>
+                    {formats.map((f,i) => <option key={i} value={i}>{f.size_kg} {massUnit}/{f.label}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label style={{ display:"block", fontSize:12.5, fontWeight:600, color:C.muted, marginBottom:6 }}>Confezione</label>
+                  <select value={packMode} onChange={e => applyPackMode(e.target.value)}
+                    style={{ width:"100%", padding:"9px 12px", borderRadius:7, border:`1px solid ${C.border}`, background:"#fff", color:C.text, fontSize:13.5, fontWeight:600, cursor:"pointer", fontFamily:"Inter,system-ui" }}>
+                    <option value="sfuso">Sfuso</option>
+                    {packUnits && <option value="pack">Confezione da {packUnits} ({(packUnits*unitSizeKg).toLocaleString("it-IT")} {massUnit})</option>}
+                    <option value="pallet">Pallet ({unitsPerPallet} unità · {(unitsPerPallet*unitSizeKg).toLocaleString("it-IT")} {massUnit})</option>
+                    <option value="c20">Container 20' ({unitsPerContainer20} unità · {(unitsPerContainer20*unitSizeKg).toLocaleString("it-IT")} {massUnit})</option>
+                    <option value="c40">Container 40' ({unitsPerContainer40} unità · {(unitsPerContainer40*unitSizeKg).toLocaleString("it-IT")} {massUnit})</option>
+                  </select>
+                </div>
               </div>
 
-              <div style={{ fontSize:12.5, fontWeight:600, color:C.muted, marginBottom:8 }}>Seleziona il numero di unità per il formato selezionato · il prezzo si aggiorna in base allo scaglione di volume</div>
-              <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap" }}>
-                <button className="bs-qty-btn" onClick={() => setUnitCount(unitCount - 1)}><Minus size={16}/></button>
-                <div style={{ display:"flex", alignItems:"baseline", gap:6, background:"#fff", border:`1px solid ${C.border}`, borderRadius:8, padding:"8px 14px" }}>
-                  <input className="bs-num" style={{ width:60, border:"none", outline:"none", fontSize:20, fontWeight:700, color:C.text }} value={unitCount} onChange={e => setUnitCount(parseInt(e.target.value.replace(/\D/g,"")||"0"))} />
-                  <span style={{ fontSize:14, color:C.muted }}>unità</span>
+              {packMode === "sfuso" ? (<>
+                <div style={{ fontSize:12.5, fontWeight:600, color:C.muted, marginBottom:8 }}>Numero di unità · il prezzo si aggiorna in base allo scaglione di volume</div>
+                <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap" }}>
+                  <button className="bs-qty-btn" onClick={() => setUnitCount(unitCount - 1)}><Minus size={16}/></button>
+                  <div style={{ display:"flex", alignItems:"baseline", gap:6, background:"#fff", border:`1px solid ${C.border}`, borderRadius:8, padding:"8px 14px" }}>
+                    <input className="bs-num" style={{ width:60, border:"none", outline:"none", fontSize:20, fontWeight:700, color:C.text }} value={unitCount} onChange={e => setUnitCount(parseInt(e.target.value.replace(/\D/g,"")||"0"))} />
+                    <span style={{ fontSize:14, color:C.muted }}>unità</span>
+                  </div>
+                  <button className="bs-qty-btn" onClick={() => setUnitCount(unitCount + 1)}><Plus size={16}/></button>
+                  <div style={{ fontSize:13, color:C.muted, marginLeft:2 }}>= <b className="bs-num" style={{ color:C.text }}>{qty.toLocaleString("it-IT")} {massUnit}</b> totali</div>
                 </div>
-                <button className="bs-qty-btn" onClick={() => setUnitCount(unitCount + 1)}><Plus size={16}/></button>
-                <div style={{ fontSize:13, color:C.muted, marginLeft:2 }}>= <b className="bs-num" style={{ color:C.text }}>{qty.toLocaleString("it-IT")} {massUnit}</b> totali <span style={{ color:"#94A3B8" }}>(automatico)</span></div>
-              </div>
-              {minUnits > 1 && <div style={{ fontSize:11.5, color:C.muted, marginTop:6 }}>Unità minima vendibile per questo fornitore: {minUnits} ({(minUnits*unitSizeKg).toLocaleString("it-IT")} {massUnit}).</div>}
-              <div style={{ marginTop:10 }}>
-                <span style={{ fontSize:12.5, color:C.muted, marginRight:8 }}>Scelta rapida:</span>
-                <select
-                  value={unitCount===unitsPerPallet ? String(unitsPerPallet) : unitCount===unitsPerContainer20 ? String(unitsPerContainer20) : unitCount===unitsPerContainer40 ? String(unitsPerContainer40) : ""}
-                  onChange={e => { const n = Number(e.target.value); if (!n) return; setUnitCount(n); setSelectedId(null); setSelectedFormatIdx(0); }}
-                  style={{ padding:"8px 12px", borderRadius:7, border:`1px solid ${C.border}`, background:"#fff", color:C.text, fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:"Inter,system-ui" }}>
-                  <option value="">Pallet o container…</option>
-                  <option value={unitsPerPallet}>1 pallet ({unitsPerPallet} unità · {(unitsPerPallet*unitSizeKg).toLocaleString("it-IT")} {massUnit})</option>
-                  <option value={unitsPerContainer20}>1 container 20' ({unitsPerContainer20} unità · {(unitsPerContainer20*unitSizeKg).toLocaleString("it-IT")} {massUnit})</option>
-                  <option value={unitsPerContainer40}>1 container 40' ({unitsPerContainer40} unità · {(unitsPerContainer40*unitSizeKg).toLocaleString("it-IT")} {massUnit})</option>
-                </select>
-              </div>
+                {minUnits > 1 && <div style={{ fontSize:11.5, color:C.muted, marginTop:6 }}>Unità minima vendibile per questo fornitore: {minUnits} ({(minUnits*unitSizeKg).toLocaleString("it-IT")} {massUnit}).</div>}
+              </>) : (
+                <div style={{ fontSize:13.5, color:C.text, display:"flex", alignItems:"baseline", gap:6, flexWrap:"wrap" }}>
+                  <b className="bs-num" style={{ fontSize:18 }}>{unitCount.toLocaleString("it-IT")}</b> unità <span style={{ color:C.muted }}>= <b className="bs-num" style={{ color:C.text }}>{qty.toLocaleString("it-IT")} {massUnit}</b> totali</span>
+                </div>
+              )}
               {/* Avviso non bloccante: quantità oltre l'ultima fascia FINITA del fornitore espanso. */}
               {overTierCap && (
                 <div style={{ display:"flex", gap:8, alignItems:"flex-start", marginTop:12, background:"#FFFBEB", border:"1px solid #FDE68A", borderRadius:10, padding:"10px 12px", fontSize:12.5, color:"#92400E", lineHeight:1.5 }}>
