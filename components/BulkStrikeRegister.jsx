@@ -286,13 +286,16 @@ export default function RegisterPage() {
   const [done, setDone] = useState(false);
   const [f, setF] = useState({
     email:"", pass:"", pass2:"", company:"", vat:"", country:"Italia", city:"", address:"", phone:"", website:"", contact:"",
-    volume:"", deliveryAddr:"", sectors:[], materials:{},
+    volume:"", deliveryAddr:"", sectors:[], materials:{}, registrationMacroAreaId:"",
     emailMgmt:"", emailAdmin:"", pec:"", sdi:"", erpSystem:"", erpOther:"", ibanHolder:"", iban:"", bic:"",
     certs:[], capacity:"", served:[], supplierType:"producer",
     terms:false, privacy:false, ai:false,
   });
   const set = (k,v) => setF(s => ({ ...s, [k]:v }));
   const toggle = (k,v) => setF(s => ({ ...s, [k]: s[k].includes(v) ? s[k].filter(x=>x!==v) : [...s[k], v] }));
+  // Macro-aree per il campo "Settore principale" in step 2 (stesse 16 della home).
+  const [macroAreas, setMacroAreas] = useState([]);
+  useEffect(() => { getMacroAreas().then(m => setMacroAreas(m || [])).catch(() => {}); }, []);
 
   const steps = ["Account","Azienda", type==="supplier"?"Catalogo":type==="carrier"?"Pagamenti":"Esigenze"];
   const canConsent = f.terms && f.privacy && f.ai;
@@ -635,6 +638,12 @@ export default function RegisterPage() {
                   </Field>
                   <Field icon={<User size={14} color={C.muted}/>} label="Persona di riferimento" required>
                     <input style={inputStyle} placeholder="Nome e cognome" value={f.contact} onChange={e=>set("contact",e.target.value)}/>
+                  </Field>
+                  <Field icon={<Boxes size={14} color={C.muted}/>} label="Qual è il tuo settore principale?">
+                    <select style={inputStyle} value={f.registrationMacroAreaId} onChange={e=>set("registrationMacroAreaId",e.target.value)}>
+                      <option value="">Seleziona (facoltativo)…</option>
+                      {macroAreas.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                    </select>
                   </Field>
                 </div>
               </>

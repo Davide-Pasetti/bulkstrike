@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { Bot, ArrowRight, ArrowUp, BarChart3, Check, Clock, ChevronRight, TrendingDown, Flame, Wine, Beef, Pill, SprayCan, FlaskConical, Palette, Recycle, Building2, Package, Shirt, Fuel, Sprout, Wheat, Grid3x3, Anvil, Zap } from "lucide-react";
-import { getMacroAreas, getMacroAreasCached, getSectorProducts, getActivePools, getMyFollowedProducts, getSession, getMarketPriceSeries, getMarketIndexSectors, getMarketSelectorNav, getWatchedMaterials, getMyOrdersHistory, getMyFollowedSectors, getHomepageStats, getPriceTicker, getActivePromotions } from "@/lib/api";
+import { getMacroAreas, getMacroAreasCached, getActivePools, getMyFollowedProducts, getSession, getMarketPriceSeries, getMarketIndexSectors, getMarketSelectorNav, getWatchedMaterials, getMyOrdersHistory, getMyFollowedSectors, getHomepageStats, getPriceTicker, getActivePromotions } from "@/lib/api";
 import BulkStrikePromoCard from "@/components/BulkStrikePromoCard";
 import { ytdChange } from "@/lib/priceTrend";
 import { TIERS, tierIndexFor, tierFor } from "@/lib/tiers";
@@ -111,10 +111,6 @@ const AI_MSGS = [
 ];
 
 // Selezione della strip discovery preservata a livello di modulo: come la
-// cache della tassonomia, sopravvive al remount della pagina client (swap
-// shell statica → dinamica di cacheComponents), così il box sotto-aree
-// aperto non si chiude da solo.
-let _discoverySel = { macro: null, sector: null };
 
 // ─── MAIN ───────────────────────────────────────────────────────────────────
 function CookieBanner() {
@@ -178,12 +174,6 @@ export default function BulkStrikeLight() {
   // Stato iniziale dalla cache sincrona: al remount della pagina (swap shell
   // statica → dinamica di cacheComponents) il box categorie non flasha vuoto.
   const [macros, setMacros]               = useState(() => getMacroAreasCached() || []);
-  const [activeMacro, setActiveMacroState]   = useState(() => _discoverySel.macro);
-  const [activeSector, setActiveSectorState] = useState(() => _discoverySel.sector);
-  const [sectorProducts, setSectorProducts] = useState([]);
-  const [loadingProducts, setLoadingProducts] = useState(false);
-  const setActiveMacro  = (m) => { _discoverySel.macro = m; setActiveMacroState(m); };
-  const setActiveSector = (s) => { _discoverySel.sector = s; setActiveSectorState(s); };
 
   // Statistiche REALI (niente più numeri finti): conta-su animato verso i valori
   // veri restituiti da get_homepage_stats.
@@ -338,24 +328,6 @@ export default function BulkStrikeLight() {
     mq.addEventListener?.("change", update);
     return () => mq.removeEventListener?.("change", update);
   }, []);
-
-  const loadSectorProducts = (sec) => {
-    setSectorProducts([]); setLoadingProducts(true);
-    getSectorProducts(sec.id)
-      .then((ps) => { setSectorProducts(ps); setLoadingProducts(false); })
-      .catch(() => setLoadingProducts(false));
-  };
-
-  // dopo un remount con sotto-area già aperta (selezione preservata sopra),
-  // ricarica i suoi prodotti
-  useEffect(() => { if (activeSector) loadSectorProducts(activeSector); }, []);
-
-  // apre una sotto-area e carica SOLO i suoi prodotti (filtro rigoroso per settore)
-  const openSector = (sec) => {
-    if (activeSector?.id === sec.id) { setActiveSector(null); setSectorProducts([]); return; }
-    setActiveSector(sec);
-    loadSectorProducts(sec);
-  };
 
   const C = { blue:"#0EA5E9", dark:"#0284C7", text:"#0F172A", muted:"#64748B", border:"#E2E8F0", bg:"#F8FAFE", green:"#059669", red:"#DC2626", amber:"#D97706" };
 
@@ -530,68 +502,23 @@ export default function BulkStrikeLight() {
         </div>
       )}
 
-      {/* ── DISCOVERY a due livelli: macro-aree → sotto-aree → prodotti ── */}
+      {/* ── CATEGORIE: griglia macro-aree, ogni icona è un link diretto al
+             catalogo filtrato per quel settore (/catalogo?settore=<slug>) ── */}
       <div style={{ borderBottom:`1px solid ${C.border}`, background:"#fff" }}>
         <div style={{ maxWidth:1280, margin:"0 auto" }}>
-          {/* livello 1: macro-aree — griglia 8x2 (4x4 su mobile), tile a 3 toni:
-              non selezionata bianco/bordo grigio, selezionata blu petrolio pieno */}
           <div className="bs-cats">
             {macros.map(m => {
-              const on = activeMacro?.id === m.id;
               const { Ico, color } = MACRO_ICONS[m.slug] || { Ico: Package, color: PETROL };
               return (
-                <div key={m.id} className={`bs-cat${on?" active":""}`}
-                     onClick={() => { const next = on ? null : m; setActiveMacro(next); setActiveSector(null); setSectorProducts([]); }}>
-                  <Ico size={22} strokeWidth={1.8} color={on ? "#fff" : color} />
-                  <span className="bs-cat-label" style={{ fontSize:12.5, color:on?"#fff":"#0F172A", textAlign:"center", fontWeight:on?700:500 }}>
+                <a key={m.id} href={`/catalogo?settore=${encodeURIComponent(m.slug)}`} className="bs-cat" style={{ textDecoration:"none" }}>
+                  <Ico size={22} strokeWidth={1.8} color={color} />
+                  <span className="bs-cat-label" style={{ fontSize:12.5, color:"#0F172A", textAlign:"center", fontWeight:500 }}>
                     {m.name}
                   </span>
-                </div>
+                </a>
               );
             })}
           </div>
-
-          {/* livello 2: sotto-aree della macro selezionata */}
-          {activeMacro && (
-            <div style={{ padding:"12px 16px", display:"flex", flexWrap:"wrap", gap:8, borderTop:`1px solid ${C.border}`, background:"#FAFCFF" }}>
-              {(activeMacro.sub_areas || []).filter(s => (s.product_count||0) > 0).map(s => {
-                const on = activeSector?.id === s.id;
-                return (
-                  <div key={s.id} onClick={() => openSector(s)}
-                       style={{ display:"inline-flex", alignItems:"center", gap:7, padding:"8px 14px", borderRadius:100, cursor:"pointer",
-                                border:`1.5px solid ${on?"#0369A1":C.border}`, background:on?"#EFF6FF":"#fff",
-                                fontSize:13, fontWeight:on?700:500, color:on?"#0369A1":C.text, whiteSpace:"nowrap" }}>
-                    {s.name}
-                    <span style={{ fontSize:11, color:on?"#0369A1":C.muted, background:on?"#DBEAFE":"#F1F5F9", borderRadius:100, padding:"1px 7px", fontWeight:700 }}>{s.product_count}</span>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-
-          {/* livello 3: prodotti della sotto-area selezionata (solo di quel settore) */}
-          {activeSector && (
-            <div style={{ padding:"14px 16px 20px", borderTop:`1px solid ${C.border}` }}>
-              {loadingProducts ? (
-                <div style={{ fontSize:13, color:C.muted, padding:"8px 2px" }}>Caricamento prodotti…</div>
-              ) : (
-                <>
-                  <div style={{ fontSize:13, color:C.muted, margin:"0 0 10px" }}>
-                    {sectorProducts.length} prodotti in <b style={{ color:C.text }}>{activeSector.name}</b>
-                  </div>
-                  <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))", gap:8 }}>
-                    {sectorProducts.map(p => (
-                      <div key={p.id} onClick={() => { window.location.href = `/prodotto?id=${p.id}`; }}
-                           style={{ padding:"10px 12px", border:`1px solid ${C.border}`, borderRadius:9, cursor:"pointer", fontSize:13, color:C.text, background:"#fff", display:"flex", alignItems:"center", justifyContent:"space-between", gap:8 }}>
-                        <span>{p.canonical_name}</span>
-                        <ChevronRight size={14} color={C.muted} />
-                      </div>
-                    ))}
-                  </div>
-                </>
-              )}
-            </div>
-          )}
         </div>
       </div>
 

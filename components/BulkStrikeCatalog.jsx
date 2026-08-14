@@ -8,9 +8,9 @@
 // La barra di ricerca in nav usa il componente condiviso ProductSearch:
 // dropdown di suggerimenti (nome+CAS+E-number+sinonimi) e, in parallelo,
 // filtra live la griglia mentre digiti (onQueryChange → setQ).
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { ChevronRight, X, Flame, Package, SlidersHorizontal, ShieldCheck, Gavel, Layers, FileCheck2, Boxes, Star, Tag } from "lucide-react";
-import { getCatalog, getMacroAreas, getChemicalClasses, getMyFollowedProducts, getMyFollowedSectors, followSector, unfollowSector, getSession } from "@/lib/api";
+import { getCatalog, getMacroAreas, getChemicalClasses, getMyFollowedProducts, getMyFollowedSectors, followSector, unfollowSector, getSession, getMyCompany } from "@/lib/api";
 import BulkStrikeNav from "@/components/BulkStrikeNav";
 import ProductFollowButton from "@/components/BulkStrikeProductFollow";
 import BulkStrikeCatalogFilters from "@/components/BulkStrikeCatalogFilters";
@@ -49,22 +49,26 @@ export default function CatalogPage() {
   const [poolOnly, setPoolOnly] = useState(false);
   const [sort, setSort] = useState("name");
   const [showFilters, setShowFilters] = useState(false);
-  const [favOnly, setFavOnly] = useState(true);          // default: solo preferiti
+  const [favOnly, setFavOnly] = useState(false);         // non più default: il default è la categoria di registrazione
   const [followedIds, setFollowedIds] = useState(null);  // Set | null (non caricato)
   const [loggedIn, setLoggedIn] = useState(false);
+  const [regMacroId, setRegMacroId] = useState(null); // registration_macro_area_id della company (uuid)
+  const urlSectorRef = useRef(false);                 // l'URL portava un settore esplicito → vince sul default profilo
 
   useEffect(() => {
     Promise.all([getCatalog(), getMacroAreas(), getChemicalClasses()])
       .then(([c, m, cg]) => { setAll(c || []); setMacros(m || []); setChemGroups(cg || []); setLoading(false); })
       .catch(() => setLoading(false));
     const sp = new URLSearchParams(window.location.search);
-    if (sp.get("macro")) setActiveMacro(sp.get("macro"));
+    // "settore" (link dalle icone home) è un alias di "macro": stesso slug macro_areas.
+    const urlSettore = sp.get("settore") || sp.get("macro");
+    if (urlSettore) { setActiveMacro(urlSettore); urlSectorRef.current = true; }
     if (sp.get("sector")) setActiveSector(sp.get("sector"));
     if (sp.get("sostanza")) setActiveClasses(new Set(sp.get("sostanza").split(",").map(s => s.trim()).filter(Boolean)));
     if (sp.get("q")) setQ(sp.get("q"));
     // Filtro preselezionato da URL → apri la tendina che lo contiene, altrimenti
     // il filtro attivo resterebbe nascosto dentro una sezione chiusa.
-    if (sp.get("macro") || sp.get("sector")) setOpenAree(true);
+    if (urlSettore || sp.get("sector")) setOpenAree(true);
     if (sp.get("sostanza")) setOpenChemGroups(new Set(["famiglia-chimica", "tipo-materiale"]));
     // Stelle dei settori: visibili (vuote) anche da anonimo, la RPC ritorna [].
     getMyFollowedSectors()
@@ -76,8 +80,20 @@ export default function CatalogPage() {
       getMyFollowedProducts()
         .then(list => setFollowedIds(new Set((list || []).map(x => x.product_id))))
         .catch(() => setFollowedIds(new Set()));
+      // Categoria di registrazione → default del filtro Settore (priorità dopo l'URL).
+      getMyCompany()
+        .then(co => { if (co && co.registration_macro_area_id) setRegMacroId(co.registration_macro_area_id); })
+        .catch(() => {});
     }).catch(() => setLoggedIn(false));
   }, []);
+
+  // Default Settore dalla categoria di registrazione: solo se l'URL non porta
+  // già un settore esplicito (priorità 1 = URL, 2 = profilo, 3 = nessuno).
+  useEffect(() => {
+    if (urlSectorRef.current || !regMacroId || !macros.length || activeMacro) return;
+    const slug = macros.find(m => m.id === regMacroId)?.slug;
+    if (slug) { setActiveMacro(slug); setOpenAree(true); }
+  }, [regMacroId, macros, activeMacro]);
 
   const hasFavs = !!(followedIds && followedIds.size > 0);
   // Preferiti attivo solo se loggato, con almeno un preferito e toggle ON.
