@@ -133,6 +133,10 @@ function mapDbSupplier(s) {
     // fornitore senza prezzo pubblicato.
     status: s.status || null,
     tiers,
+    // Ordine minimo del fornitore: senza questo campo la sezione quantità partiva
+    // sempre da 1 unità e le conversioni Formato/Confezione scendevano sotto il
+    // minimo dichiarato (il carrello poi bloccava l'ordine).
+    min_order_kg: s.min_order_kg ?? 0,
     shipBase: ship.shipBase,
     shipKg: ship.shipKg,
     formats: Array.isArray(s.formats) && s.formats.length ? s.formats : [{ label: "sacco", size_kg: 25 }],
