@@ -704,6 +704,12 @@ export default function ProductPage() {
   const unitsPerPallet = Math.max(1, Math.round(palletKg / unitSizeKg));
   const unitsPerContainer20 = unitsPerPallet * 11;
   const unitsPerContainer40 = unitsPerPallet * 23;
+  // Soglia fasce di prezzo del fornitore espanso: se la sua ultima fascia è
+  // FINITA (non Infinity) e la quantità la supera, priceForQty estende l'ultimo
+  // prezzo → mostrato ma non confermato dal fornitore. Avviso non bloccante.
+  const tierCapKg = (featured && Array.isArray(featured.tiers) && featured.tiers.length)
+    ? featured.tiers[featured.tiers.length - 1][0] : Infinity;
+  const overTierCap = !!featured && Number.isFinite(tierCapKg) && qty > tierCapKg;
   // best instant unit price across suppliers at this qty (for comparison with the active pool)
   const bestInstantUnit = ranked.length ? Math.min(...ranked.map(s => s.calc.unit)) : 0;
   const joinSavings = Math.max(0, (bestInstantUnit - pool.bestPrice) * qty);
@@ -940,18 +946,25 @@ export default function ProductPage() {
                 <div style={{ fontSize:13, color:C.muted, marginLeft:2 }}>= <b className="bs-num" style={{ color:C.text }}>{qty.toLocaleString("it-IT")} {massUnit}</b> totali <span style={{ color:"#94A3B8" }}>(automatico)</span></div>
               </div>
               {minUnits > 1 && <div style={{ fontSize:11.5, color:C.muted, marginTop:6 }}>Unità minima vendibile per questo fornitore: {minUnits} ({(minUnits*unitSizeKg).toLocaleString("it-IT")} {massUnit}).</div>}
-              <div style={{ display:"flex", gap:6, marginTop:10, flexWrap:"wrap" }}>
-                {[
-                  ["Minimo d'ordine", minUnits],
-                  ["1 pallet", unitsPerPallet],
-                  ["1 container 20'", unitsPerContainer20],
-                  ["1 container 40'", unitsPerContainer40],
-                ].map(([label,n]) => (
-                  <button key={label} onClick={() => { setUnitCount(n); setSelectedId(null); setSelectedFormatIdx(0); }} style={{ padding:"7px 12px", borderRadius:7, border:`1px solid ${unitCount===n?C.blue:C.border}`, background:unitCount===n?"#EFF6FF":"#fff", color:unitCount===n?C.blue:C.muted, fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:"Inter,system-ui" }}>
-                    {label} <span style={{ color:"#94A3B8" }}>({n} unità · {(n*unitSizeKg).toLocaleString("it-IT")} {massUnit})</span>
-                  </button>
-                ))}
+              <div style={{ marginTop:10 }}>
+                <span style={{ fontSize:12.5, color:C.muted, marginRight:8 }}>Scelta rapida:</span>
+                <select
+                  value={unitCount===unitsPerPallet ? String(unitsPerPallet) : unitCount===unitsPerContainer20 ? String(unitsPerContainer20) : unitCount===unitsPerContainer40 ? String(unitsPerContainer40) : ""}
+                  onChange={e => { const n = Number(e.target.value); if (!n) return; setUnitCount(n); setSelectedId(null); setSelectedFormatIdx(0); }}
+                  style={{ padding:"8px 12px", borderRadius:7, border:`1px solid ${C.border}`, background:"#fff", color:C.text, fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:"Inter,system-ui" }}>
+                  <option value="">Pallet o container…</option>
+                  <option value={unitsPerPallet}>1 pallet ({unitsPerPallet} unità · {(unitsPerPallet*unitSizeKg).toLocaleString("it-IT")} {massUnit})</option>
+                  <option value={unitsPerContainer20}>1 container 20' ({unitsPerContainer20} unità · {(unitsPerContainer20*unitSizeKg).toLocaleString("it-IT")} {massUnit})</option>
+                  <option value={unitsPerContainer40}>1 container 40' ({unitsPerContainer40} unità · {(unitsPerContainer40*unitSizeKg).toLocaleString("it-IT")} {massUnit})</option>
+                </select>
               </div>
+              {/* Avviso non bloccante: quantità oltre l'ultima fascia FINITA del fornitore espanso. */}
+              {overTierCap && (
+                <div style={{ display:"flex", gap:8, alignItems:"flex-start", marginTop:12, background:"#FFFBEB", border:"1px solid #FDE68A", borderRadius:10, padding:"10px 12px", fontSize:12.5, color:"#92400E", lineHeight:1.5 }}>
+                  <Info size={15} color="#D97706" style={{ flexShrink:0, marginTop:1 }}/>
+                  <span>Il fornitore ha indicato prezzi fino a <b>{tierCapKg.toLocaleString("it-IT")} {massUnit}</b> per questo formato: oltre questa soglia il prezzo mostrato è indicativo, non confermato. Contatta il fornitore o riduci la quantità.</span>
+                </div>
+              )}
             </div>
             )}
 
