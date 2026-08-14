@@ -122,6 +122,7 @@ function mapDbSupplier(s) {
     rating: s.rating ?? 0,
     reviews: s.reviews_count ?? 0,
     delivery: s.lead_time_days != null ? `${s.lead_time_days} gg` : "—",
+    leadTimeDays: s.lead_time_days ?? null, // valore grezzo per l'ordinamento "consegna"
     type: s.grade || (s.origin === "natural" ? "Naturale" : s.origin === "synthetic" ? "Sintetico" : "—"),
     purity,
     certs: s.certifications || [],
@@ -326,6 +327,7 @@ export default function ProductPage() {
   const [sampling, setSampling] = useState(null);   // get_product_sampling per le materie prime (purchase)
   const [wfCountry, setWfCountry] = useState("");   // nazione selezionata
   const [wfRegion, setWfRegion] = useState("");     // regione selezionata
+  const [sortBy, setSortBy] = useState("prezzo");   // ordinamento fornitori con prezzo: "prezzo" | "consegna"
   const [selectedSP, setSelectedSP] = useState(() => new Set());
   const [quantitaPartita, setQuantitaPartita] = useState("");
   const [specColore, setSpecColore] = useState("");
@@ -539,20 +541,38 @@ export default function ProductPage() {
   // come riga compatta. Il filtro Nazione/Regione vale per TUTTI, espanso incluso.
   const unifiedSuppliers = useMemo(() => {
     const pricedByCid = new Map(ranked.map(o => [o.company_id, o]));
+    // Ordinamento tra i fornitori CON prezzo: per costo (default) o per tempo di
+    // consegna crescente. Chi non ha il dato di consegna va in fondo al gruppo
+    // "con prezzo". I fornitori SENZA prezzo restano sempre in coda alla lista.
+    const cmpPriced = (pa, pb) => {
+      if (sortBy === "consegna") {
+        const da = pa.leadTimeDays, db = pb.leadTimeDays;
+        if (da == null && db == null) return pa.calc.preVatKg - pb.calc.preVatKg;
+        if (da == null) return 1;
+        if (db == null) return -1;
+        return da - db || pa.calc.preVatKg - pb.calc.preVatKg;
+      }
+      return pa.calc.preVatKg - pb.calc.preVatKg;
+    };
     return filteredSampleSuppliers
       .map(s => ({ s, priced: pricedByCid.get(s.company_id) || null }))
       .sort((a, b) => {
-        if (a.priced && b.priced) return a.priced.calc.preVatKg - b.priced.calc.preVatKg;
+        if (a.priced && b.priced) return cmpPriced(a.priced, b.priced);
         if (a.priced) return -1;
         if (b.priced) return 1;
         return 0; // senza prezzo: mantiene l'ordine della RPC (verificati prima)
       });
-  }, [ranked, filteredSampleSuppliers]);
-  // Fornitori con prezzo effettivamente visibili (già ordinati per costo).
+  }, [ranked, filteredSampleSuppliers, sortBy]);
+  // Fornitori con prezzo effettivamente visibili, nell'ordine scelto.
   const pricedInList = useMemo(() => unifiedSuppliers.filter(u => u.priced).map(u => u.priced), [unifiedSuppliers]);
-  // Il più conveniente TRA I FILTRATI: porta il badge "★ Più conveniente" dove si
-  // trova (espanso o compatto) e NON segue la selezione dell'utente.
-  const cheapestFilteredId = pricedInList.length ? pricedInList[0].id : null;
+  // Il più conveniente TRA I FILTRATI (badge "★ Più conveniente"): sempre il più
+  // economico per PREZZO, indipendente dall'ordinamento scelto, e NON segue la
+  // selezione dell'utente.
+  const cheapestFilteredId = useMemo(() => {
+    let best = null;
+    for (const p of pricedInList) if (best == null || p.calc.preVatKg < best.calc.preVatKg) best = p;
+    return best ? best.id : null;
+  }, [pricedInList]);
   // "In evidenza": in modalità campioni è il fornitore con prezzo espanso nella
   // lista — quello scelto dall'utente se è tra i filtrati con prezzo, altrimenti
   // il più conveniente filtrato (se il filtro esclude il più economico, il box
@@ -1103,6 +1123,21 @@ export default function ProductPage() {
                     </select>
                   </div>
                 </div>
+                {/* ORDINAMENTO — riguarda solo i fornitori con prezzo; quelli senza restano in fondo. */}
+                <div style={{ marginTop:12 }}>
+                  <label style={{ display:"block", fontSize:11, color:C.muted, fontWeight:600, marginBottom:5 }}>Ordina per</label>
+                  <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+                    {[["prezzo","Prezzo"],["consegna","Data di consegna"]].map(([key, label]) => {
+                      const on = sortBy === key;
+                      return (
+                        <button key={key} onClick={() => setSortBy(key)}
+                          style={{ display:"inline-flex", alignItems:"center", gap:5, padding:"6px 12px", borderRadius:100, fontSize:12.5, fontWeight:600, cursor:"pointer", fontFamily:"Inter,system-ui", border:`1px solid ${on?C.blue:C.border}`, background:on?"#EFF6FF":"#fff", color:on?C.dark:C.muted }}>
+                          {key==="prezzo" ? "€" : <Truck size={13}/>} {label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
 
               {/* CONTEGGIO + seleziona/deseleziona tutti i filtrati */}
@@ -1146,7 +1181,7 @@ export default function ProductPage() {
 
                           <label style={{ display:"inline-flex", alignItems:"center", gap:8, marginBottom:16, fontSize:13, fontWeight:600, color: sel ? "#9D174D" : C.muted, cursor:"pointer" }}>
                             <input type="checkbox" checked={sel} onChange={() => toggleSP(s.supplier_product_id)} aria-label={`Campiona ${priced.name}`} style={{ width:16, height:16, accentColor:"#9D174D", cursor:"pointer", flexShrink:0 }}/>
-                            Richiedi anche un campione da questo fornitore
+                            Richiedi un campione da questo fornitore
                           </label>
 
                           <div style={{ display:"flex", justifyContent:"space-between", gap:16, flexWrap:"wrap", marginBottom:18 }}>
@@ -1221,19 +1256,19 @@ export default function ProductPage() {
                        e "Seleziona" che lo espande QUI, sul posto (niente scrollTo). */
                     if (priced) {
                       return (
-                        <div key={s.supplier_product_id} style={{ display:"flex", alignItems:"stretch", gap:10 }}>
-                          <label style={{ display:"flex", alignItems:"center", paddingLeft:2, cursor:"pointer" }}>
-                            <input type="checkbox" checked={sel} onChange={() => toggleSP(s.supplier_product_id)} aria-label={`Campiona ${priced.name}`} style={{ width:17, height:17, accentColor:"#9D174D", cursor:"pointer", flexShrink:0 }}/>
-                          </label>
-                          <div className="bs-supplier-row" style={{ flex:1, minWidth:0, background: sel ? "#FDF2F8" : undefined, borderColor: sel ? "#9D174D" : undefined }}>
-                            <div>
-                              <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:3 }}>
-                                <SupplierName name={priced.name} companyId={priced.company_id} className="bs-suplink" style={{ fontSize:15, fontWeight:700 }}/><CountryFlag country={priced.origin} size={13} />
-                              </div>
-                              <div style={{ display:"flex", alignItems:"center", gap:8, fontSize:12, color:C.muted, flexWrap:"wrap" }}>
-                                <span style={{ display:"flex", alignItems:"center", gap:3 }}><Star size={11} fill={C.amber} color={C.amber}/> {priced.rating.toFixed(1)}</span>
-                                <span>{priced.type}</span>
-                                {priced.id===cheapestFilteredId && <span className="bs-chip" style={{ background:"#ECFDF5", color:C.green }}>★ Più conveniente</span>}
+                        <div key={s.supplier_product_id} className="bs-supplier-row" style={{ background: sel ? "#FDF2F8" : undefined, borderColor: sel ? "#9D174D" : undefined }}>
+                            <div style={{ display:"flex", alignItems:"flex-start", gap:10, minWidth:0 }}>
+                              {/* checkbox come primo figlio della riga, area click limitata all'input (la riga NON e' un label) */}
+                              <input type="checkbox" checked={sel} onChange={() => toggleSP(s.supplier_product_id)} aria-label={`Campiona ${priced.name}`} style={{ width:17, height:17, accentColor:"#9D174D", cursor:"pointer", flexShrink:0, marginTop:2 }}/>
+                              <div style={{ minWidth:0 }}>
+                                <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:3 }}>
+                                  <SupplierName name={priced.name} companyId={priced.company_id} className="bs-suplink" style={{ fontSize:15, fontWeight:700 }}/><CountryFlag country={priced.origin} size={13} />
+                                </div>
+                                <div style={{ display:"flex", alignItems:"center", gap:8, fontSize:12, color:C.muted, flexWrap:"wrap" }}>
+                                  <span style={{ display:"flex", alignItems:"center", gap:3 }}><Star size={11} fill={C.amber} color={C.amber}/> {priced.rating.toFixed(1)}</span>
+                                  <span>{priced.type}</span>
+                                  {priced.id===cheapestFilteredId && <span className="bs-chip" style={{ background:"#ECFDF5", color:C.green }}>★ Più conveniente</span>}
+                                </div>
                               </div>
                             </div>
                             <div className="bs-col-hide" style={{ textAlign:"center" }}>
@@ -1255,7 +1290,6 @@ export default function ProductPage() {
                             </div>
                             <button className="bs-btn-ghost" onClick={() => { setSelectedId(priced.id); setSelectedFormatIdx(0); }}>Seleziona</button>
                           </div>
-                        </div>
                       );
                     }
                     /* RIGA CAMPIONE — fornitore senza prezzo: checkbox + "Richiedi un preventivo". */
@@ -1896,9 +1930,20 @@ export default function ProductPage() {
                   </>);
                 })()}
               </div>
-            )) : (
-            <div style={{ border:`1px solid ${C.border}`, borderRadius:14, padding:18 }}>
-              <div style={{ fontSize:13, fontWeight:700, marginBottom:2 }}>Andamento prezzo</div>
+            )) : (() => {
+              // Deep-link SOLO quando c'è un indicatore collegato (ramo prim): tutto
+              // il box diventa un <a> verso /andamento-prezzi?slug=... (indicatore
+              // gia' aperto). Gli altri rami (prezzo reale ISMEA/CUN, nessun
+              // indicatore) restano <div> non cliccabili.
+              const hasMarket = priceSeries && Array.isArray(priceSeries.series) && priceSeries.series.length > 0;
+              const prim0 = prodInd && prodInd.primario;
+              const deepLink = (!hasMarket && prim0) ? `/andamento-prezzi?slug=${prim0.slug}` : null;
+              const boxStyle = { border:`1px solid ${C.border}`, borderRadius:14, padding:18, display:"block", ...(deepLink ? { cursor:"pointer", textDecoration:"none", color:"inherit" } : {}) };
+              const Box = deepLink ? "a" : "div";
+              const boxProps = deepLink ? { href: deepLink, style: boxStyle, title: "Apri l'andamento di questo indicatore" } : { style: boxStyle };
+              return (
+              <Box {...boxProps}>
+              <div style={{ fontSize:13, fontWeight:700, marginBottom:2, display:"flex", alignItems:"center", justifyContent:"space-between", gap:8 }}><span>Andamento prezzo</span>{deepLink && <ChevronRight size={15} color={C.blue} style={{ flexShrink:0 }}/>}</div>
               {(() => {
                 const hasMarket = priceSeries && Array.isArray(priceSeries.series) && priceSeries.series.length > 0;
                 if (hasMarket) {
@@ -1966,7 +2011,7 @@ export default function ProductPage() {
                       {isIdx
                         ? <>Indice di <b>tendenza settoriale</b> (base 2021=100), condiviso da più prodotti del settore: <b>non</b> il prezzo €/kg di questo specifico prodotto. </>
                         : <>Prezzo di mercato del comparto, riferimento indicativo. </>}
-                      Fonte: {prim.fonte}{prim.licenza?` · ${prim.licenza}`:""}. <a href="/andamento-prezzi" style={{ color:C.blue, fontWeight:700, textDecoration:"none" }}>Vedi su Andamento prezzi →</a>
+                      Fonte: {prim.fonte}{prim.licenza?` · ${prim.licenza}`:""}. <span style={{ color:C.blue, fontWeight:700 }}>Vedi su Andamento prezzi →</span>
                     </div>
                   </>);
                 }
@@ -1978,8 +2023,9 @@ export default function ProductPage() {
                   </div>
                 );
               })()}
-            </div>
-            )}
+              </Box>
+              );
+            })()}
 
             {/* SAMPLE / SAFETY NOTE — non pertinente ai prodotti a sola campionatura */}
             {!sampleOnly && (

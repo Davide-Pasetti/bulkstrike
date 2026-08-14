@@ -168,6 +168,16 @@ export default function AndamentoPrezziPage() {
   const [favOnly, setFavOnly] = useState(true);
   const [loggedIn, setLoggedIn] = useState(false);
   const [followedInd, setFollowedInd] = useState(null); // Set di slug, null = in caricamento
+  const [deepSlug, setDeepSlug] = useState(null); // ?slug= dalla scheda prodotto → apri quell'indicatore
+
+  // Deep-link ?slug=: apri quell'indicatore invece del primo. Se presente,
+  // disattivo "Preferiti" cosi' l'indicatore e' visibile anche se non e' seguito.
+  useEffect(() => {
+    try {
+      const s = new URLSearchParams(window.location.search).get("slug");
+      if (s) { setDeepSlug(s); setFavOnly(false); }
+    } catch { /* no-op */ }
+  }, []);
 
   useEffect(() => {
     getIndicatorScreener().then(setRows).catch(() => setRows([]));
@@ -219,8 +229,14 @@ export default function AndamentoPrezziPage() {
   useEffect(() => {
     if (didAutoExpand.current || rows == null) return;
     if (loggedIn && followedInd == null) return; // aspetta i preferiti (rispetta il default ON)
-    if (flatOrder.length > 0) { setExpanded(flatOrder[0].slug); didAutoExpand.current = true; }
-  }, [rows, loggedIn, followedInd, flatOrder]);
+    // deep-link ?slug= valido → apri quello e scrolla; altrimenti il primo in lista.
+    const target = (deepSlug && (rows || []).some(r => r.slug === deepSlug)) ? deepSlug : (flatOrder[0] && flatOrder[0].slug);
+    if (target) {
+      setExpanded(target);
+      didAutoExpand.current = true;
+      setTimeout(() => { const el = document.getElementById(`ind-${target}`); if (el) el.scrollIntoView({ behavior: "smooth", block: "center" }); }, 140);
+    }
+  }, [rows, loggedIn, followedInd, flatOrder, deepSlug]);
 
   const clearFilters = () => { setQ(""); setPriceOnly(false); setFamSel(new Set()); setFonteSel(new Set()); setFreqSel(new Set()); };
   const activeCount = (priceOnly ? 1 : 0) + famSel.size + fonteSel.size + freqSel.size;
@@ -331,7 +347,7 @@ export default function AndamentoPrezziPage() {
                     const open = expanded === r.slug;
                     const v = yoyPct(r);
                     return (
-                      <div key={r.slug} style={{ borderBottom: `1px solid #F1F5F9` }}>
+                      <div key={r.slug} id={`ind-${r.slug}`} style={{ borderBottom: `1px solid #F1F5F9`, scrollMarginTop: 88 }}>
                         <div onClick={() => setExpanded(open ? null : r.slug)} className="ap-row"
                           style={{ display: "grid", gridTemplateColumns: "1fr 130px 110px 120px 34px", gap: 10, padding: "12px 16px", alignItems: "center", cursor: "pointer", background: open ? C.bg : "#fff" }}>
                           <div>
