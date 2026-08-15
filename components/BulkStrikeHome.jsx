@@ -543,9 +543,11 @@ export default function BulkStrikeLight() {
             <p style={{ fontSize:17, color:C.muted, lineHeight:1.65, marginBottom:28, maxWidth:460 }}>
               Acquista sfuso insieme ad altri. Vendi a chi vuole davvero comprare. Aste a ribasso, aggregazione della domanda, prezzi in tempo reale. Da 1 kg a 50 tonnellate.
             </p>
+            {/* Un solo CTA: il percorso di registrazione fornitore è il tasto
+                "Registrati" nell'header (visibile ai non autenticati), non un
+                secondo bottone nell'hero. */}
             <div className="bs-cta-btns" style={{ display:"flex", gap:12, flexWrap:"wrap" }}>
               <button className="bs-btn" onClick={() => { window.location.href = "/registrati"; }}>Inizia ad acquistare <ArrowRight size={18} /></button>
-              <button className="bs-btn-out" onClick={() => { window.location.href = "/registrati"; }}>Diventa fornitore</button>
             </div>
             <div style={{ display:"flex", gap:20, marginTop:20, flexWrap:"wrap" }}>
               {["Registrazione gratuita","Nessun abbonamento","Asta senza impegno"].map(t => (
