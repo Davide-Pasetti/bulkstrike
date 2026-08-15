@@ -1,9 +1,13 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+// Parsing e aggregazione condivisi con il backfill storico
+// (scripts/backfill-mimit-storico.mjs): unica implementazione del filtro
+// self/non-autostradale e della media settimanale.
+import { parseHighwaySet, dailyAveragesByDesc, mondayOf, weekRow } from "../_shared/mimit-agg.js";
 
 // Ingest GIORNALIERO del MIMIT Osservaprezzi carburanti nel modello a indicatori
 // (market_indicators dove serie_ref->>'source'='mimit'). Due CSV per singolo
-// impianto, separatore PIPE '|' (cambiato il 10/02/2026):
+// impianto; il separatore e' rilevato dal file ('|' dal 10/02/2026, prima ';'):
 //   prezzo_alle_8.csv: idImpianto|descCarburante|prezzo|isSelf|dtComu
 //   anagrafica_impianti_attivi.csv: idImpianto|...|Tipo Impianto|...
 // Media nazionale self-service (isSelf=1) esclusi gli impianti autostradali
@@ -27,31 +31,6 @@ async function getCsv(url) {
   return new TextDecoder("latin1").decode(buf); // MIMIT usa Windows-1252
 }
 
-function headerIndex(lines) {
-  for (let i = 0; i < Math.min(lines.length, 8); i++) if (lines[i].toLowerCase().includes("idimpianto")) return i;
-  return -1;
-}
-
-function parsePrice(s) {
-  let x = String(s || "").trim();
-  if (x.includes(",") && !x.includes(".")) x = x.split(",").join(".");
-  const v = parseFloat(x);
-  return isFinite(v) ? v : null;
-}
-
-// lunedi' della settimana ISO di una data YYYY-MM-DD
-function mondayOf(dateStr) {
-  const d = new Date(`${dateStr}T00:00:00Z`);
-  const dow = (d.getUTCDay() + 6) % 7; // 0 = lunedi'
-  d.setUTCDate(d.getUTCDate() - dow);
-  return d.toISOString().slice(0, 10);
-}
-function addDays(dateStr, n) {
-  const d = new Date(`${dateStr}T00:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + n);
-  return d.toISOString().slice(0, 10);
-}
-
 Deno.serve(async (req) => {
   const supaAdmin = createClient(Deno.env.get("SUPABASE_URL"), Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"));
   const { data: cfg } = await supaAdmin.from("app_secrets").select("value").eq("key", "ingest_cron_secret").single();
@@ -69,51 +48,15 @@ Deno.serve(async (req) => {
 
     // 1) anagrafica -> set impianti autostradali
     const aTxt = await getCsv(ANAG);
-    const aLines = aTxt.split("\n");
-    const ah = headerIndex(aLines);
-    const acols = aLines[ah].split("|");
-    const iTipo = acols.findIndex((c) => c.toLowerCase().includes("tipo impianto"));
-    const highway = new Set();
-    for (let i = ah + 1; i < aLines.length; i++) {
-      const f = aLines[i].split("|");
-      if (f.length < acols.length) continue;
-      if ((f[iTipo] || "").trim().toLowerCase() === "autostradale") highway.add((f[0] || "").trim());
-    }
+    const highway = parseHighwaySet(aTxt);
 
-    // 2) prezzo -> media per carburante (self, non autostradale)
+    // 2) prezzo -> media nazionale del giorno per carburante (self, non autostradale)
     const pTxt = await getCsv(PREZZO);
     const pLines = pTxt.split("\n");
     // riga 0: 'Estrazione del YYYY-MM-DD' -> prendi l'ultimo token che sembra una data
     const tok = pLines[0].trim().split(" ").pop() || "";
     const refDate = (tok.length === 10 && tok[4] === "-" && tok[7] === "-") ? tok : new Date().toISOString().slice(0, 10);
-    const ph = headerIndex(pLines);
-    const pcols = pLines[ph].split("|");
-    const iDesc = pcols.findIndex((c) => c.toLowerCase().includes("desccarburante"));
-    const iPrezzo = pcols.findIndex((c) => c.toLowerCase() === "prezzo");
-    const iSelf = pcols.findIndex((c) => c.toLowerCase().includes("isself"));
-
-    const agg = {}; // slug -> {sum,count}
-    for (let i = ph + 1; i < pLines.length; i++) {
-      const f = pLines[i].split("|");
-      if (f.length < pcols.length) continue;
-      if ((f[iSelf] || "").trim() !== "1") continue;                 // solo self-service
-      const id = (f[0] || "").trim();
-      if (highway.has(id)) continue;                                  // no autostradali
-      const ind = byDesc[(f[iDesc] || "").trim()];
-      if (!ind) continue;                                             // solo i 3 carburanti base
-      const p = parsePrice(f[iPrezzo]);
-      if (p == null || p < 0.3 || p > 5) continue;                    // scarta valori assurdi
-      const a = agg[ind.slug] || (agg[ind.slug] = { sum: 0, count: 0 });
-      a.sum += p; a.count += 1;
-    }
-
-    // 3) media nazionale del giorno per carburante
-    const todayAvg = {};
-    for (const ind of mimit) {
-      const a = agg[ind.slug];
-      if (!a || a.count === 0) continue;
-      todayAvg[ind.slug] = Math.round((a.sum / a.count) * 1000) / 1000;
-    }
+    const todayAvg = dailyAveragesByDesc(pTxt, byDesc, highway);
     if (Object.keys(todayAvg).length === 0) return json({ error: "NO_DATA", refDate }, 200);
 
     // 4) NIENTE riga giornaliera: si scrive SOLO la riga SETTIMANALE (lunedi'->
@@ -123,7 +66,6 @@ Deno.serve(async (req) => {
     // lo stesso giorno sovrascrive) e si ricalcola la media. Cosi' non si persiste
     // il dato giornaliero come serie, solo la settimanale (come da specifica).
     const monday = mondayOf(refDate);
-    const sunday = addDays(monday, 6);
     const idToSlug = {};
     for (const ind of mimit) idToSlug[ind.id] = ind.slug;
     const { data: existing, error: rErr } = await supaAdmin
@@ -144,9 +86,8 @@ Deno.serve(async (req) => {
       if (avg == null) continue;
       const days = { ...(prevDays[ind.slug] || {}) };
       days[refDate] = avg;                                  // aggiorna/aggiunge il giorno
-      const vals = Object.values(days).map(Number);
-      const weekAvg = Math.round((vals.reduce((s, v) => s + v, 0) / vals.length) * 1000) / 1000;
-      headRows.push({ indicator_slug: ind.slug, ref_date: monday, ref_date_end: sunday, valore: weekAvg, raw: { days } });
+      const row = weekRow(ind.slug, monday, days);           // stessa media del backfill
+      if (row) headRows.push(row);
     }
     const { data: upserted, error: hErr } = await supaAdmin.rpc("upsert_indicator_history", { p_rows: headRows });
     if (hErr) return json({ error: "UPSERT_HEAD_ERROR", detail: hErr.message }, 500);

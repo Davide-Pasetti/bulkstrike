@@ -43,3 +43,6 @@ next-env.d.ts
 
 # Claude Code (worktree agent, config locale)
 .claude/
+
+# anteprima del backfill MIMIT (--dry-run), rigenerabile
+backfill-mimit-anteprima.json
