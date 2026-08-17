@@ -172,6 +172,8 @@ function mapDbProduct(p) {
 }
 // Segnalazione di un possibile fornitore per un prodotto senza offerte attive.
 // Nessun invio automatico: si apre il client email dell'utente, che decide se spedire.
+// Etichette dei tre tipi di richiesta: tendina del box "Richiedi" e popup di conferma.
+const REQ_LABEL = { campione:"Campione", preventivo:"Preventivo", contatto:"Essere ricontattato" };
 const SUGGEST_SUPPLIER_EMAIL = "davide@bulkstrike.com";
 function suggestSupplierMailto(productName) {
   const nome = productName || "—";
@@ -345,13 +347,15 @@ export default function ProductPage() {
   const [specDenomTipo, setSpecDenomTipo] = useState("");
   const [specDenomTesto, setSpecDenomTesto] = useState("");
   const [specAnnata, setSpecAnnata] = useState("");
-  // Box "Richiedi" (colonna sinistra, sopra il filtro): un solo modulo per i tre
-  // tipi di richiesta. Il tipo scelto vale per TUTTI i fornitori selezionati.
+  // Box "Richiedi" (colonna destra, dove stava il box campionatura): un solo
+  // modulo per i tre tipi di richiesta. Il tipo scelto vale per TUTTI i
+  // fornitori selezionati.
   const [reqTypeRaw, setReqType] = useState("campione"); // 'campione' | 'preventivo' | 'contatto'
   const [reqMsg, setReqMsg] = useState("");
   const [reqBusy, setReqBusy] = useState(false);
   const [reqErr, setReqErr] = useState("");
   const [reqResult, setReqResult] = useState(null);   // { inviate, fallite, dettaglio } | null
+  const [reqConfirm, setReqConfirm] = useState(false); // popup di conferma prima dell'invio
   const [piazzaData, setPiazzaData] = useState(null);
   const [selectedPiazze, setSelectedPiazze] = useState([]); // piazze mostrate sul grafico vino
   useEffect(() => { if (productId) isFollowingProduct(productId).then(setFollowingProduct).catch(() => {}); }, [productId]);
@@ -648,6 +652,12 @@ export default function ProductPage() {
     () => (reqType === "campione" ? richiestaSuppliers.filter(s => s.campionabile) : richiestaSuppliers),
     [richiestaSuppliers, reqType]
   );
+  // I fornitori che l'invio toccherà davvero: è la lista che finisce nel popup di
+  // conferma e nel riepilogo del box, ed è la stessa che submitRichiesta spedisce.
+  const reqScelti = useMemo(
+    () => richiestaSuppliers.filter(s => selectedSP.has(s.supplier_product_id)),
+    [richiestaSuppliers, selectedSP]
+  );
   // Passando a "Campione" restano selezionati solo i fornitori che i campioni li
   // fanno davvero: altrimenti l'invio partirebbe con righe destinate a fallire.
   useEffect(() => {
@@ -677,7 +687,7 @@ export default function ProductPage() {
   // trigger email). Preventivo/Contatto -> request_supplier_contact_bulk, che
   // avvisa per email l'operatore BulkStrike.
   async function submitRichiesta() {
-    const scelti = richiestaSuppliers.filter(s => selectedSP.has(s.supplier_product_id));
+    const scelti = reqScelti;
     if (scelti.length === 0) return;
     if (!(await requireAuth())) return; // sloggato → /registrati
     setReqBusy(true); setReqErr(""); setReqResult(null);
@@ -1232,96 +1242,11 @@ export default function ProductPage() {
             </div>
             </>)}
 
-            {/* BOX RICHIESTA — un solo modulo per campione, preventivo e contatto.
-                Sta sopra il filtro perché è l'azione, non un dettaglio della lista.
-                La selezione è la STESSA delle checkbox nella lista qui sotto
-                (selectedSP), così si può spuntare da una parte o dall'altra. */}
-            {richiestaSuppliers.length > 0 && (
-              <div style={{ border:"1px solid #FBCFE8", borderRadius:14, padding:16, marginBottom:14, background:"#FDF2F8" }}>
-                <div style={{ fontSize:15, fontWeight:800, color:"#9D174D", marginBottom:12 }}>Richiedi</div>
-
-                <label style={{ display:"block", fontSize:12, fontWeight:600, color:C.muted, marginBottom:12 }}>Tipo di richiesta
-                  <select value={reqType} onChange={e => { setReqType(e.target.value); setReqResult(null); setReqErr(""); }}
-                    style={{ marginTop:4, width:"100%", padding:"9px 11px", border:`1px solid ${C.border}`, borderRadius:8, fontSize:13.5, background:"#fff", color:C.text, cursor:"pointer", fontFamily:"Inter,system-ui" }}>
-                    {/* "Campione" solo dove qualcuno i campioni li fa davvero:
-                        altrimenti resterebbe un'opzione che fallisce sempre. */}
-                    {campioniPossibili && <option value="campione">Campione</option>}
-                    <option value="preventivo">Preventivo</option>
-                    <option value="contatto">Essere ricontattato</option>
-                  </select>
-                </label>
-
-                {/* Solo per il campione: le spese sono del cliente e i dettagli si
-                    concordano dopo. Testo fisso, non un campo da compilare. */}
-                {reqType === "campione" && (
-                  <div style={{ fontSize:12, color:C.muted, lineHeight:1.55, marginBottom:12, background:"#fff", border:`1px solid ${C.border}`, borderRadius:8, padding:"10px 12px" }}>
-                    Le spese di spedizione del campione sono a carico del cliente. I dettagli di spedizione
-                    (quantità, indirizzo) verranno concordati direttamente con il fornitore dopo l'invio della richiesta.
-                  </div>
-                )}
-
-                <div style={{ fontSize:12, fontWeight:600, color:C.muted, marginBottom:6 }}>
-                  Fornitori ({selectedSP.size} selezionati)
-                </div>
-                {richiestaSelezionabili.length === 0 ? (
-                  <div style={{ fontSize:12.5, color:C.muted, marginBottom:12 }}>
-                    Nessun fornitore disponibile per questo tipo di richiesta.
-                  </div>
-                ) : (
-                  <div style={{ maxHeight:220, overflowY:"auto", background:"#fff", border:`1px solid ${C.border}`, borderRadius:8, marginBottom:12 }}>
-                    {richiestaSelezionabili.map(s => (
-                      <label key={s.supplier_product_id}
-                        style={{ display:"flex", alignItems:"center", gap:9, padding:"9px 11px", borderBottom:`1px solid #F1F5F9`, cursor:"pointer", fontSize:13 }}>
-                        <input type="checkbox" checked={selectedSP.has(s.supplier_product_id)}
-                          onChange={() => toggleSP(s.supplier_product_id)}
-                          style={{ width:16, height:16, accentColor:"#9D174D", cursor:"pointer", flexShrink:0 }}/>
-                        <span style={{ flex:1, minWidth:0, color:C.text, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{s.legal_name}</span>
-                        {s.conPrezzo && <span className="bs-chip" style={{ background:"#ECFDF5", color:C.green, flexShrink:0 }}>a listino</span>}
-                      </label>
-                    ))}
-                  </div>
-                )}
-
-                <label style={{ display:"block", fontSize:12, fontWeight:600, color:C.muted }}>Messaggio (facoltativo)
-                  <textarea value={reqMsg} onChange={e => setReqMsg(e.target.value)} rows={3} maxLength={2000}
-                    placeholder="Quantità indicativa, uso previsto, tempistiche, grado di purezza…"
-                    style={{ marginTop:4, width:"100%", padding:"9px 11px", border:`1px solid ${C.border}`, borderRadius:8, fontSize:13.5, resize:"vertical", fontFamily:"Inter,system-ui", color:C.text, background:"#fff", boxSizing:"border-box" }}/>
-                </label>
-
-                <button onClick={submitRichiesta} disabled={selectedSP.size === 0 || reqBusy}
-                  style={{ width:"100%", marginTop:12, background:(selectedSP.size===0||reqBusy)?"#E9AEC6":"#9D174D", color:"#fff", border:"none", borderRadius:10, padding:"13px", fontSize:14.5, fontWeight:700, cursor:(selectedSP.size===0||reqBusy)?"not-allowed":"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:8, fontFamily:"Inter,system-ui" }}>
-                  <Beaker size={16}/> {reqBusy ? "Invio…" : `Invia richiesta (${selectedSP.size})`}
-                </button>
-                {selectedSP.size === 0 && (
-                  <div style={{ fontSize:12, color:C.muted, marginTop:8, textAlign:"center" }}>Seleziona almeno un fornitore.</div>
-                )}
-
-                {reqErr && <div style={{ marginTop:10, fontSize:13, color:C.red }}>{reqErr}</div>}
-                {reqResult && (
-                  <div style={{ marginTop:10, background:"#fff", border:`1px solid ${C.border}`, borderRadius:10, padding:"10px 12px" }}>
-                    <div style={{ fontSize:13.5, fontWeight:700, color:C.text }}>
-                      {reqResult.inviate > 0
-                        ? `Richiesta inviata a ${reqResult.inviate} ${reqResult.inviate === 1 ? "fornitore" : "fornitori"}.`
-                        : "Nessuna richiesta inviata."}
-                    </div>
-                    {reqResult.fallite.length > 0 && (
-                      <div style={{ fontSize:12, color:C.muted, marginTop:6, lineHeight:1.5 }}>
-                        Non {reqResult.fallite.length === 1 ? "è andata" : "sono andate"} a buon fine: {reqResult.fallite.map(f => `${f.nome} (${f.errore || "errore"})`).join("; ")}.
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                <div style={{ fontSize:11.5, color:C.muted, marginTop:12, textAlign:"center", lineHeight:1.5 }}>
-                  Massimo {limite24h} richieste ogni 24 ore, di qualsiasi tipo. Ogni fornitore selezionato conta come una richiesta.
-                </div>
-              </div>
-            )}
-
             {/* FORNITORI — lista UNICA con filtro (Nazione/Regione). Un fornitore
                 con prezzo appare come riga d'acquisto; senza prezzo come riga
                 compatta. La selezione con le checkbox alimenta il box "Richiedi"
-                qui sopra. */}
+                in colonna destra: qui ci sono le uniche checkbox, il box mostra
+                solo il riepilogo. */}
             {showSampling && (<>
               {/* FILTRO — due soli campi: Nazione (con conteggio) e Regione (dipendente). */}
               <div style={{ border:`1px solid ${C.border}`, borderRadius:12, padding:14, marginBottom:14, background:C.bg }}>
@@ -1932,6 +1857,138 @@ export default function ProductPage() {
             </div>
             ))}
 
+            {/* BOX RICHIESTA — un solo modulo per campione, preventivo e contatto,
+                sotto il box asta: la posizione che aveva il box campionatura.
+                La selezione è la STESSA delle checkbox nelle righe fornitore
+                (selectedSP), così si può spuntare da una parte o dall'altra. */}
+            {richiestaSuppliers.length > 0 && (<>
+              <div style={{ border:"1px solid #FBCFE8", borderRadius:14, padding:16, background:"#FDF2F8" }}>
+                <div style={{ fontSize:15, fontWeight:800, color:"#9D174D", marginBottom:12 }}>Richiedi</div>
+
+                <label style={{ display:"block", fontSize:12, fontWeight:600, color:C.muted, marginBottom:12 }}>Tipo di richiesta
+                  <select value={reqType} onChange={e => { setReqType(e.target.value); setReqResult(null); setReqErr(""); }}
+                    style={{ marginTop:4, width:"100%", padding:"9px 11px", border:`1px solid ${C.border}`, borderRadius:8, fontSize:13.5, background:"#fff", color:C.text, cursor:"pointer", fontFamily:"Inter,system-ui" }}>
+                    {/* "Campione" solo dove qualcuno i campioni li fa davvero:
+                        altrimenti resterebbe un'opzione che fallisce sempre. */}
+                    {campioniPossibili && <option value="campione">{REQ_LABEL.campione}</option>}
+                    <option value="preventivo">{REQ_LABEL.preventivo}</option>
+                    <option value="contatto">{REQ_LABEL.contatto}</option>
+                  </select>
+                </label>
+
+                {/* Solo per il campione: le spese sono del cliente e i dettagli si
+                    concordano dopo. Testo fisso, non un campo da compilare. */}
+                {reqType === "campione" && (
+                  <div style={{ fontSize:12, color:C.muted, lineHeight:1.55, marginBottom:12, background:"#fff", border:`1px solid ${C.border}`, borderRadius:8, padding:"10px 12px" }}>
+                    Le spese di spedizione del campione sono a carico del cliente. I dettagli di spedizione
+                    (quantità, indirizzo) verranno concordati direttamente con il fornitore dopo l'invio della richiesta.
+                  </div>
+                )}
+
+                <div style={{ fontSize:12, fontWeight:600, color:C.muted, marginBottom:6 }}>
+                  Fornitori selezionati ({reqScelti.length})
+                </div>
+                {/* Con showSampling le checkbox sono già sulle righe fornitore: qui
+                    basta il riepilogo, una seconda lista sarebbe lo stesso elenco
+                    due volte. Senza showSampling quelle righe non esistono e la
+                    lista qui dentro resta l'unico modo per selezionare. */}
+                {showSampling ? (
+                  <div style={{ fontSize:12.5, color:C.muted, lineHeight:1.5, marginBottom:12, background:"#fff", border:`1px solid ${C.border}`, borderRadius:8, padding:"9px 11px" }}>
+                    {reqScelti.length === 0
+                      ? "Spunta i fornitori nell'elenco dei fornitori di questa pagina."
+                      : reqScelti.slice(0, 5).map(s => s.legal_name).join(", ")
+                        + (reqScelti.length > 5 ? ` e altri ${reqScelti.length - 5}` : "")}
+                  </div>
+                ) : richiestaSelezionabili.length === 0 ? (
+                  <div style={{ fontSize:12.5, color:C.muted, marginBottom:12 }}>
+                    Nessun fornitore disponibile per questo tipo di richiesta.
+                  </div>
+                ) : (
+                  <div style={{ maxHeight:220, overflowY:"auto", background:"#fff", border:`1px solid ${C.border}`, borderRadius:8, marginBottom:12 }}>
+                    {richiestaSelezionabili.map(s => (
+                      <label key={s.supplier_product_id}
+                        style={{ display:"flex", alignItems:"center", gap:9, padding:"9px 11px", borderBottom:`1px solid #F1F5F9`, cursor:"pointer", fontSize:13 }}>
+                        <input type="checkbox" checked={selectedSP.has(s.supplier_product_id)}
+                          onChange={() => toggleSP(s.supplier_product_id)}
+                          style={{ width:16, height:16, accentColor:"#9D174D", cursor:"pointer", flexShrink:0 }}/>
+                        <span style={{ flex:1, minWidth:0, color:C.text, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{s.legal_name}</span>
+                        {s.conPrezzo && <span className="bs-chip" style={{ background:"#ECFDF5", color:C.green, flexShrink:0 }}>a listino</span>}
+                      </label>
+                    ))}
+                  </div>
+                )}
+
+                <label style={{ display:"block", fontSize:12, fontWeight:600, color:C.muted }}>Messaggio (facoltativo)
+                  <textarea value={reqMsg} onChange={e => setReqMsg(e.target.value)} rows={3} maxLength={2000}
+                    placeholder="Quantità indicativa, uso previsto, tempistiche, grado di purezza…"
+                    style={{ marginTop:4, width:"100%", padding:"9px 11px", border:`1px solid ${C.border}`, borderRadius:8, fontSize:13.5, resize:"vertical", fontFamily:"Inter,system-ui", color:C.text, background:"#fff", boxSizing:"border-box" }}/>
+                </label>
+
+                {/* Il click NON invia: apre il popup di conferma. Si invia solo da lì. */}
+                <button onClick={() => { setReqErr(""); setReqResult(null); setReqConfirm(true); }} disabled={reqScelti.length === 0 || reqBusy}
+                  style={{ width:"100%", marginTop:12, background:(reqScelti.length===0||reqBusy)?"#E9AEC6":"#9D174D", color:"#fff", border:"none", borderRadius:10, padding:"13px", fontSize:14.5, fontWeight:700, cursor:(reqScelti.length===0||reqBusy)?"not-allowed":"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:8, fontFamily:"Inter,system-ui" }}>
+                  <Beaker size={16}/> {reqBusy ? "Invio…" : `Invia richiesta (${reqScelti.length})`}
+                </button>
+                {reqScelti.length === 0 && (
+                  <div style={{ fontSize:12, color:C.muted, marginTop:8, textAlign:"center" }}>Seleziona almeno un fornitore.</div>
+                )}
+
+                {reqErr && <div style={{ marginTop:10, fontSize:13, color:C.red }}>{reqErr}</div>}
+                {reqResult && (
+                  <div style={{ marginTop:10, background:"#fff", border:`1px solid ${C.border}`, borderRadius:10, padding:"10px 12px" }}>
+                    <div style={{ fontSize:13.5, fontWeight:700, color:C.text }}>
+                      {reqResult.inviate > 0
+                        ? `Richiesta inviata a ${reqResult.inviate} ${reqResult.inviate === 1 ? "fornitore" : "fornitori"}.`
+                        : "Nessuna richiesta inviata."}
+                    </div>
+                    {reqResult.fallite.length > 0 && (
+                      <div style={{ fontSize:12, color:C.muted, marginTop:6, lineHeight:1.5 }}>
+                        Non {reqResult.fallite.length === 1 ? "è andata" : "sono andate"} a buon fine: {reqResult.fallite.map(f => `${f.nome} (${f.errore || "errore"})`).join("; ")}.
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div style={{ fontSize:11.5, color:C.muted, marginTop:12, textAlign:"center", lineHeight:1.5 }}>
+                  Massimo {limite24h} richieste ogni 24 ore, di qualsiasi tipo. Ogni fornitore selezionato conta come una richiesta.
+                </div>
+              </div>
+
+              {/* CONFERMA — ultima revisione prima di far partire davvero le
+                  richieste: tipo e destinatari sotto gli occhi, perché l'invio
+                  consuma il limite giornaliero e non si annulla. */}
+              {reqConfirm && (
+                <div onClick={() => setReqConfirm(false)}
+                  style={{ position:"fixed", inset:0, background:"rgba(15,23,42,0.45)", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center", padding:20 }}>
+                  <div onClick={e => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Conferma la richiesta"
+                    style={{ background:"#fff", borderRadius:16, padding:22, width:"100%", maxWidth:460, maxHeight:"82vh", overflowY:"auto", boxShadow:"0 18px 48px rgba(15,23,42,0.22)", textAlign:"left" }}>
+                    <div style={{ fontSize:17, fontWeight:800, color:C.text, marginBottom:10 }}>Conferma la richiesta</div>
+                    <div style={{ fontSize:13.5, color:C.muted, marginBottom:14 }}>
+                      Tipo di richiesta: <b style={{ color:C.text }}>{REQ_LABEL[reqType]}</b>
+                    </div>
+                    <div style={{ fontSize:11.5, fontWeight:700, color:C.muted, textTransform:"uppercase", letterSpacing:"0.04em", marginBottom:6 }}>
+                      {reqScelti.length === 1 ? "Fornitore" : `Fornitori (${reqScelti.length})`}
+                    </div>
+                    <ul style={{ margin:"0 0 14px", padding:"0 0 0 20px", fontSize:13.5, color:C.text, lineHeight:1.65, maxHeight:220, overflowY:"auto" }}>
+                      {reqScelti.map(s => <li key={s.supplier_product_id}>{s.legal_name}</li>)}
+                    </ul>
+                    {reqType === "campione" && (
+                      <div style={{ fontSize:12.5, color:C.muted, lineHeight:1.55, marginBottom:16, background:"#FDF2F8", border:"1px solid #FBCFE8", borderRadius:8, padding:"10px 12px" }}>
+                        Le spese di spedizione del campione sono a carico del cliente. I dettagli di spedizione
+                        (quantità, indirizzo) verranno concordati direttamente con il fornitore dopo l'invio della richiesta.
+                      </div>
+                    )}
+                    <div style={{ display:"flex", gap:10, justifyContent:"flex-end", flexWrap:"wrap" }}>
+                      <button onClick={() => setReqConfirm(false)}
+                        style={{ background:"#fff", color:C.muted, border:`1px solid ${C.border}`, borderRadius:9, padding:"11px 18px", fontSize:14, fontWeight:700, cursor:"pointer", fontFamily:"Inter,system-ui" }}>Annulla</button>
+                      <button onClick={() => { setReqConfirm(false); submitRichiesta(); }}
+                        style={{ background:"#9D174D", color:"#fff", border:"none", borderRadius:9, padding:"11px 18px", fontSize:14, fontWeight:700, cursor:"pointer", fontFamily:"Inter,system-ui" }}>Conferma e invia</button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </>)}
+
             {/* SPECIFICHE CAMPIONE (colonna destra) — solo vini/mosti, e solo
                 quando nel box "Richiedi" e' selezionato il tipo "Campione": sono
                 specifiche di campionatura (colore, gradazione, annata...), non
@@ -2021,7 +2078,7 @@ export default function ProductPage() {
 
                 <div style={{ fontSize:11.5, color:C.muted, marginTop:12, lineHeight:1.5 }}>
                   Queste specifiche accompagnano la richiesta di campione che invii dal box
-                  &quot;Richiedi&quot; in cima alla pagina.
+                  &quot;Richiedi&quot; qui sopra.
                 </div>
               </div>
             ) : null}
