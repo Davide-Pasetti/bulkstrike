@@ -521,6 +521,10 @@ export default function ProductPage() {
   const richiedeSpec = sampling ? !!sampling.richiede_specifiche : sampleOnly;
   const showSampling = sampleOnly || !!sampling?.consentito;
   const limite24h = sampling?.limite_24h ?? 5;
+  // Gli admin di piattaforma non sono soggetti al limite: il flag lo calcola il
+  // DB (get_product_sampling), non il client, così la scritta non può dire una
+  // cosa diversa da quella che la RPC poi applica davvero.
+  const limiteEsente = !!sampling?.limite_esente;
   // Fornitori vino dalla RPC dedicata (verificati e non). Nazione con conteggio
   // (desc); Regione dipende dalla nazione. La selezione vive in un Set
   // indipendente dal filtro: cambiando filtro le scelte non si perdono.
@@ -1952,7 +1956,9 @@ export default function ProductPage() {
                 )}
 
                 <div style={{ fontSize:11.5, color:C.muted, marginTop:12, textAlign:"center", lineHeight:1.5 }}>
-                  Massimo {limite24h} richieste ogni 24 ore, di qualsiasi tipo. Ogni fornitore selezionato conta come una richiesta.
+                  {limiteEsente
+                    ? "Account amministrativo: nessun limite giornaliero di richieste."
+                    : `Massimo ${limite24h} richieste ogni 24 ore, di qualsiasi tipo. Ogni fornitore selezionato conta come una richiesta.`}
                 </div>
               </div>
 
