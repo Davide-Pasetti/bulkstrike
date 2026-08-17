@@ -95,10 +95,11 @@ begin
              else                   t->>'oggetto_contatto'
            end || ' — ' || v_prod;
 
-  -- Quantità facoltativa: se manca, {quantita} sparisce e non resta un doppio
-  -- spazio in mezzo alla frase.
+  -- Quantità facoltativa. Col valore presente serve un "di" che leghi la
+  -- quantità al prodotto ("di 50 kg di Acido citrico"); senza, {quantita}
+  -- sparisce del tutto e resta "di Acido citrico", senza doppi "di" né spazi.
   v_apertura := replace(
-                  replace(t->>'interesse', '{quantita}', case when v_qta is null then '' else v_qta || ' ' end),
+                  replace(t->>'interesse', '{quantita}', case when v_qta is null then '' else v_qta || ' di ' end),
                   '{prodotto}', v_prod);
 
   v_corpo := case p_tipo
