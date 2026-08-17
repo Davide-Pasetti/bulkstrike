@@ -15,6 +15,8 @@ export const config = {
 // comunque sul login.
 // "ricezione" (conferma consegna via QR, DAV-74) è pubblica per design: il
 // token nell'URL è la credenziale, validata server-side con rate limit.
-"/((?!_next/static|_next/image|favicon.ico|api|welcome|registrati|pool|prodotto|prodotti|categorie|aste|andamento-prezzi|fornitore|fornitori|dashboard|catalogo|corriere|corrieri|legale|ricezione|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)"
+// "disiscrizione" idem: la apre un fornitore NON registrato dal link in fondo
+// alle email di richiesta, quindi non può passare dal login.
+"/((?!_next/static|_next/image|favicon.ico|api|welcome|registrati|pool|prodotto|prodotti|categorie|aste|andamento-prezzi|fornitore|fornitori|dashboard|catalogo|corriere|corrieri|legale|ricezione|disiscrizione|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)"
   ],
 };
