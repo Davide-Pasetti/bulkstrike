@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
-import { Search, ArrowRight, Check, Clock, ChevronDown, ChevronRight, ChevronUp, Star, Shield, Truck, FileText, Download, Plus, Minus, Beaker, TrendingDown, Users, Gavel, Info, ShoppingCart, Factory, ExternalLink, MessageSquare, X, Wine } from "lucide-react";
+import { Search, ArrowRight, Check, Clock, ChevronDown, ChevronRight, ChevronUp, Star, Shield, Truck, FileText, Download, Plus, Minus, Beaker, TrendingDown, Users, Gavel, Info, ShoppingCart, Factory, ExternalLink, MessageSquare, X, Wine, AlertTriangle } from "lucide-react";
 import { getProduct, getOpenPoolForProduct, getPriceReference, getProductBreadcrumb, getSession, upsertCartItem, poolErrorMessage, searchProducts, getCart, isFollowingProduct, getMarketPriceSeries, getMarketIndexSeries, getProductSpecs, getProductCandidateSuppliers, getMyCompany, getMarketPriceSeriesByPiazza, requestSamplesBulk, bulkSampleGlobalError, getProductSampling, requestSupplierContactBulk, supplierContactError, getProductIndicators } from "@/lib/api";
 import PriceSourceNote from "@/components/PriceSourceNote";
 import CountryFlag from "@/components/CountryFlag";
@@ -355,7 +355,10 @@ export default function ProductPage() {
   const [reqBusy, setReqBusy] = useState(false);
   const [reqErr, setReqErr] = useState("");
   const [reqResult, setReqResult] = useState(null);   // { inviate, fallite, dettaglio } | null
-  const [reqConfirm, setReqConfirm] = useState(false); // popup di conferma prima dell'invio
+  // Popup unico che cambia stato: conferma → invio → esito. Non due popup
+  // sovrapposti: l'esito riguarda la stessa azione, e restare nello stesso
+  // contenitore lascia un solo posto da leggere e da chiudere.
+  const [reqFase, setReqFase] = useState(null); // null | 'conferma' | 'invio' | 'esito'
   const [piazzaData, setPiazzaData] = useState(null);
   const [selectedPiazze, setSelectedPiazze] = useState([]); // piazze mostrate sul grafico vino
   useEffect(() => { if (productId) isFollowingProduct(productId).then(setFollowingProduct).catch(() => {}); }, [productId]);
@@ -694,6 +697,7 @@ export default function ProductPage() {
     const scelti = reqScelti;
     if (scelti.length === 0) return;
     if (!(await requireAuth())) return; // sloggato → /registrati
+    setReqFase("invio");
     setReqBusy(true); setReqErr(""); setReqResult(null);
     try {
       let esiti;
@@ -744,6 +748,7 @@ export default function ProductPage() {
       setReqErr(reqType === "campione" ? bulkSampleGlobalError(e) : supplierContactError(e));
     }
     setReqBusy(false);
+    setReqFase("esito");
   }
   const specLabel = { display:"block", fontSize:12, fontWeight:600, color:C.muted };
   const specInput = { marginTop:4, width:"100%", minWidth:0, padding:"8px 10px", border:`1px solid ${C.border}`, borderRadius:7, fontSize:13, background:"#fff", color:C.text };
@@ -1931,7 +1936,7 @@ export default function ProductPage() {
                 </label>
 
                 {/* Il click NON invia: apre il popup di conferma. Si invia solo da lì. */}
-                <button onClick={() => { setReqErr(""); setReqResult(null); setReqConfirm(true); }} disabled={reqScelti.length === 0 || reqBusy}
+                <button onClick={() => { setReqErr(""); setReqResult(null); setReqFase("conferma"); }} disabled={reqScelti.length === 0 || reqBusy}
                   style={{ width:"100%", marginTop:12, background:(reqScelti.length===0||reqBusy)?"#E9AEC6":"#9D174D", color:"#fff", border:"none", borderRadius:10, padding:"13px", fontSize:14.5, fontWeight:700, cursor:(reqScelti.length===0||reqBusy)?"not-allowed":"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:8, fontFamily:"Inter,system-ui" }}>
                   <Beaker size={16}/> {reqBusy ? "Invio…" : `Invia richiesta (${reqScelti.length})`}
                 </button>
@@ -1962,53 +1967,120 @@ export default function ProductPage() {
                 </div>
               </div>
 
-              {/* CONFERMA — ultima revisione prima di far partire davvero le
-                  richieste: tipo e destinatari sotto gli occhi, perché l'invio
-                  consuma il limite giornaliero e non si annulla. */}
-              {reqConfirm && (
-                <div onClick={() => setReqConfirm(false)}
-                  style={{ position:"fixed", inset:0, background:"rgba(15,23,42,0.45)", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center", padding:20 }}>
-                  <div onClick={e => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Conferma la richiesta"
-                    style={{ background:"#fff", borderRadius:16, padding:22, width:"100%", maxWidth:460, maxHeight:"82vh", overflowY:"auto", boxShadow:"0 18px 48px rgba(15,23,42,0.22)", textAlign:"left" }}>
-                    <div style={{ fontSize:17, fontWeight:800, color:C.text, marginBottom:10 }}>Conferma la richiesta</div>
-                    <div style={{ fontSize:13.5, color:C.muted, marginBottom:14 }}>
-                      Tipo di richiesta: <b style={{ color:C.text }}>{REQ_LABEL[reqType]}</b>
-                    </div>
-                    <div style={{ fontSize:11.5, fontWeight:700, color:C.muted, textTransform:"uppercase", letterSpacing:"0.04em", marginBottom:6 }}>
-                      {reqScelti.length === 1 ? "Fornitore" : `Fornitori (${reqScelti.length})`}
-                    </div>
-                    {/* La quantità è quella scelta nel box "Seleziona le quantità
-                        necessarie", che è UNA per la pagina: la si ripete accanto a
-                        ogni fornitore perché è ciò che verrà scritto nella richiesta
-                        a ciascuno di loro. */}
-                    <ul style={{ margin:"0 0 14px", padding:"0 0 0 20px", fontSize:13.5, color:C.text, lineHeight:1.65, maxHeight:220, overflowY:"auto" }}>
-                      {reqScelti.map(s => (
-                        <li key={s.supplier_product_id}>
-                          {s.legal_name}
-                          {qtaRichiesta && <span style={{ color:C.muted }}> — {qtaRichiesta}</span>}
-                        </li>
-                      ))}
-                    </ul>
-                    {!qtaRichiesta && (
-                      <div style={{ fontSize:12.5, color:C.muted, marginBottom:14, lineHeight:1.55 }}>
-                        Nessuna quantità indicata: la richiesta parte senza.
-                      </div>
-                    )}
-                    {reqType === "campione" && (
-                      <div style={{ fontSize:12.5, color:C.muted, lineHeight:1.55, marginBottom:16, background:"#FDF2F8", border:"1px solid #FBCFE8", borderRadius:8, padding:"10px 12px" }}>
-                        Le spese di spedizione del campione sono a carico del cliente. I dettagli di spedizione
-                        (quantità, indirizzo) verranno concordati direttamente con il fornitore dopo l'invio della richiesta.
-                      </div>
-                    )}
-                    <div style={{ display:"flex", gap:10, justifyContent:"flex-end", flexWrap:"wrap" }}>
-                      <button onClick={() => setReqConfirm(false)}
-                        style={{ background:"#fff", color:C.muted, border:`1px solid ${C.border}`, borderRadius:9, padding:"11px 18px", fontSize:14, fontWeight:700, cursor:"pointer", fontFamily:"Inter,system-ui" }}>Annulla</button>
-                      <button onClick={() => { setReqConfirm(false); submitRichiesta(); }}
-                        style={{ background:"#9D174D", color:"#fff", border:"none", borderRadius:9, padding:"11px 18px", fontSize:14, fontWeight:700, cursor:"pointer", fontFamily:"Inter,system-ui" }}>Conferma e invia</button>
+              {/* POPUP UNICO — conferma → invio → esito.
+                  Conferma: ultima revisione prima di far partire le richieste,
+                  perché l'invio consuma il limite giornaliero e non si annulla.
+                  Esito: nello stesso contenitore, così in caso di errore si torna
+                  indietro senza riaprire tutto da capo. */}
+              {reqFase && (() => {
+                // Un invio è "riuscito" se almeno una richiesta è partita. Con
+                // qualcuna caduta resta un successo parziale: i nomi dei falliti
+                // servono per capire chi riprovare.
+                const inviate = reqResult?.inviate ?? 0;
+                const fallite = reqResult?.fallite ?? [];
+                const ok = reqFase === "esito" && !reqErr && inviate > 0;
+                const ko = reqFase === "esito" && (!!reqErr || inviate === 0);
+                const chiudi = () => { setReqFase(null); };
+                return (
+                  <div onClick={() => { if (reqFase !== "invio") chiudi(); }}
+                    style={{ position:"fixed", inset:0, background:"rgba(15,23,42,0.45)", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center", padding:20 }}>
+                    <div onClick={e => e.stopPropagation()} role="dialog" aria-modal="true"
+                      aria-label={reqFase === "esito" ? "Esito della richiesta" : "Conferma la richiesta"}
+                      style={{ background:"#fff", borderRadius:16, padding:22, width:"100%", maxWidth:460, maxHeight:"82vh", overflowY:"auto", boxShadow:"0 18px 48px rgba(15,23,42,0.22)", textAlign:"left" }}>
+
+                      {reqFase === "esito" ? (<>
+                        <div style={{ display:"flex", alignItems:"center", gap:9, marginBottom:10 }}>
+                          {ok ? <Check size={20} style={{ color:C.green, flexShrink:0 }}/>
+                              : <AlertTriangle size={20} style={{ color:C.red, flexShrink:0 }}/>}
+                          <div style={{ fontSize:17, fontWeight:800, color:C.text }}>
+                            {ok ? (fallite.length > 0 ? "Richiesta inviata in parte" : "Richiesta inviata con successo")
+                                : "Richiesta non inviata"}
+                          </div>
+                        </div>
+
+                        {ok && (
+                          <div style={{ fontSize:13.5, color:C.muted, lineHeight:1.6, marginBottom:14 }}>
+                            {REQ_LABEL[reqType]} inviata a <b style={{ color:C.text }}>{inviate}</b>{" "}
+                            {inviate === 1 ? "fornitore" : "fornitori"}
+                            {qtaRichiesta && <> per <b style={{ color:C.text }}>{qtaRichiesta}</b></>}.
+                            {reqType === "campione"
+                              ? " Riceverai una email a ogni risposta."
+                              : " Ti ricontatteremo appena arriva un riscontro."}
+                          </div>
+                        )}
+
+                        {reqErr && (
+                          <div style={{ fontSize:13.5, color:C.red, lineHeight:1.6, marginBottom:14 }}>{reqErr}</div>
+                        )}
+
+                        {fallite.length > 0 && (
+                          <div style={{ background:"#FEF2F2", border:"1px solid #FECACA", borderRadius:8, padding:"10px 12px", marginBottom:16 }}>
+                            <div style={{ fontSize:12, fontWeight:700, color:C.red, marginBottom:6 }}>
+                              {fallite.length === 1 ? "Non è andata a buon fine" : `Non sono andate a buon fine (${fallite.length})`}
+                            </div>
+                            <ul style={{ margin:0, padding:"0 0 0 18px", fontSize:12.5, color:C.text, lineHeight:1.6 }}>
+                              {fallite.map((f, i) => (
+                                <li key={i}>{f.nome}<span style={{ color:C.muted }}> — {f.errore || "errore"}</span></li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+
+                        <div style={{ display:"flex", gap:10, justifyContent:"flex-end", flexWrap:"wrap" }}>
+                          {ko && reqScelti.length > 0 && (
+                            <button onClick={() => { setReqErr(""); setReqResult(null); setReqFase("conferma"); }}
+                              style={{ background:"#fff", color:C.muted, border:`1px solid ${C.border}`, borderRadius:9, padding:"11px 18px", fontSize:14, fontWeight:700, cursor:"pointer", fontFamily:"Inter,system-ui" }}>Indietro</button>
+                          )}
+                          {ko && reqScelti.length > 0
+                            ? <button onClick={submitRichiesta} disabled={reqBusy}
+                                style={{ background:"#9D174D", color:"#fff", border:"none", borderRadius:9, padding:"11px 18px", fontSize:14, fontWeight:700, cursor:reqBusy?"not-allowed":"pointer", fontFamily:"Inter,system-ui" }}>Riprova</button>
+                            : <button onClick={chiudi}
+                                style={{ background:"#9D174D", color:"#fff", border:"none", borderRadius:9, padding:"11px 18px", fontSize:14, fontWeight:700, cursor:"pointer", fontFamily:"Inter,system-ui" }}>Chiudi</button>}
+                        </div>
+                      </>) : (<>
+                        <div style={{ fontSize:17, fontWeight:800, color:C.text, marginBottom:10 }}>Conferma la richiesta</div>
+                        <div style={{ fontSize:13.5, color:C.muted, marginBottom:14 }}>
+                          Tipo di richiesta: <b style={{ color:C.text }}>{REQ_LABEL[reqType]}</b>
+                        </div>
+                        <div style={{ fontSize:11.5, fontWeight:700, color:C.muted, textTransform:"uppercase", letterSpacing:"0.04em", marginBottom:6 }}>
+                          {reqScelti.length === 1 ? "Fornitore" : `Fornitori (${reqScelti.length})`}
+                        </div>
+                        {/* La quantità è quella scelta nel box "Seleziona le quantità
+                            necessarie", che è UNA per la pagina: la si ripete accanto a
+                            ogni fornitore perché è ciò che verrà scritto nella richiesta
+                            a ciascuno di loro. */}
+                        <ul style={{ margin:"0 0 14px", padding:"0 0 0 20px", fontSize:13.5, color:C.text, lineHeight:1.65, maxHeight:220, overflowY:"auto" }}>
+                          {reqScelti.map(s => (
+                            <li key={s.supplier_product_id}>
+                              {s.legal_name}
+                              {qtaRichiesta && <span style={{ color:C.muted }}> — {qtaRichiesta}</span>}
+                            </li>
+                          ))}
+                        </ul>
+                        {!qtaRichiesta && (
+                          <div style={{ fontSize:12.5, color:C.muted, marginBottom:14, lineHeight:1.55 }}>
+                            Nessuna quantità indicata: la richiesta parte senza.
+                          </div>
+                        )}
+                        {reqType === "campione" && (
+                          <div style={{ fontSize:12.5, color:C.muted, lineHeight:1.55, marginBottom:16, background:"#FDF2F8", border:"1px solid #FBCFE8", borderRadius:8, padding:"10px 12px" }}>
+                            Le spese di spedizione del campione sono a carico del cliente. I dettagli di spedizione
+                            (quantità, indirizzo) verranno concordati direttamente con il fornitore dopo l'invio della richiesta.
+                          </div>
+                        )}
+                        <div style={{ display:"flex", gap:10, justifyContent:"flex-end", flexWrap:"wrap" }}>
+                          <button onClick={chiudi} disabled={reqFase === "invio"}
+                            style={{ background:"#fff", color:C.muted, border:`1px solid ${C.border}`, borderRadius:9, padding:"11px 18px", fontSize:14, fontWeight:700, cursor:reqFase==="invio"?"not-allowed":"pointer", fontFamily:"Inter,system-ui" }}>Annulla</button>
+                          <button onClick={submitRichiesta} disabled={reqFase === "invio" || reqBusy}
+                            style={{ background:(reqFase==="invio"||reqBusy)?"#E9AEC6":"#9D174D", color:"#fff", border:"none", borderRadius:9, padding:"11px 18px", fontSize:14, fontWeight:700, cursor:(reqFase==="invio"||reqBusy)?"not-allowed":"pointer", fontFamily:"Inter,system-ui" }}>
+                            {reqFase === "invio" ? "Invio…" : "Conferma e invia"}
+                          </button>
+                        </div>
+                      </>)}
                     </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
             </>)}
 
             {/* SPECIFICHE CAMPIONE (colonna destra) — solo vini/mosti, e solo
