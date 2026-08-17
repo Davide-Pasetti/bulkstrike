@@ -352,10 +352,6 @@ export default function ProductPage() {
   // fornitori selezionati.
   const [reqTypeRaw, setReqType] = useState("campione"); // 'campione' | 'preventivo' | 'contatto'
   const [reqMsg, setReqMsg] = useState("");
-  // Quantità che interessa al cliente, testo libero ("1000 kg"): va nella riga
-  // di apertura dell'email al fornitore. Separata dal messaggio perché lì
-  // sarebbe da indovinare, e vale per tutti e tre i tipi di richiesta.
-  const [reqQta, setReqQta] = useState("");
   const [reqBusy, setReqBusy] = useState(false);
   const [reqErr, setReqErr] = useState("");
   const [reqResult, setReqResult] = useState(null);   // { inviate, fallite, dettaglio } | null
@@ -703,7 +699,7 @@ export default function ProductPage() {
         const res = await requestSamplesBulk({
           supplierProductIds: scelti.map(s => s.supplier_product_id),
           message: reqMsg.trim() || null,
-          quantitaIndicativa: reqQta.trim() || null,
+          quantitaIndicativa: qtaRichiesta,
           ...(richiedeSpec ? {
             specQuantitaPartita: quantitaPartita || null,
             specColore: specColore || null,
@@ -727,7 +723,7 @@ export default function ProductPage() {
         const cids = [...new Set(scelti.map(s => s.company_id).filter(Boolean))];
         const res = await requestSupplierContactBulk({
           targetCompanyIds: cids, productId, requestType: reqType, message: reqMsg.trim() || null,
-          quantitaIndicativa: reqQta.trim() || null,
+          quantitaIndicativa: qtaRichiesta,
         });
         const nomePerCid = new Map(richiestaSuppliers.map(s => [s.company_id, s.legal_name]));
         esiti = (res || []).map(r => ({
@@ -753,6 +749,11 @@ export default function ProductPage() {
   // Il formato dipende dal fornitore in evidenza; qty (kg) resta lo stato reale,
   // unitCount è solo la sua vista in unità per quel formato.
   const massUnit = product.default_unit === "L" ? "L" : "kg"; // solido→kg, liquido→litri
+  // Quantità che finisce nel popup di conferma e nella riga di apertura
+  // dell'email: è quella del box "Seleziona le quantità necessarie", non un
+  // campo a parte. Dove quel box non c'è (vini/mosti, sampleOnly) resta null e
+  // l'email si chiude sul solo nome del prodotto.
+  const qtaRichiesta = (!sampleOnly && qty > 0) ? `${qty.toLocaleString("it-IT")} ${massUnit}` : null;
   // Formati di vendita: quelli del fornitore in evidenza se li espone; altrimenti
   // i formati REALI del prodotto impostati da admin (sacco/pallet/container), non
   // un sacco da 25 kg inventato. Coerente con la pagina asta. Se il prodotto non
@@ -1882,23 +1883,9 @@ export default function ProductPage() {
                   </select>
                 </label>
 
-                {/* Finisce nella riga di apertura dell'email ("...interessato
-                    all'acquisto di 1000 kg di Acido citrico"). Se resta vuoto la
-                    frase si chiude sul solo nome del prodotto. */}
-                <label style={{ display:"block", fontSize:12, fontWeight:600, color:C.muted, marginBottom:12 }}>Quantità indicativa (opzionale)
-                  <input type="text" value={reqQta} onChange={e => setReqQta(e.target.value)} maxLength={100}
-                    placeholder="es. 1000 kg"
-                    style={{ marginTop:4, width:"100%", padding:"9px 11px", border:`1px solid ${C.border}`, borderRadius:8, fontSize:13.5, background:"#fff", color:C.text, fontFamily:"Inter,system-ui", boxSizing:"border-box" }}/>
-                </label>
-
-                {/* Solo per il campione: le spese sono del cliente e i dettagli si
-                    concordano dopo. Testo fisso, non un campo da compilare. */}
-                {reqType === "campione" && (
-                  <div style={{ fontSize:12, color:C.muted, lineHeight:1.55, marginBottom:12, background:"#fff", border:`1px solid ${C.border}`, borderRadius:8, padding:"10px 12px" }}>
-                    Le spese di spedizione del campione sono a carico del cliente. I dettagli di spedizione
-                    (quantità, indirizzo) verranno concordati direttamente con il fornitore dopo l'invio della richiesta.
-                  </div>
-                )}
+                {/* Quantità e nota sulle spese stanno nel popup di conferma: qui
+                    sarebbero un doppione del box "Seleziona le quantità
+                    necessarie", che è già la fonte del dato. */}
 
                 <div style={{ fontSize:12, fontWeight:600, color:C.muted, marginBottom:6 }}>
                   Fornitori selezionati ({reqScelti.length})
@@ -1984,9 +1971,23 @@ export default function ProductPage() {
                     <div style={{ fontSize:11.5, fontWeight:700, color:C.muted, textTransform:"uppercase", letterSpacing:"0.04em", marginBottom:6 }}>
                       {reqScelti.length === 1 ? "Fornitore" : `Fornitori (${reqScelti.length})`}
                     </div>
+                    {/* La quantità è quella scelta nel box "Seleziona le quantità
+                        necessarie", che è UNA per la pagina: la si ripete accanto a
+                        ogni fornitore perché è ciò che verrà scritto nella richiesta
+                        a ciascuno di loro. */}
                     <ul style={{ margin:"0 0 14px", padding:"0 0 0 20px", fontSize:13.5, color:C.text, lineHeight:1.65, maxHeight:220, overflowY:"auto" }}>
-                      {reqScelti.map(s => <li key={s.supplier_product_id}>{s.legal_name}</li>)}
+                      {reqScelti.map(s => (
+                        <li key={s.supplier_product_id}>
+                          {s.legal_name}
+                          {qtaRichiesta && <span style={{ color:C.muted }}> — {qtaRichiesta}</span>}
+                        </li>
+                      ))}
                     </ul>
+                    {!qtaRichiesta && (
+                      <div style={{ fontSize:12.5, color:C.muted, marginBottom:14, lineHeight:1.55 }}>
+                        Nessuna quantità indicata: la richiesta parte senza.
+                      </div>
+                    )}
                     {reqType === "campione" && (
                       <div style={{ fontSize:12.5, color:C.muted, lineHeight:1.55, marginBottom:16, background:"#FDF2F8", border:"1px solid #FBCFE8", borderRadius:8, padding:"10px 12px" }}>
                         Le spese di spedizione del campione sono a carico del cliente. I dettagli di spedizione
