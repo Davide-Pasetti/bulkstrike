@@ -352,6 +352,10 @@ export default function ProductPage() {
   // fornitori selezionati.
   const [reqTypeRaw, setReqType] = useState("campione"); // 'campione' | 'preventivo' | 'contatto'
   const [reqMsg, setReqMsg] = useState("");
+  // Quantità che interessa al cliente, testo libero ("1000 kg"): va nella riga
+  // di apertura dell'email al fornitore. Separata dal messaggio perché lì
+  // sarebbe da indovinare, e vale per tutti e tre i tipi di richiesta.
+  const [reqQta, setReqQta] = useState("");
   const [reqBusy, setReqBusy] = useState(false);
   const [reqErr, setReqErr] = useState("");
   const [reqResult, setReqResult] = useState(null);   // { inviate, fallite, dettaglio } | null
@@ -699,6 +703,7 @@ export default function ProductPage() {
         const res = await requestSamplesBulk({
           supplierProductIds: scelti.map(s => s.supplier_product_id),
           message: reqMsg.trim() || null,
+          quantitaIndicativa: reqQta.trim() || null,
           ...(richiedeSpec ? {
             specQuantitaPartita: quantitaPartita || null,
             specColore: specColore || null,
@@ -722,6 +727,7 @@ export default function ProductPage() {
         const cids = [...new Set(scelti.map(s => s.company_id).filter(Boolean))];
         const res = await requestSupplierContactBulk({
           targetCompanyIds: cids, productId, requestType: reqType, message: reqMsg.trim() || null,
+          quantitaIndicativa: reqQta.trim() || null,
         });
         const nomePerCid = new Map(richiestaSuppliers.map(s => [s.company_id, s.legal_name]));
         esiti = (res || []).map(r => ({
@@ -1874,6 +1880,15 @@ export default function ProductPage() {
                     <option value="preventivo">{REQ_LABEL.preventivo}</option>
                     <option value="contatto">{REQ_LABEL.contatto}</option>
                   </select>
+                </label>
+
+                {/* Finisce nella riga di apertura dell'email ("...interessato
+                    all'acquisto di 1000 kg di Acido citrico"). Se resta vuoto la
+                    frase si chiude sul solo nome del prodotto. */}
+                <label style={{ display:"block", fontSize:12, fontWeight:600, color:C.muted, marginBottom:12 }}>Quantità indicativa (opzionale)
+                  <input type="text" value={reqQta} onChange={e => setReqQta(e.target.value)} maxLength={100}
+                    placeholder="es. 1000 kg"
+                    style={{ marginTop:4, width:"100%", padding:"9px 11px", border:`1px solid ${C.border}`, borderRadius:8, fontSize:13.5, background:"#fff", color:C.text, fontFamily:"Inter,system-ui", boxSizing:"border-box" }}/>
                 </label>
 
                 {/* Solo per il campione: le spese sono del cliente e i dettagli si
