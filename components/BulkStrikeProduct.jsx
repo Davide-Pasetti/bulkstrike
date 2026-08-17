@@ -1922,7 +1922,7 @@ export default function ProductPage() {
 
                 <label style={{ display:"block", fontSize:12, fontWeight:600, color:C.muted }}>Messaggio (facoltativo)
                   <textarea value={reqMsg} onChange={e => setReqMsg(e.target.value)} rows={3} maxLength={2000}
-                    placeholder="Quantità indicativa, uso previsto, tempistiche, grado di purezza…"
+                    placeholder="Note varie, uso previsto, tempistiche, grado di purezza…"
                     style={{ marginTop:4, width:"100%", padding:"9px 11px", border:`1px solid ${C.border}`, borderRadius:8, fontSize:13.5, resize:"vertical", fontFamily:"Inter,system-ui", color:C.text, background:"#fff", boxSizing:"border-box" }}/>
                 </label>
 
