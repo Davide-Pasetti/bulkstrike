@@ -359,6 +359,10 @@ export default function ProductPage() {
   // sovrapposti: l'esito riguarda la stessa azione, e restare nello stesso
   // contenitore lascia un solo posto da leggere e da chiudere.
   const [reqFase, setReqFase] = useState(null); // null | 'conferma' | 'invio' | 'esito'
+  // Consenso a contattare i fornitori per conto del cliente: mai pre-flaggato,
+  // e si riazzera a ogni nuova richiesta. Tornando "Indietro" dall'esito resta
+  // spuntato: è la stessa richiesta, agli stessi fornitori.
+  const [reqConsenso, setReqConsenso] = useState(false);
   const [piazzaData, setPiazzaData] = useState(null);
   const [selectedPiazze, setSelectedPiazze] = useState([]); // piazze mostrate sul grafico vino
   useEffect(() => { if (productId) isFollowingProduct(productId).then(setFollowingProduct).catch(() => {}); }, [productId]);
@@ -1936,7 +1940,7 @@ export default function ProductPage() {
                 </label>
 
                 {/* Il click NON invia: apre il popup di conferma. Si invia solo da lì. */}
-                <button onClick={() => { setReqErr(""); setReqResult(null); setReqFase("conferma"); }} disabled={reqScelti.length === 0 || reqBusy}
+                <button onClick={() => { setReqErr(""); setReqResult(null); setReqConsenso(false); setReqFase("conferma"); }} disabled={reqScelti.length === 0 || reqBusy}
                   style={{ width:"100%", marginTop:12, background:(reqScelti.length===0||reqBusy)?"#E9AEC6":"#9D174D", color:"#fff", border:"none", borderRadius:10, padding:"13px", fontSize:14.5, fontWeight:700, cursor:(reqScelti.length===0||reqBusy)?"not-allowed":"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:8, fontFamily:"Inter,system-ui" }}>
                   <Beaker size={16}/> {reqBusy ? "Invio…" : `Invia richiesta (${reqScelti.length})`}
                 </button>
@@ -2049,30 +2053,43 @@ export default function ProductPage() {
                             necessarie", che è UNA per la pagina: la si ripete accanto a
                             ogni fornitore perché è ciò che verrà scritto nella richiesta
                             a ciascuno di loro. */}
-                        <ul style={{ margin:"0 0 14px", padding:"0 0 0 20px", fontSize:13.5, color:C.text, lineHeight:1.65, maxHeight:220, overflowY:"auto" }}>
+                        <ul style={{ margin:"0 0 14px", padding:"0 0 0 20px", fontSize:13.5, color:C.text, lineHeight:1.5, maxHeight:220, overflowY:"auto" }}>
                           {reqScelti.map(s => (
-                            <li key={s.supplier_product_id}>
-                              {s.legal_name}
-                              {qtaRichiesta && <span style={{ color:C.muted }}> — {qtaRichiesta}</span>}
+                            <li key={s.supplier_product_id} style={{ marginBottom:8 }}>
+                              <div>{s.legal_name}</div>
+                              {/* Senza quantità la riga sparisce del tutto: "0 kg"
+                                  o una riga vuota direbbero una cosa falsa. */}
+                              {qtaRichiesta && (
+                                <div style={{ fontSize:12.5, color:C.muted }}>Quantità stimata necessaria: {qtaRichiesta}</div>
+                              )}
                             </li>
                           ))}
                         </ul>
-                        {!qtaRichiesta && (
-                          <div style={{ fontSize:12.5, color:C.muted, marginBottom:14, lineHeight:1.55 }}>
-                            Nessuna quantità indicata: la richiesta parte senza.
-                          </div>
-                        )}
                         {reqType === "campione" && (
-                          <div style={{ fontSize:12.5, color:C.muted, lineHeight:1.55, marginBottom:16, background:"#FDF2F8", border:"1px solid #FBCFE8", borderRadius:8, padding:"10px 12px" }}>
+                          <div style={{ fontSize:12.5, color:C.muted, lineHeight:1.55, marginBottom:12, background:"#FDF2F8", border:"1px solid #FBCFE8", borderRadius:8, padding:"10px 12px" }}>
                             Le spese di spedizione del campione sono a carico del cliente. I dettagli di spedizione
                             (quantità, indirizzo) verranno concordati direttamente con il fornitore dopo l'invio della richiesta.
                           </div>
                         )}
+                        {/* Consenso obbligatorio: senza, l'invio non parte. Vale per
+                            tutti e tre i tipi — in ogni caso scriviamo a terzi per
+                            conto del cliente, con i suoi dati. */}
+                        <label style={{ display:"flex", gap:9, alignItems:"flex-start", cursor:"pointer", fontSize:12.5, color:C.text, lineHeight:1.55, marginBottom:16 }}>
+                          <input type="checkbox" checked={reqConsenso} onChange={e => setReqConsenso(e.target.checked)}
+                            style={{ width:16, height:16, accentColor:"#9D174D", cursor:"pointer", flexShrink:0, marginTop:2 }}/>
+                          <span>
+                            Autorizzo BulkStrike a contattare, per mio conto, i fornitori sopra indicati e a comunicare
+                            loro i miei dati personali e aziendali necessari alla richiesta (nome e cognome, ragione
+                            sociale, indirizzo e partita IVA). Per maggiori informazioni consulta la pagina{" "}
+                            <a href="/legale#privacy" target="_blank" rel="noopener noreferrer" style={{ color:C.blue, fontWeight:600 }}>Privacy</a>.
+                          </span>
+                        </label>
                         <div style={{ display:"flex", gap:10, justifyContent:"flex-end", flexWrap:"wrap" }}>
                           <button onClick={chiudi} disabled={reqFase === "invio"}
                             style={{ background:"#fff", color:C.muted, border:`1px solid ${C.border}`, borderRadius:9, padding:"11px 18px", fontSize:14, fontWeight:700, cursor:reqFase==="invio"?"not-allowed":"pointer", fontFamily:"Inter,system-ui" }}>Annulla</button>
-                          <button onClick={submitRichiesta} disabled={reqFase === "invio" || reqBusy}
-                            style={{ background:(reqFase==="invio"||reqBusy)?"#E9AEC6":"#9D174D", color:"#fff", border:"none", borderRadius:9, padding:"11px 18px", fontSize:14, fontWeight:700, cursor:(reqFase==="invio"||reqBusy)?"not-allowed":"pointer", fontFamily:"Inter,system-ui" }}>
+                          <button onClick={submitRichiesta} disabled={!reqConsenso || reqFase === "invio" || reqBusy}
+                            title={!reqConsenso ? "Serve l'autorizzazione a contattare i fornitori" : undefined}
+                            style={{ background:(!reqConsenso||reqFase==="invio"||reqBusy)?"#E9AEC6":"#9D174D", color:"#fff", border:"none", borderRadius:9, padding:"11px 18px", fontSize:14, fontWeight:700, cursor:(!reqConsenso||reqFase==="invio"||reqBusy)?"not-allowed":"pointer", fontFamily:"Inter,system-ui" }}>
                             {reqFase === "invio" ? "Invio…" : "Conferma e invia"}
                           </button>
                         </div>
