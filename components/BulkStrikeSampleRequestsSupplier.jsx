@@ -91,7 +91,9 @@ export default function SampleRequestsSupplierPage({ inShell = false }) {
               </div>
               <div style={{ display:"flex", gap:6, fontSize:13, color:C.text, marginBottom:8, alignItems:"flex-start" }}>
                 <MapPin size={14} style={{ color:C.muted, flexShrink:0, marginTop:2 }} />
-                <span>{r.shipping_address}</span>
+                {/* Le richieste dal box "Richiedi" non portano l'indirizzo: si
+                    concorda col cliente dopo, quindi qui si dice esplicitamente. */}
+                <span>{r.shipping_address || "Indirizzo e quantità da concordare con il cliente"}</span>
               </div>
               {r.message && <div style={{ fontSize:13, color:C.muted, fontStyle:"italic", marginBottom:8 }}>“{r.message}”</div>}
               {r.status === "declined" && r.decline_reason && <div style={{ fontSize:12.5, color:C.red, marginBottom:8 }}>Motivo del rifiuto: {r.decline_reason}</div>}
