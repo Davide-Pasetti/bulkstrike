@@ -347,7 +347,7 @@ export default function ProductPage() {
   const [specAnnata, setSpecAnnata] = useState("");
   // Box "Richiedi" (colonna sinistra, sopra il filtro): un solo modulo per i tre
   // tipi di richiesta. Il tipo scelto vale per TUTTI i fornitori selezionati.
-  const [reqType, setReqType] = useState("campione"); // 'campione' | 'preventivo' | 'contatto'
+  const [reqTypeRaw, setReqType] = useState("campione"); // 'campione' | 'preventivo' | 'contatto'
   const [reqMsg, setReqMsg] = useState("");
   const [reqBusy, setReqBusy] = useState(false);
   const [reqErr, setReqErr] = useState("");
@@ -633,21 +633,21 @@ export default function ProductPage() {
       .map(s => ({ ...s, conPrezzo: s.conPrezzo || conPrezzoIds.has(s.company_id) }))
       .sort((a, b) => (b.conPrezzo - a.conPrezzo) || String(a.legal_name).localeCompare(String(b.legal_name)));
   }, [sampleSuppliers, suppliers, ranked]);
+  const campioniPossibili = useMemo(() => richiestaSuppliers.some(s => s.campionabile), [richiestaSuppliers]);
+  // Se per questo prodotto nessuno fa campioni, l'opzione sparisce dalla tendina e
+  // il tipo ripiega su "Preventivo". Il ripiego e' DERIVATO, non scritto nello
+  // stato: i fornitori campionabili arrivano da una RPC a parte, piu' lenta della
+  // scheda prodotto, e un setReqType in useEffect scattava su quella finestra
+  // lasciando il tipo su "Preventivo" anche dove i campioni si possono chiedere
+  // (verificato in produzione). Cosi' invece torna da solo su "Campione" appena la
+  // lista arriva. Stesso schema di packMode piu' sopra.
+  const reqType = (reqTypeRaw === "campione" && !campioniPossibili) ? "preventivo" : reqTypeRaw;
   // Solo i fornitori compatibili col tipo scelto: il campione richiede che il
   // fornitore lo fornisca, preventivo e contatto valgono per tutti.
   const richiestaSelezionabili = useMemo(
     () => (reqType === "campione" ? richiestaSuppliers.filter(s => s.campionabile) : richiestaSuppliers),
     [richiestaSuppliers, reqType]
   );
-  const campioniPossibili = useMemo(() => richiestaSuppliers.some(s => s.campionabile), [richiestaSuppliers]);
-  // Se per questo prodotto nessuno fa campioni, l'opzione sparisce dalla tendina:
-  // il tipo va riportato su un valore ancora valido. La lista dei fornitori
-  // arriva in asincrono: finche' e' vuota il ripiego non va fatto, altrimenti
-  // scatta al primo render e il tipo resta su "Preventivo" anche dove i campioni
-  // si possono chiedere (verificato in produzione su Vino sfuso).
-  useEffect(() => {
-    if (richiestaSuppliers.length > 0 && !campioniPossibili && reqType === "campione") setReqType("preventivo");
-  }, [richiestaSuppliers.length, campioniPossibili, reqType]);
   // Passando a "Campione" restano selezionati solo i fornitori che i campioni li
   // fanno davvero: altrimenti l'invio partirebbe con righe destinate a fallire.
   useEffect(() => {
