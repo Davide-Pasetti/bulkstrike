@@ -1,14 +1,19 @@
 -- ============================================================================
--- FIRMA EMAIL — dati aziendali del cliente + ritocco a piede_info
+-- FIRMA EMAIL — dati del cliente in calce + ritocco a piede_info
 --
--- Sotto "Questa email è stata generata ... per conto di {cliente}" compaiono
--- ragione sociale, via e P.IVA del richiedente, una per riga, in HTML e in
--- testo. Sono gli stessi dati che la checkbox di consenso nel popup dichiara
--- che verranno comunicati al fornitore: senza, la mail prometteva una cosa e
--- ne mandava un'altra.
+-- Dopo "Restando in attesa di un Vostro cortese riscontro, porgo cordiali
+-- saluti." la lettera si chiude con nome, ragione sociale, via e P.IVA del
+-- richiedente, una per riga, nello stesso corpo del testo (non nel piede
+-- piccolo e grigio). Sono gli stessi dati che la checkbox di consenso nel popup
+-- dichiara verranno comunicati al fornitore: senza, la mail prometteva una cosa
+-- e ne mandava un'altra.
 --
 -- Riga omessa se il campo è vuoto: mai "P.IVA:" seguito dal nulla. I valori
--- arrivano da companies (legal_name, address, vat) del buyer.
+-- arrivano da companies (contact_name, legal_name, address, vat) del buyer.
+--
+-- Nel piede si toglie anche il punto doppio: ragioni sociali come "S.r.l." o
+-- "S.S." finiscono già per punto e il template ne aggiungeva un secondo
+-- ("... per conto di Tizio S.S..").
 -- ============================================================================
 
 create or replace function public.email_richiesta_testi(p_lingua text default 'it')
@@ -59,7 +64,8 @@ create or replace function public.email_richiesta_render(
   p_quantita        text default null,
   p_ragione_sociale text default null,
   p_indirizzo       text default null,
-  p_piva            text default null
+  p_piva            text default null,
+  p_nome            text default null
 ) returns jsonb
 language plpgsql
 immutable
@@ -71,6 +77,7 @@ declare
   v_cli    text := coalesce(nullif(btrim(coalesce(p_cliente, '')), ''), 'un cliente BulkStrike');
   v_msg    text := nullif(btrim(coalesce(p_messaggio, '')), '');
   v_qta    text := nullif(btrim(coalesce(p_quantita, '')), '');
+  v_nome   text := nullif(btrim(coalesce(p_nome, '')), '');
   v_rs     text := nullif(btrim(coalesce(p_ragione_sociale, '')), '');
   v_addr   text := nullif(btrim(coalesce(p_indirizzo, '')), '');
   v_piva   text := nullif(btrim(coalesce(p_piva, '')), '');
@@ -81,6 +88,7 @@ declare
   v_ogg    text;
   v_html   text;
   v_txt    text;
+  v_generata   text;
   v_piede_html text;
   v_piede_txt  text;
   v_note_txt   text;
@@ -106,11 +114,17 @@ begin
   v_note_txt := case when v_msg is null then null
                      else replace(t->>'note', '{messaggio}', v_msg) end;
 
-  -- Dati aziendali del cliente in firma: una riga per campo, e la riga sparisce
-  -- se il campo è vuoto — mai "P.IVA:" seguito dal nulla.
+  -- Blocco firma in calce alla lettera (stesso corpo del testo, non il piede
+  -- piccolo): una riga per campo, e la riga sparisce se il campo è vuoto —
+  -- mai "P.IVA:" seguito dal nulla.
+  if v_nome is not null then v_dati := v_dati || ('Nome: ' || v_nome)::text; end if;
   if v_rs   is not null then v_dati := v_dati || ('Ragione sociale: ' || v_rs)::text; end if;
   if v_addr is not null then v_dati := v_dati || ('Via: ' || v_addr)::text; end if;
   if v_piva is not null then v_dati := v_dati || ('P.IVA: ' || v_piva)::text; end if;
+
+  -- Ragioni sociali come "S.r.l." o "S.S." finiscono già per punto: il punto
+  -- del template ne aggiungeva un secondo.
+  v_generata := regexp_replace(replace(t->>'piede_generata', '{cliente}', v_cli), '\.\.$', '.');
 
   v_html :=
     '<p>' || replace(t->>'saluto', '{fornitore}', v_forn) || '</p>' ||
@@ -121,7 +135,9 @@ begin
          else '<p>' || replace(v_note_txt, chr(10), '<br>') || '</p>' end ||
     case when p_tipo = 'campione' then '<p>' || (t->>'spese_campione') || '</p>' else '' end ||
     case when p_tipo = 'campione' and v_reg then '<p>' || (t->>'pannello') || '</p>' else '' end ||
-    '<p>' || (t->>'chiusura') || '</p>';
+    '<p>' || (t->>'chiusura') || '</p>' ||
+    case when array_length(v_dati, 1) is null then ''
+         else '<p>' || array_to_string(v_dati, '<br>') || '</p>' end;
 
   v_txt :=
     replace(t->>'saluto', '{fornitore}', v_forn) || chr(10) || chr(10) ||
@@ -131,12 +147,12 @@ begin
     coalesce(v_note_txt || chr(10) || chr(10), '') ||
     case when p_tipo = 'campione' then (t->>'spese_campione') || chr(10) || chr(10) else '' end ||
     case when p_tipo = 'campione' and v_reg then (t->>'pannello') || chr(10) || chr(10) else '' end ||
-    (t->>'chiusura');
+    (t->>'chiusura') ||
+    case when array_length(v_dati, 1) is null then ''
+         else chr(10) || chr(10) || array_to_string(v_dati, chr(10)) end;
 
   v_piede_html :=
-    '<p>' || replace(t->>'piede_generata', '{cliente}', v_cli) || '</p>' ||
-    case when array_length(v_dati, 1) is null then ''
-         else '<p>' || array_to_string(v_dati, '<br>') || '</p>' end ||
+    '<p>' || v_generata || '</p>' ||
     case when v_reg then ''
          else '<p>' || replace(t->>'piede_iscrizione', '{url_registrati}',
               '<a href="https://www.bulkstrike.com/registrati" style="color:#64748B">https://www.bulkstrike.com/registrati</a>') || '</p>' end ||
@@ -145,9 +161,7 @@ begin
          else '<p>' || replace(t->>'piede_disiscrizione_html', '{url_unsub}', p_unsub_url) || '</p>' end;
 
   v_piede_txt :=
-    replace(t->>'piede_generata', '{cliente}', v_cli) || chr(10) ||
-    case when array_length(v_dati, 1) is null then ''
-         else array_to_string(v_dati, chr(10)) || chr(10) end ||
+    v_generata || chr(10) ||
     case when v_reg then ''
          else replace(t->>'piede_iscrizione', '{url_registrati}', 'https://www.bulkstrike.com/registrati') || chr(10) end ||
     (t->>'piede_info') ||
@@ -163,7 +177,7 @@ begin
   );
 end;
 $fn$;
-revoke all on function public.email_richiesta_render(text,text,text,text,text,text,text,boolean,text,text,text,text,text,text) from public, anon;
+revoke all on function public.email_richiesta_render(text,text,text,text,text,text,text,boolean,text,text,text,text,text,text,text) from public, anon;
 
 -- ── Chiamanti: leggono anche address/vat del buyer e li passano al render ────
 -- Rispetto alle versioni precedenti cambiano solo la select sui dati del buyer
@@ -177,7 +191,7 @@ set search_path to 'public'
 as $function$
 declare
   v_product  text; v_buyer text; v_supplier text;
-  v_buyer_addr text; v_buyer_piva text;
+  v_buyer_addr text; v_buyer_piva text; v_buyer_ref text;
   v_lines    text[] := array[]::text[];
   v_specs_html text := null; v_specs_txt text := null;
   v_grado_label text; v_grado_txt text; v_fmt_min text; v_fmt_max text; v_denom_txt text;
@@ -194,7 +208,7 @@ begin
   end if;
 
   select p.canonical_name into v_product from products p where p.id = new.product_id;
-  select c.legal_name, c.address, c.vat into v_buyer, v_buyer_addr, v_buyer_piva
+  select c.legal_name, c.address, c.vat, c.contact_name into v_buyer, v_buyer_addr, v_buyer_piva, v_buyer_ref
     from companies c where c.id = new.buyer_company_id;
   select c.legal_name into v_supplier from companies c where c.id = new.supplier_company_id;
 
@@ -271,7 +285,7 @@ begin
     v_mail := public.email_richiesta_render(
       'campione', v_supplier, v_product, v_buyer, new.message,
       v_specs_html, v_specs_txt, v_reg, v_unsub, 'it', new.quantita_indicativa,
-      v_buyer, v_buyer_addr, v_buyer_piva);
+      v_buyer, v_buyer_addr, v_buyer_piva, v_buyer_ref);
 
     perform public._queue_plain_email(
       'sample_request_supplier', new.supplier_company_id, 'acquisti',
@@ -340,6 +354,7 @@ declare
   v_buyer_name text;
   v_buyer_addr text;
   v_buyer_piva text;
+  v_buyer_ref  text;
   v_product_name text;
   v_target uuid;
   v_target_row companies%rowtype;
@@ -375,7 +390,7 @@ begin
   end if;
 
   v_label := case v_type when 'preventivo' then 'Preventivo' else 'Contatto' end;
-  select legal_name, address, vat into v_buyer_name, v_buyer_addr, v_buyer_piva
+  select legal_name, address, vat, contact_name into v_buyer_name, v_buyer_addr, v_buyer_piva, v_buyer_ref
     from companies where id = v_buyer;
   select canonical_name into v_product_name from products where id = v_product;
 
@@ -419,7 +434,7 @@ begin
       v_mail := public.email_richiesta_render(
         v_type, v_target_row.legal_name, v_product_name, v_buyer_name, v_msg,
         null, null, v_reg, v_unsub, 'it', v_qta,
-        v_buyer_name, v_buyer_addr, v_buyer_piva);
+        v_buyer_name, v_buyer_addr, v_buyer_piva, v_buyer_ref);
 
       perform public._queue_plain_email(
         'supplier_contact_request_' || v_type, v_target, 'acquisti',
