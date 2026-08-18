@@ -2067,8 +2067,7 @@ export default function ProductPage() {
                         </ul>
                         {reqType === "campione" && (
                           <div style={{ fontSize:12.5, color:C.muted, lineHeight:1.55, marginBottom:12, background:"#FDF2F8", border:"1px solid #FBCFE8", borderRadius:8, padding:"10px 12px" }}>
-                            Le spese di spedizione del campione sono a carico del cliente. I dettagli di spedizione
-                            (quantità, indirizzo) verranno concordati direttamente con il fornitore dopo l'invio della richiesta.
+                            I costi di spedizione verranno concordati dopo l&apos;accettazione della richiesta.
                           </div>
                         )}
                         {/* Consenso obbligatorio: senza, l'invio non parte. Vale per
