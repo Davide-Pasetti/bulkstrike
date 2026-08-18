@@ -18,6 +18,9 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 // backoff 1m/5m/30m/2h/12h; al 6° fallimento status='failed'.
 // Allegati: emails_outbox.attachments = [{url, type, order_id}] → passati
 // a Resend come attachment con path (URL pubblico).
+// Reply-To: emails_outbox.reply_to, se valorizzato. Lo imposta il trigger
+// trg_reply_to_default in base al kind (oggi solo le tre richieste ai
+// fornitori → commercial@bulkstrike.com); NULL per tutto il resto.
 //
 // Autorizzazione: header x-cron-secret == app_secrets.ingest_cron_secret
 // (stesso pattern degli ingest ISMEA/CUN; verify_jwt=false lato deploy).
@@ -27,7 +30,11 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") ?? "";
-const FROM_EMAIL = Deno.env.get("FROM_EMAIL") ?? "BulkStrike <ordini@updates.bulkstrike.com>";
+// Mittente tecnico sul sottodominio già verificato su Resend. NON è una casella
+// reale: info@updates.bulkstrike.com non riceve posta (updates.bulkstrike.com non
+// ha MX). Le risposte le raccoglie il Reply-To, vedi replyTo qui sotto.
+// Da non confondere con info@bulkstrike.com, che è una casella Zoho vera.
+const FROM_EMAIL = Deno.env.get("FROM_EMAIL") ?? "BulkStrike <info@updates.bulkstrike.com>";
 const ALERT_TO = Deno.env.get("ALERT_EMAIL") ?? "davide@bulkstrike.com";
 
 // Kind amministrativi: vanno all'admin (ALERT_EMAIL), non all'azienda della riga.
@@ -49,7 +56,7 @@ function attachmentName(url: string, i: number) {
   return `allegato-${i + 1}`;
 }
 
-async function sendViaResend(to: string, subject: string, html: string | null, text: string | null, attachments: unknown) {
+async function sendViaResend(to: string, subject: string, html: string | null, text: string | null, attachments: unknown, replyTo?: string | null) {
   const atts = Array.isArray(attachments)
     ? attachments
         .filter((a: { url?: string }) => a && typeof a.url === "string" && a.url)
@@ -62,6 +69,8 @@ async function sendViaResend(to: string, subject: string, html: string | null, t
       from: FROM_EMAIL,
       to: [to],
       subject,
+      // Solo se la riga lo porta: senza reply_to l'invio resta identico a prima.
+      ...(replyTo ? { reply_to: replyTo } : {}),
       ...(html ? { html } : {}),
       ...(text ? { text } : {}),
       ...(atts.length ? { attachments: atts } : {}),
@@ -90,7 +99,7 @@ Deno.serve(async (req: Request) => {
 
   const { data: row } = await admin
     .from("emails_outbox")
-    .select("id, kind, to_email, to_company_id, recipient_role, subject, body_text, body_html, status, attempts, attachments")
+    .select("id, kind, to_email, to_company_id, recipient_role, subject, body_text, body_html, status, attempts, attachments, reply_to")
     .eq("id", id)
     .maybeSingle();
   if (!row) return json(404, { error: "OUTBOX_ROW_NOT_FOUND" });
@@ -161,7 +170,7 @@ Deno.serve(async (req: Request) => {
   if (!RESEND_API_KEY) return await failRetry("RESEND_API_KEY_NOT_SET", 500);
 
   try {
-    const resendId = await sendViaResend(recipient, row.subject, row.body_html, row.body_text, row.attachments);
+    const resendId = await sendViaResend(recipient, row.subject, row.body_html, row.body_text, row.attachments, row.reply_to);
     await admin.from("emails_outbox")
       .update({ status: "sent", sent_at: new Date().toISOString(), last_error: null })
       .eq("id", id).eq("status", "queued");
