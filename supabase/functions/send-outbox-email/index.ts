@@ -56,7 +56,7 @@ function attachmentName(url: string, i: number) {
   return `allegato-${i + 1}`;
 }
 
-async function sendViaResend(to: string, subject: string, html: string | null, text: string | null, attachments: unknown, replyTo?: string | null) {
+async function sendViaResend(to: string, subject: string, html: string | null, text: string | null, attachments: unknown, replyTo?: string | null, messageId?: string | null) {
   const atts = Array.isArray(attachments)
     ? attachments
         .filter((a: { url?: string }) => a && typeof a.url === "string" && a.url)
@@ -71,6 +71,9 @@ async function sendViaResend(to: string, subject: string, html: string | null, t
       subject,
       // Solo se la riga lo porta: senza reply_to l'invio resta identico a prima.
       ...(replyTo ? { reply_to: replyTo } : {}),
+      // Message-ID nostro: e' la chiave con cui, quando il fornitore risponde,
+      // si risale al thread leggendo In-Reply-To/References.
+      ...(messageId ? { headers: { "Message-ID": messageId } } : {}),
       ...(html ? { html } : {}),
       ...(text ? { text } : {}),
       ...(atts.length ? { attachments: atts } : {}),
@@ -99,7 +102,7 @@ Deno.serve(async (req: Request) => {
 
   const { data: row } = await admin
     .from("emails_outbox")
-    .select("id, kind, to_email, to_company_id, recipient_role, subject, body_text, body_html, status, attempts, attachments, reply_to")
+    .select("id, kind, to_email, to_company_id, recipient_role, subject, body_text, body_html, status, attempts, attachments, reply_to, message_id")
     .eq("id", id)
     .maybeSingle();
   if (!row) return json(404, { error: "OUTBOX_ROW_NOT_FOUND" });
@@ -170,7 +173,7 @@ Deno.serve(async (req: Request) => {
   if (!RESEND_API_KEY) return await failRetry("RESEND_API_KEY_NOT_SET", 500);
 
   try {
-    const resendId = await sendViaResend(recipient, row.subject, row.body_html, row.body_text, row.attachments, row.reply_to);
+    const resendId = await sendViaResend(recipient, row.subject, row.body_html, row.body_text, row.attachments, row.reply_to, row.message_id);
     await admin.from("emails_outbox")
       .update({ status: "sent", sent_at: new Date().toISOString(), last_error: null })
       .eq("id", id).eq("status", "queued");

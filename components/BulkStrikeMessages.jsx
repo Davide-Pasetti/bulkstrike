@@ -247,6 +247,14 @@ export default function MessagesPage({ inShell = false }) {
                             {m.body}
                           </div>
                           <div style={{ fontSize: 10.5, color: C.muted, marginTop: 3, textAlign: m.mine ? "right" : "left" }}>
+                            {/* Il fornitore non rivendicato risponde via email e la
+                                risposta finisce qui in automatico: chi legge deve
+                                sapere che non l'ha scritta lui in piattaforma. */}
+                            {m.via_email && (
+                              <span style={{ background: "#FFFBEB", color: "#92400E", border: "1px solid #FDE68A", borderRadius: 5, padding: "1px 5px", marginRight: 5, fontWeight: 600 }}>
+                                risposta via email
+                              </span>
+                            )}
                             {fmtTime(m.created_at)}{m.mine && m.read_at ? " · letto" : ""}
                           </div>
                         </div>
