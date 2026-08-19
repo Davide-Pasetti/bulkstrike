@@ -15,7 +15,7 @@ import { useState, useEffect, useLayoutEffect } from "react";
 import { LayoutGrid, Bell, ShoppingBag, Gavel, MessageSquare, Star, Package, Truck, Shield, ShieldCheck, Settings, Tag, Beaker } from "lucide-react";
 import { BSIcon } from "@/components/BSLogo";
 import NavAuth from "@/components/BulkStrikeNavAuth";
-import { getMyCompany, getNotifications, getUnreadMessagesCount, adminCountPendingSuppliers, adminListPendingPromotions, getMySampleRequests } from "@/lib/api";
+import { getMyCompany, getNotifications, getUnreadMessagesCount, adminCountPendingSuppliers, adminListPendingPromotions, getMySampleRequests, myClaimLanding } from "@/lib/api";
 
 const C = { blue: "#0EA5E9", text: "#0F172A", muted: "#64748B", border: "#E2E8F0", bg: "#F8FAFE", red: "#DC2626" };
 
@@ -77,6 +77,18 @@ export default function ProfileShell({ active, headerCenter = null, children }) 
     adminListPendingPromotions().then((rows) => { const n = (rows || []).length; setPendingPromos(n); writeShellCache({ pendingPromo: n }); }).catch(() => {});
     // Richieste di campionatura da gestire come FORNITORE, ancora in attesa.
     getMySampleRequests().then((rows) => { const n = (rows || []).filter((r) => r.role === "supplier" && r.status === "pending").length; setPendingSamples(n); writeShellCache({ pendingSample: n }); }).catch(() => {});
+    // Fornitore che ha appena rivendicato il profilo dal link in un'email di
+    // richiesta: al primo accesso lo si porta sulla conversazione di quel
+    // cliente, non su una pagina generica. Sta nella shell e non nella
+    // dashboard perché così intercetta il primo accesso ovunque atterri.
+    // La RPC consuma il valore, quindi succede una volta sola; se siamo già
+    // su quel thread non si ricarica la pagina per niente.
+    myClaimLanding().then((threadId) => {
+      if (!threadId) return;
+      const qs = new URLSearchParams(window.location.search);
+      if (window.location.pathname === "/messaggi" && qs.get("thread") === threadId) return;
+      window.location.href = `/messaggi?thread=${threadId}`;
+    }).catch(() => {});
   }, []);
 
   const SIDEBAR = [

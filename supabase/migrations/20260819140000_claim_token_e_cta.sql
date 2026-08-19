@@ -5,12 +5,13 @@
 -- QUALE conversazione far atterrare il fornitore dopo. L'approvazione resta
 -- admin_review_claim, cioè la review manuale.
 --
--- ATTENZIONE, comportamento preesistente non toccato qui: request_company_claim
--- approva DA SOLA quando il dominio dell'email di registrazione coincide con
--- quello del sito aziendale (domain_match) e il dominio non è generico. Chi
--- arriva da questo link con una email @suodominio.it viene quindi collegato
--- subito, senza passare da nessuna review. Non l'ho cambiato: è una decisione
--- di prodotto/sicurezza, non un dettaglio di questa migration.
+-- request_company_claim approva DA SOLA quando il dominio dell'email di
+-- registrazione coincide con quello del sito aziendale (domain_match) e il
+-- dominio non è generico: chi arriva da questo link con una email @suodominio.it
+-- viene collegato subito, senza review. Comportamento CONFERMATO come voluto,
+-- anche per chi arriva dal token — per questo la nota sotto il bottone dice
+-- "se ti registri con l'email della tua azienda, l'accesso è immediato" invece
+-- di promettere una verifica manuale che in quel caso non avviene.
 -- ============================================================================
 
 create table if not exists public.supplier_claim_tokens (
@@ -183,7 +184,7 @@ as $fn$
       'pannello',           $t$Puoi accettare o rifiutare la richiesta dal tuo pannello BulkStrike.$t$,
       'chiusura',           $t$Restando in attesa di un Vostro cortese riscontro, porgo cordiali saluti.$t$,
       'cta_registrati',     $t$Registrati e rivendica il tuo profilo per rispondere direttamente a {cliente}$t$,
-      'cta_nota',           $t$La richiesta di verifica sarà controllata dal nostro team prima dell'attivazione.$t$,
+      'cta_nota',           $t$Se ti registri con l'email della tua azienda, l'accesso è immediato; altrimenti verificheremo la richiesta a mano.$t$,
       'cta_alternativa',    $t$In alternativa, puoi rispondere direttamente a questa email.$t$,
       'piede_generata',     $t$Questa email è stata generata da un agente AI del sito BulkStrike.com per conto di {cliente}.$t$,
       'piede_info',         $t$Per maggiori informazioni in merito al sito BulkStrike scrivere alla mail davide@bulkstrike.com.$t$,
