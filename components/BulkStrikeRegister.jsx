@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { registerCompany, signUpAccount, findClaimCandidates, requestCompanyClaim, completeClaimedCompany, getMacroAreas } from "@/lib/api";
+import { registerCompany, signUpAccount, findClaimCandidates, requestCompanyClaim, completeClaimedCompany, getMacroAreas, claimTokenInfo, claimWithToken } from "@/lib/api";
 import { ShoppingCart, Factory, Truck, Check, ArrowRight, ArrowLeft, Mail, Lock, Building2, Globe, Phone, User, MapPin, Award, Boxes, Shield, X, Bell, Search, Plus, TrendingDown, Zap, ChevronRight, Eye, EyeOff } from "lucide-react";
 import BulkStrikeNav from "@/components/BulkStrikeNav";
 
@@ -314,6 +314,25 @@ export default function RegisterPage() {
   const [claiming, setClaiming] = useState(false);
   const [claimError, setClaimError] = useState(null);
   const [claimed, setClaimed] = useState(null); // { company_id, status, legal_name }
+  // Arrivo dal link "Registrati e rivendica il tuo profilo" nell'email di
+  // richiesta: il token dice già quale azienda, quindi la ricerca dei candidati
+  // si salta. Se è scaduto o già usato si torna al percorso normale.
+  const [claimToken, setClaimToken] = useState(null);
+  const [claimTokenAzienda, setClaimTokenAzienda] = useState(null);
+  const [claimTokenErr, setClaimTokenErr] = useState(null);
+  useEffect(() => {
+    const tk = new URLSearchParams(window.location.search).get("claim");
+    if (!tk) return;
+    claimTokenInfo(tk)
+      .then((r) => {
+        if (r?.ok) { setClaimToken(tk); setClaimTokenAzienda(r.company_name || "la tua azienda"); }
+        else setClaimTokenErr(
+          r?.motivo === "TOKEN_SCADUTO" ? "Il link di verifica è scaduto: puoi comunque registrarti qui sotto e cercare la tua azienda."
+          : r?.motivo === "TOKEN_GIA_USATO" ? "Questo link è già stato usato: se non sei stato tu, scrivici."
+          : "Link di verifica non valido: puoi comunque registrarti qui sotto.");
+      })
+      .catch(() => setClaimTokenErr("Link di verifica non leggibile: puoi comunque registrarti qui sotto."));
+  }, []);
 
   // L'account si crea alla fine dello step 1: senza sessione le RPC di
   // rivendicazione non sono chiamabili (il dominio si legge da auth.users).
@@ -340,6 +359,26 @@ export default function RegisterPage() {
     }
     setStep(2); // account creato (o già creato in questa sessione): ora si avanza
     setClaimLoading(true);
+    // Con un token valido l'azienda la sappiamo già: si rivendica quella, senza
+    // far scegliere da un elenco. L'esito (collegata o in attesa di verifica) lo
+    // decide request_company_claim come per ogni altra rivendica.
+    if (claimToken) {
+      try {
+        const res = await claimWithToken(claimToken);
+        if (res?.ok !== false) {
+          setClaimed({ ...res, legal_name: claimTokenAzienda });
+          setClaimState("claimed");
+          if (claimTokenAzienda) set("company", claimTokenAzienda);
+          setClaimLoading(false);
+          return;
+        }
+        // Token consumato o scaduto fra l'apertura della pagina e adesso:
+        // si prosegue col percorso normale invece di lasciare l'utente fermo.
+        setClaimTokenErr("Il link di verifica non è più valido: cerca la tua azienda qui sotto.");
+      } catch {
+        setClaimTokenErr("Non è stato possibile usare il link di verifica: cerca la tua azienda qui sotto.");
+      }
+    }
     try {
       const rows = await findClaimCandidates({
         email: f.email.trim(), legalName: f.company || null, vat: f.vat || null, role: type,
@@ -485,6 +524,26 @@ export default function RegisterPage() {
           </div>
 
           <div style={{ background:"#fff", border:`1px solid ${C.border}`, borderRadius:18, padding:28 }}>
+
+            {/* Chi arriva dal link nell'email di richiesta deve vedere subito
+                quale profilo sta rivendicando, prima ancora di creare l'account. */}
+            {claimTokenAzienda && (
+              <div style={{ border:"1px solid #BFDBFE", background:"#EFF6FF", borderRadius:12, padding:"14px 16px", marginBottom:20 }}>
+                <div style={{ fontSize:14, fontWeight:700, color:C.text, marginBottom:4 }}>
+                  Stai rivendicando il profilo di {claimTokenAzienda}
+                </div>
+                <div style={{ fontSize:13, color:C.muted, lineHeight:1.55 }}>
+                  Crea l&apos;account con la tua email aziendale: colleghiamo il profilo a te e trovi la richiesta
+                  del cliente nei messaggi. La richiesta di verifica sarà controllata dal nostro team prima
+                  dell&apos;attivazione.
+                </div>
+              </div>
+            )}
+            {claimTokenErr && (
+              <div style={{ border:"1px solid #FDE68A", background:"#FFFBEB", borderRadius:12, padding:"12px 15px", marginBottom:20, fontSize:13, color:"#92400E", lineHeight:1.55 }}>
+                {claimTokenErr}
+              </div>
+            )}
 
             {/* STEP 1 — type + access. È avvolto in un vero <form>: senza,
                 Chrome non riconosceva la coppia "nuova password / conferma" e
