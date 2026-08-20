@@ -12,7 +12,7 @@
 // Le voci con show:false sono nascoste per il ruolo corrente (flag
 // companies.is_* da getMyCompany, stesso pattern della vecchia sidebar).
 import { useState, useEffect, useLayoutEffect } from "react";
-import { LayoutGrid, Bell, ShoppingBag, Gavel, MessageSquare, Star, Package, Truck, Shield, ShieldCheck, Settings, Tag, Beaker } from "lucide-react";
+import { LayoutGrid, Bell, ShoppingBag, Gavel, MessageSquare, Star, Package, Truck, Shield, ShieldCheck, Settings, Tag, Beaker, Mail } from "lucide-react";
 import { BSIcon } from "@/components/BSLogo";
 import NavAuth from "@/components/BulkStrikeNavAuth";
 import { getMyCompany, getNotifications, getUnreadMessagesCount, adminCountPendingSuppliers, adminListPendingPromotions, getMySampleRequests, myClaimLanding } from "@/lib/api";
@@ -106,6 +106,7 @@ export default function ProfileShell({ active, headerCenter = null, children }) 
     { id: "admin",     label: "Apertura asta",          icon: Shield,        href: "/admin/prodotti",  show: !!company?.is_platform_admin },
     { id: "admin-fornitori", label: "Fornitori da verificare", icon: ShieldCheck, href: "/admin/fornitori", show: !!company?.is_platform_admin, badge: pendingSuppliers },
     { id: "admin-promozioni", label: "Promozioni da approvare", icon: Tag, href: "/admin/promozioni", show: !!company?.is_platform_admin, badge: pendingPromos },
+    { id: "mail-ricevute", label: "Mail ricevute", icon: Mail, href: "/admin/mail-ricevute", show: !!company?.is_platform_admin },
     { id: "account",   label: "Account",                icon: Settings,      href: "/dashboard?section=account" },
   ];
 
