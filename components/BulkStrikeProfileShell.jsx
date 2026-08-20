@@ -12,7 +12,7 @@
 // Le voci con show:false sono nascoste per il ruolo corrente (flag
 // companies.is_* da getMyCompany, stesso pattern della vecchia sidebar).
 import { useState, useEffect, useLayoutEffect } from "react";
-import { LayoutGrid, Bell, ShoppingBag, Gavel, MessageSquare, Star, Package, Truck, Shield, ShieldCheck, Settings, Tag, Beaker, Mail } from "lucide-react";
+import { LayoutGrid, Bell, ShoppingBag, Gavel, MessageSquare, Star, Package, Truck, Shield, ShieldCheck, Settings, Tag, Beaker, Mail, UserCheck } from "lucide-react";
 import { BSIcon } from "@/components/BSLogo";
 import NavAuth from "@/components/BulkStrikeNavAuth";
 import { getMyCompany, getNotifications, getUnreadMessagesCount, adminCountPendingSuppliers, adminListPendingPromotions, getMySampleRequests, myClaimLanding } from "@/lib/api";
@@ -101,6 +101,7 @@ export default function ProfileShell({ active, headerCenter = null, children }) 
     { id: "preferiti", label: "Fornitori preferiti",    icon: Star,          href: "/preferiti" },
     { id: "prodotti",  label: "Listino prodotti",       icon: Package,       href: "/i-miei-prodotti", show: !!company?.is_supplier },
     { id: "promozioni", label: "Le mie promozioni",      icon: Tag,           href: "/le-mie-promozioni", show: !!company?.is_supplier },
+    { id: "agenti",    label: "I miei agenti di zona",  icon: UserCheck,     href: "/fornitore/agenti", show: !!company?.is_supplier },
     { id: "campionature", label: "Richieste di campionatura", icon: Beaker,   href: "/le-mie-campionature", show: !!company?.is_supplier, badge: pendingSamples },
     { id: "servizi",   label: "Listino servizi",        icon: Truck,         href: "/corriere",        show: !!company?.is_carrier },
     { id: "admin",     label: "Apertura asta",          icon: Shield,        href: "/admin/prodotti",  show: !!company?.is_platform_admin },

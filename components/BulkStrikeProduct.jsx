@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { Search, ArrowRight, Check, Clock, ChevronDown, ChevronRight, ChevronUp, Star, Shield, Truck, FileText, Download, Plus, Minus, Beaker, TrendingDown, Users, Gavel, Info, ShoppingCart, Factory, ExternalLink, MessageSquare, X, Wine, AlertTriangle } from "lucide-react";
-import { getProduct, getOpenPoolForProduct, getPriceReference, getProductBreadcrumb, getSession, upsertCartItem, poolErrorMessage, searchProducts, getCart, isFollowingProduct, getMarketPriceSeries, getMarketIndexSeries, getProductSpecs, getProductCandidateSuppliers, getMyCompany, getMarketPriceSeriesByPiazza, requestSamplesBulk, bulkSampleGlobalError, getProductSampling, requestSupplierContactBulk, supplierContactError, getProductIndicators } from "@/lib/api";
+import { agentiDiZona, getProduct, getOpenPoolForProduct, getPriceReference, getProductBreadcrumb, getSession, upsertCartItem, poolErrorMessage, searchProducts, getCart, isFollowingProduct, getMarketPriceSeries, getMarketIndexSeries, getProductSpecs, getProductCandidateSuppliers, getMyCompany, getMarketPriceSeriesByPiazza, requestSamplesBulk, bulkSampleGlobalError, getProductSampling, requestSupplierContactBulk, supplierContactError, getProductIndicators } from "@/lib/api";
 import PriceSourceNote from "@/components/PriceSourceNote";
 import CountryFlag from "@/components/CountryFlag";
 import { ytdChange } from "@/lib/priceTrend";
@@ -367,6 +367,12 @@ export default function ProductPage() {
   // e si riazzera a ogni nuova richiesta. Tornando "Indietro" dall'esito resta
   // spuntato: è la stessa richiesta, agli stessi fornitori.
   const [reqConsenso, setReqConsenso] = useState(false);
+  // Agenti di zona dei fornitori scelti: { [company_id]: [ {zone_id, full_name, ...} ] }.
+  // Solo legami confermati, e senza provvigione: quella non esce mai dalla RPC.
+  const [agentiPerFornitore, setAgentiPerFornitore] = useState({});
+  // zone_id scelti dal buyer, per fornitore. La richiesta va COMUNQUE al
+  // fornitore: all'agente arriva una copia.
+  const [agenteScelto, setAgenteScelto] = useState({});
   const [piazzaData, setPiazzaData] = useState(null);
   const [selectedPiazze, setSelectedPiazze] = useState([]); // piazze mostrate sul grafico vino
   useEffect(() => { if (productId) isFollowingProduct(productId).then(setFollowingProduct).catch(() => {}); }, [productId]);
@@ -692,6 +698,23 @@ export default function ProductPage() {
     () => richiestaSuppliers.filter(s => selectedSP.has(s.supplier_product_id)),
     [richiestaSuppliers, selectedSP]
   );
+  // Agenti dei fornitori selezionati: si chiedono all'apertura del popup, non a
+  // ogni spunta, così una selezione da 70 fornitori non genera 70 chiamate.
+  async function caricaAgenti(scelti) {
+    const cids = [...new Set(scelti.map(s => s.company_id).filter(Boolean))];
+    const mancanti = cids.filter(c => !(c in agentiPerFornitore));
+    if (mancanti.length === 0) return;
+    const esiti = await Promise.all(mancanti.map(async cid => {
+      const s = scelti.find(x => x.company_id === cid);
+      return [cid, await agentiDiZona(cid, s?.region || null, s?.country || null)];
+    }));
+    setAgentiPerFornitore(prev => ({ ...prev, ...Object.fromEntries(esiti) }));
+  }
+  // { supplier_company_id: zone_id } per i soli fornitori dove il buyer ha
+  // davvero scelto un agente. Vuoto = contatto diretto, comportamento di sempre.
+  const zoneAgentiScelte = (scelti) => Object.fromEntries(
+    scelti.map(s => [s.company_id, agenteScelto[s.company_id]])
+          .filter(([cid, z]) => cid && z));
   // Passando a "Campione" restano selezionati solo i fornitori che i campioni li
   // fanno davvero: altrimenti l'invio partirebbe con righe destinate a fallire.
   useEffect(() => {
@@ -735,6 +758,7 @@ export default function ProductPage() {
           supplierProductIds: scelti.map(s => s.supplier_product_id),
           message: reqMsg.trim() || null,
           quantitaIndicativa: qtaRichiesta,
+          agentZones: zoneAgentiScelte(scelti),
           ...(richiedeSpec ? {
             specQuantitaPartita: quantitaPartita || null,
             specColore: specColore || null,
@@ -759,6 +783,7 @@ export default function ProductPage() {
         const res = await requestSupplierContactBulk({
           targetCompanyIds: cids, productId, requestType: reqType, message: reqMsg.trim() || null,
           quantitaIndicativa: qtaRichiesta,
+          agentZones: zoneAgentiScelte(scelti),
         });
         const nomePerCid = new Map(richiestaSuppliers.map(s => [s.company_id, s.legal_name]));
         esiti = (res || []).map(r => ({
@@ -1987,7 +2012,7 @@ export default function ProductPage() {
                 </label>
 
                 {/* Il click NON invia: apre il popup di conferma. Si invia solo da lì. */}
-                <button onClick={() => { setReqErr(""); setReqResult(null); setReqConsenso(false); setReqFase("conferma"); }} disabled={reqScelti.length === 0 || reqBusy}
+                <button onClick={() => { setReqErr(""); setReqResult(null); setReqConsenso(false); setReqFase("conferma"); caricaAgenti(reqScelti); }} disabled={reqScelti.length === 0 || reqBusy}
                   style={{ width:"100%", marginTop:12, background:(reqScelti.length===0||reqBusy)?"#E9AEC6":"#9D174D", color:"#fff", border:"none", borderRadius:10, padding:"13px", fontSize:14.5, fontWeight:700, cursor:(reqScelti.length===0||reqBusy)?"not-allowed":"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:8, fontFamily:"Inter,system-ui" }}>
                   <Beaker size={16}/> {reqBusy ? "Invio…" : `Invia richiesta (${reqScelti.length})`}
                 </button>
@@ -2100,17 +2125,43 @@ export default function ProductPage() {
                             necessarie", che è UNA per la pagina: la si ripete accanto a
                             ogni fornitore perché è ciò che verrà scritto nella richiesta
                             a ciascuno di loro. */}
-                        <ul style={{ margin:"0 0 14px", padding:"0 0 0 20px", fontSize:13.5, color:C.text, lineHeight:1.5, maxHeight:220, overflowY:"auto" }}>
-                          {reqScelti.map(s => (
-                            <li key={s.supplier_product_id} style={{ marginBottom:8 }}>
+                        <ul style={{ margin:"0 0 14px", padding:"0 0 0 20px", fontSize:13.5, color:C.text, lineHeight:1.5, maxHeight:260, overflowY:"auto" }}>
+                          {reqScelti.map(s => {
+                            const agenti = agentiPerFornitore[s.company_id] || [];
+                            const scelto = agenteScelto[s.company_id] || "";
+                            return (
+                            <li key={s.supplier_product_id} style={{ marginBottom:10 }}>
                               <div>{s.legal_name}</div>
                               {/* Senza quantità la riga sparisce del tutto: "0 kg"
                                   o una riga vuota direbbero una cosa falsa. */}
                               {qtaRichiesta && (
                                 <div style={{ fontSize:12.5, color:C.muted }}>Quantità stimata necessaria: {qtaRichiesta}</div>
                               )}
+                              {/* Agente di zona: facoltativo, di default nessuno.
+                                  Il fornitore riceve la richiesta in ogni caso. */}
+                              {agenti.length > 0 && (
+                                <div style={{ marginTop:4 }}>
+                                  <select value={scelto}
+                                    onChange={e => setAgenteScelto(p => ({ ...p, [s.company_id]: e.target.value }))}
+                                    style={{ width:"100%", padding:"6px 9px", border:`1px solid ${C.border}`, borderRadius:7, fontSize:12.5, background:"#fff", color:C.text, cursor:"pointer", fontFamily:"Inter,system-ui" }}>
+                                    <option value="">Contatto diretto col fornitore</option>
+                                    {agenti.map(a => (
+                                      <option key={a.zone_id} value={a.zone_id}>
+                                        Anche all&apos;agente {a.full_name}
+                                        {a.zona_esatta ? ` (zona ${a.region})` : a.region ? ` (zona ${a.region})` : ""}
+                                      </option>
+                                    ))}
+                                  </select>
+                                  {scelto && (
+                                    <div style={{ fontSize:11.5, color:C.muted, marginTop:3 }}>
+                                      Il fornitore riceve comunque la richiesta: all&apos;agente arriva una copia.
+                                    </div>
+                                  )}
+                                </div>
+                              )}
                             </li>
-                          ))}
+                            );
+                          })}
                         </ul>
                         {reqType === "campione" && (
                           <div style={{ fontSize:12.5, color:C.muted, lineHeight:1.55, marginBottom:12, background:"#FDF2F8", border:"1px solid #FBCFE8", borderRadius:8, padding:"10px 12px" }}>
