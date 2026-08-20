@@ -108,6 +108,7 @@ export default function ProfileShell({ active, headerCenter = null, children }) 
     { id: "admin-fornitori", label: "Fornitori da verificare", icon: ShieldCheck, href: "/admin/fornitori", show: !!company?.is_platform_admin, badge: pendingSuppliers },
     { id: "admin-promozioni", label: "Promozioni da approvare", icon: Tag, href: "/admin/promozioni", show: !!company?.is_platform_admin, badge: pendingPromos },
     { id: "mail-ricevute", label: "Mail ricevute", icon: Mail, href: "/admin/mail-ricevute", show: !!company?.is_platform_admin },
+    { id: "admin-agenti", label: "Agenti di vendita", icon: UserCheck, href: "/admin/agenti", show: !!company?.is_platform_admin },
     { id: "account",   label: "Account",                icon: Settings,      href: "/dashboard?section=account" },
   ];
 

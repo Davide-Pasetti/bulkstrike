@@ -17,6 +17,8 @@ export const config = {
 // token nell'URL è la credenziale, validata server-side con rate limit.
 // "disiscrizione" idem: la apre un fornitore NON registrato dal link in fondo
 // alle email di richiesta, quindi non può passare dal login.
-"/((?!_next/static|_next/image|favicon.ico|api|welcome|registrati|pool|prodotto|prodotti|categorie|aste|andamento-prezzi|fornitore|fornitori|dashboard|catalogo|corriere|corrieri|legale|ricezione|disiscrizione|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)"
+// "agenti" è la pagina pubblica di autocandidatura: chi la usa non ha (ancora)
+// un account BulkStrike, quindi non può passare dal login.
+"/((?!_next/static|_next/image|favicon.ico|api|welcome|registrati|pool|prodotto|prodotti|categorie|aste|andamento-prezzi|fornitore|fornitori|dashboard|catalogo|corriere|corrieri|legale|ricezione|disiscrizione|agenti|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)"
   ],
 };
