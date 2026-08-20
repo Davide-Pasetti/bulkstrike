@@ -334,6 +334,10 @@ export default function ProductPage() {
   const [sampling, setSampling] = useState(null);   // get_product_sampling per le materie prime (purchase)
   const [wfCountry, setWfCountry] = useState("");   // nazione selezionata
   const [wfRegion, setWfRegion] = useState("");     // regione selezionata
+  // Un fornitore con sede legale altrove ma un deposito in zona può servire il
+  // cliente da lì: di default il filtro guarda anche le sedi secondarie.
+  // Spegnendolo si torna al comportamento storico (solo sede principale).
+  const [consideraSedi, setConsideraSedi] = useState(true);
   const [sortBy, setSortBy] = useState("prezzo");   // ordinamento fornitori con prezzo: "prezzo" | "consegna"
   const [selectedSP, setSelectedSP] = useState(() => new Set());
   const [quantitaPartita, setQuantitaPartita] = useState("");
@@ -535,19 +539,38 @@ export default function ProductPage() {
   // Fornitori vino dalla RPC dedicata (verificati e non). Nazione con conteggio
   // (desc); Regione dipende dalla nazione. La selezione vive in un Set
   // indipendente dal filtro: cambiando filtro le scelte non si perdono.
+  // Le zone di un fornitore: sede principale + eventuali sedi secondarie
+  // (depositi, filiali, stabilimenti) quando il toggle è attivo.
+  const zoneDi = (s) => {
+    const z = [{ country: s.country, region: s.region, city: s.city, principale: true }];
+    if (consideraSedi) for (const l of (s.altre_sedi || [])) z.push({ ...l, principale: false });
+    return z;
+  };
   const sampleNazioni = useMemo(() => {
     const m = new Map();
-    for (const s of sampleSuppliers) { const c = s.country; if (!c) continue; m.set(c, (m.get(c) || 0) + 1); }
+    for (const s of sampleSuppliers) {
+      // Un fornitore conta UNA volta per nazione anche se ci ha più sedi:
+      // il numero fra parentesi sono fornitori, non indirizzi.
+      for (const c of new Set(zoneDi(s).map(z => z.country).filter(Boolean))) m.set(c, (m.get(c) || 0) + 1);
+    }
     return [...m.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
-  }, [sampleSuppliers]);
-  const sampleRegioni = useMemo(() => (
-    wfCountry ? [...new Set(sampleSuppliers.filter(s => s.country === wfCountry && s.region).map(s => s.region))].sort() : []
-  ), [sampleSuppliers, wfCountry]);
-  const filteredSampleSuppliers = useMemo(() => sampleSuppliers.filter(s => {
-    if (wfCountry && s.country !== wfCountry) return false;
-    if (wfRegion && s.region !== wfRegion) return false;
-    return true;
-  }), [sampleSuppliers, wfCountry, wfRegion]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sampleSuppliers, consideraSedi]);
+  const sampleRegioni = useMemo(() => {
+    if (!wfCountry) return [];
+    const r = new Set();
+    for (const s of sampleSuppliers)
+      for (const z of zoneDi(s)) if (z.country === wfCountry && z.region) r.add(z.region);
+    return [...r].sort();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sampleSuppliers, wfCountry, consideraSedi]);
+  // La sede che fa combaciare il filtro: serve anche alla card, per dire "Sede a:"
+  // invece di lasciar credere che sia la sede legale.
+  const sedeCheCombacia = (s) => zoneDi(s).find(z =>
+    (!wfCountry || z.country === wfCountry) && (!wfRegion || z.region === wfRegion)) || null;
+  const filteredSampleSuppliers = useMemo(() => sampleSuppliers.filter(s => !!sedeCheCombacia(s)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [sampleSuppliers, wfCountry, wfRegion, consideraSedi]);
   const sampleFilterActive = !!(wfCountry || wfRegion);
   const toggleSP = (id) => setSelectedSP(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   // Lista UNICA di fornitori (con showSampling): parte dai campionabili filtrati
@@ -1292,6 +1315,17 @@ export default function ProductPage() {
                     </select>
                   </div>
                 </div>
+                {/* Un fornitore con sede legale altrove ma un deposito in zona
+                    può servire il cliente da lì: di default lo si considera. */}
+                <label style={{ display:"flex", alignItems:"flex-start", gap:8, marginTop:10, cursor:"pointer" }}>
+                  <input type="checkbox" checked={consideraSedi} onChange={e => setConsideraSedi(e.target.checked)}
+                    style={{ width:15, height:15, accentColor:C.blue, cursor:"pointer", flexShrink:0, marginTop:2 }}/>
+                  <span style={{ fontSize:12, color:C.muted, lineHeight:1.5 }}>
+                    <b style={{ color:C.text, fontWeight:600 }}>Considera anche le sedi</b> — include chi ha depositi o
+                    filiali nella zona, anche con sede legale altrove.
+                  </span>
+                </label>
+
                 {/* ORDINAMENTO — riguarda solo i fornitori con prezzo; quelli senza restano in fondo. */}
                 <div style={{ marginTop:12 }}>
                   <label style={{ display:"block", fontSize:11, color:C.muted, fontWeight:600, marginBottom:5 }}>Ordina per</label>
@@ -1478,6 +1512,19 @@ export default function ProductPage() {
                           <div style={{ fontSize:12.5, color:C.muted, display:"flex", alignItems:"center", gap:6, flexWrap:"wrap" }}>
                             <CountryFlag code={s.country_iso2} country={s.country} size={12} />
                             <span>{place || s.country || "—"}</span>
+                            {/* Compare grazie a un deposito/filiale, non alla sede
+                                legale: dirlo, altrimenti la riga sopra sembra
+                                l'indirizzo da cui spedisce. */}
+                            {(() => {
+                              const sede = sedeCheCombacia(s);
+                              if (!sede || sede.principale) return null;
+                              const dove = [sede.city, sede.region, sede.country].filter(Boolean).join(", ");
+                              return (
+                                <span className="bs-chip" style={{ background:"#EFF6FF", color:"#1D4ED8" }}>
+                                  Sede a: {dove}{sede.tipo && sede.tipo !== "altra" ? ` (${sede.tipo})` : ""}
+                                </span>
+                              );
+                            })()}
                           </div>
                           {Array.isArray(s.colori) && s.colori.length > 0 && (
                             <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginTop:7 }}>
