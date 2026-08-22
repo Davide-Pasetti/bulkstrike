@@ -1,6 +1,6 @@
 "use client";
 // BulkStrikeAdminInbox — pagina admin "Mail ricevute".
-// Specchio della posta letta da commercial@bulkstrike.com. Serve soprattutto a
+// Specchio della posta letta da info@bulkstrike.com. Serve soprattutto a
 // una cosa: vedere le risposte che NON si sono agganciate a nessuna richiesta,
 // perché quelle non finiscono in nessun thread e altrimenti si perderebbero.
 // Solo platform admin: il gate vero è nella RPC (NOT_ADMIN), qui si evita solo
@@ -40,7 +40,7 @@ export default function AdminInboxPage() {
           <h1 style={{ fontSize:22, fontWeight:800, margin:0 }}>Mail ricevute</h1>
         </div>
         <p style={{ fontSize:13.5, color:C.muted, lineHeight:1.6, marginBottom:18 }}>
-          Posta in arrivo di <b>commercial@bulkstrike.com</b>, letta in sola lettura: sul server non viene
+          Posta in arrivo di <b>info@bulkstrike.com</b>, letta in sola lettura: sul server non viene
           spostato, segnato o cancellato niente. Le risposte che portano il codice della richiesta finiscono
           da sole nella conversazione col cliente. Quelle senza codice restano qui, da smistare a mano.
         </p>

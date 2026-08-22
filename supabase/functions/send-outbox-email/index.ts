@@ -20,7 +20,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 // a Resend come attachment con path (URL pubblico).
 // Reply-To: emails_outbox.reply_to, se valorizzato. Lo imposta il trigger
 // trg_reply_to_default in base al kind (oggi solo le tre richieste ai
-// fornitori → commercial@bulkstrike.com); NULL per tutto il resto.
+// fornitori → info@bulkstrike.com); NULL per tutto il resto.
 //
 // Autorizzazione: header x-cron-secret == app_secrets.ingest_cron_secret
 // (stesso pattern degli ingest ISMEA/CUN; verify_jwt=false lato deploy).

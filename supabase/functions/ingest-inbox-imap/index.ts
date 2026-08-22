@@ -2,8 +2,9 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 // ============================================================================
-// BulkStrike — legge la INBOX di commercial@bulkstrike.com e riporta le
+// BulkStrike — legge la INBOX di info@bulkstrike.com e riporta le
 // risposte dei fornitori nella conversazione giusta.
+// (Fino al 22/08/2026 la casella era commercial@bulkstrike.com, poi eliminata.)
 //
 // SOLA LETTURA sul server di posta, per contratto:
 //   - EXAMINE (non SELECT): la cartella si apre in modalità read-only;
@@ -27,7 +28,12 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const IMAP_HOST = Deno.env.get("ZOHO_IMAP_HOST") ?? "imappro.zoho.eu";
 const IMAP_PORT = Number(Deno.env.get("ZOHO_IMAP_PORT") ?? 993);
-const IMAP_USER = Deno.env.get("ZOHO_IMAP_USER") ?? "commercial@bulkstrike.com";
+// Questo valore fa DUE cose: e' l'utente del LOGIN IMAP ed e' la chiave della
+// riga di imap_state (vedi `const mailbox = IMAP_USER` piu' sotto). Se il
+// secret ZOHO_IMAP_USER e' impostato vince lui: dopo un cambio di casella va
+// aggiornato o rimosso, altrimenti il default qui sotto non viene mai usato.
+// La risposta del job riporta `mailbox`, quindi si vede subito quale ha vinto.
+const IMAP_USER = Deno.env.get("ZOHO_IMAP_USER") ?? "info@bulkstrike.com";
 const IMAP_PASS = Deno.env.get("ZOHO_IMAP_APP_PASSWORD") ?? "";
 // Quante mail al massimo per giro: il cron passa ogni 20 minuti, se ne
 // arrivassero centinaia insieme si recupera al giro dopo invece di andare in
