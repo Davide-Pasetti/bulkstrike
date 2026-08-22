@@ -52,3 +52,5 @@ insert into public.imap_state (mailbox) values ('info@bulkstrike.com')
 -- info@updates.bulkstrike.com, sottodominio senza MX: la risposta di un agente
 -- oggi rimbalza, e il codice [RIF-] che pure c'e' nel suo oggetto non serve a
 -- niente. Va deciso, non e' un refuso di questo cambio.
+-- >> CHIUSO il 22/08/2026 dalla migration 20260822180000: agent_request_copy
+-- >> e' stato aggiunto alla mappa e prende anche lui info@bulkstrike.com.
