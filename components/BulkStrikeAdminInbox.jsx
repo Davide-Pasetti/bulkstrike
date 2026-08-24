@@ -6,8 +6,8 @@
 // Solo platform admin: il gate vero è nella RPC (NOT_ADMIN), qui si evita solo
 // di mostrare una pagina vuota a chi non deve vederla.
 import { useEffect, useState } from "react";
-import { Mail, AlertTriangle, Check, ExternalLink } from "lucide-react";
-import { getMyCompany, adminListInbox } from "@/lib/api";
+import { Mail, AlertTriangle, Check, ExternalLink, Send } from "lucide-react";
+import { getMyCompany, adminListInbox, adminPublishInboxEmail } from "@/lib/api";
 import BulkStrikeProfileShell from "@/components/BulkStrikeProfileShell";
 
 const C = { blue:"#0EA5E9", text:"#0F172A", muted:"#64748B", border:"#E2E8F0", bg:"#F8FAFE", green:"#059669", amber:"#D97706" };
@@ -18,6 +18,7 @@ export default function AdminInboxPage() {
   const [soloDaRivedere, setSoloDaRivedere] = useState(false);
   const [notAdmin, setNotAdmin] = useState(false);
   const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(null);
 
   useEffect(() => { carica(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [soloDaRivedere]);
   async function carica() {
@@ -26,6 +27,21 @@ export default function AdminInboxPage() {
       if (!co?.is_platform_admin) { setNotAdmin(true); return; }
       setRows(await adminListInbox(soloDaRivedere));
     } catch (e) { setErr(String(e?.message || e)); }
+  }
+
+  // Pubblicare una mail trattenuta significa mettere parole in bocca a un
+  // fornitore in una conversazione con un cliente: si conferma prima.
+  async function pubblica(r) {
+    const chi = r.from_email || "mittente sconosciuto";
+    if (!window.confirm(
+      `Pubblicare questa mail nella conversazione con ${r.cliente || "il cliente"}?\n\n` +
+      `Comparirà come messaggio di ${r.controparte || "il fornitore"}, ma è stata inviata da ${chi}.\n` +
+      `Resterà contrassegnata come "mittente non verificato".`
+    )) return;
+    setBusy(r.id); setErr("");
+    try { await adminPublishInboxEmail(r.id); setRows(await adminListInbox(soloDaRivedere)); }
+    catch (e) { setErr(String(e?.message || e)); }
+    setBusy(null);
   }
 
   if (notAdmin) return <div style={{ padding:40, textAlign:"center", color:C.muted }}>Sezione riservata agli amministratori.</div>;
@@ -82,7 +98,9 @@ export default function AdminInboxPage() {
                   )}
                 </div>
 
-                {r.processed && r.controparte && (
+                {/* La conversazione si mostra anche per le mail trattenute:
+                    per decidere se pubblicarla bisogna sapere dove finirebbe. */}
+                {r.controparte && (
                   <div style={{ fontSize:12.5, color:C.muted, marginBottom:6 }}>
                     {r.controparte} → {r.cliente}{" "}
                     <a href={`/messaggi?thread=${r.thread_id}`} style={{ color:C.blue, fontWeight:700, textDecoration:"none", display:"inline-flex", alignItems:"center", gap:3 }}>
@@ -97,6 +115,18 @@ export default function AdminInboxPage() {
                   <div style={{ fontSize:13, color:C.text, background:C.bg, border:`1px solid ${C.border}`, borderRadius:8, padding:"9px 11px", whiteSpace:"pre-wrap", maxHeight:150, overflow:"auto", lineHeight:1.55 }}>
                     {r.estratto}
                   </div>
+                )}
+
+                {/* Solo per le mail con una conversazione ma non pubblicate:
+                    il caso tipico è il mittente estraneo ai domini del
+                    fornitore. Chi ha letto la mail decide. */}
+                {r.pubblicabile && (
+                  <button onClick={() => pubblica(r)} disabled={busy === r.id}
+                    style={{ marginTop:10, display:"inline-flex", alignItems:"center", gap:6, background:busy === r.id ? C.muted : C.blue,
+                             color:"#fff", border:"none", borderRadius:8, padding:"7px 13px", fontSize:12.5, fontWeight:700,
+                             cursor:busy === r.id ? "default" : "pointer" }}>
+                    <Send size={13}/> {busy === r.id ? "Pubblico…" : "Pubblica nella conversazione"}
+                  </button>
                 )}
               </div>
             ))}

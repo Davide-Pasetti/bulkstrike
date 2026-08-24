@@ -255,6 +255,16 @@ export default function MessagesPage({ inShell = false }) {
                                 risposta via email
                               </span>
                             )}
+                            {/* Il codice nell'oggetto dice a quale conversazione
+                                appartiene la mail, non chi l'ha scritta. Quando
+                                il mittente non è riconducibile al fornitore, chi
+                                legge deve saperlo prima di fidarsi. */}
+                            {m.sender_unverified && (
+                              <span title="Il mittente della email non è riconducibile ai recapiti noti di questa azienda."
+                                style={{ background: "#FEF2F2", color: "#B91C1C", border: "1px solid #FECACA", borderRadius: 5, padding: "1px 5px", marginRight: 5, fontWeight: 600 }}>
+                                mittente non verificato
+                              </span>
+                            )}
                             {fmtTime(m.created_at)}{m.mine && m.read_at ? " · letto" : ""}
                           </div>
                         </div>
