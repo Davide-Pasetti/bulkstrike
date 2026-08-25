@@ -100,7 +100,7 @@ prospettiva, da AI/ERP (server MCP e API OpenAPI restano obiettivi futuri).
 ================================================================
 
 - Frontend + backend applicativo: Next.js 16 (Turbopack, cacheComponents)
-  su Vercel — repo GitHub Davide-Pasetti/nextjs-with-supabase, branch main.
+  su Vercel — repo GitHub Davide-Pasetti/bulkstrike, branch main.
 - Database / auth / realtime / cron: Supabase (progetto uufueekpxboygcotqvhu).
   Migrations versionate in supabase/migrations; RPC SECURITY DEFINER con
   search_path fissato; RLS ovunque.
@@ -296,7 +296,7 @@ prospettiva, da AI/ERP (server MCP e API OpenAPI restano obiettivi futuri).
 10. INVENTARIO FILE
 ================================================================
 
-- FONTE DI VERITÀ DEL CODICE: repo GitHub Davide-Pasetti/nextjs-with-supabase
+- FONTE DI VERITÀ DEL CODICE: repo GitHub Davide-Pasetti/bulkstrike
   (app Next.js + supabase/migrations + supabase/functions + docs/). I sorgenti
   sparsi su Drive sono COPIE SUPERATE.
 - FONTE DI VERITÀ DEI DATI: DB Supabase (products, market_price_history,
@@ -313,7 +313,8 @@ prospettiva, da AI/ERP (server MCP e API OpenAPI restano obiettivi futuri).
 - Supabase: progetto uufueekpxboygcotqvhu.
 - Vercel: team team_jTWQEeTRp9VbJADw5VGpz6ri, progetto
   prj_LZkzKkAxJbPizbmZHe3DwiKjKand.
-- Repo: github.com/Davide-Pasetti/nextjs-with-supabase (branch main).
+- Repo: github.com/Davide-Pasetti/bulkstrike (branch main).
+  (rinominato il 25/08/2026 da nextjs-with-supabase; il repo e' ora pubblico)
 
 ================================================================
 12. STATO ATTUALE E PROSSIMI PASSI
