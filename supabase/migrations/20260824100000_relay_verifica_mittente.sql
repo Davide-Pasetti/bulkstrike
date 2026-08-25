@@ -1,9 +1,9 @@
 -- ============================================================================
 -- RELAY: verifica del mittente prima di pubblicare in conversazione.
 --
--- Il test dal vivo del 24/08 ha mostrato il buco: una mail spedita da
--- davide@pasettivini.it e' entrata nel thread attribuita ad "Albis Plastic
--- GmbH", solo perche' l'oggetto conteneva il codice giusto. I codici [RIF-]
+-- Il test dal vivo del 24/08 ha mostrato il buco: una mail spedita da un
+-- indirizzo estraneo (esempio@dominio.it) e' entrata nel thread attribuita al
+-- fornitore, solo perche' l'oggetto conteneva il codice giusto. I codici [RIF-]
 -- viaggiano in chiaro nell'oggetto di mail vere: un inoltro o una casella
 -- compromessa bastano a conoscerli. Da soli non provano chi scrive.
 --
@@ -18,9 +18,9 @@
 -- tutte le risposte, rendendo il relay inutile.
 --
 -- VERIFICATO su dati reali, con transazioni annullate:
---   davide@pasettivini.it su thread Albis -> mittente_non_corrispondente,
+--   esempio@dominio.it (dominio estraneo)  -> mittente_non_corrispondente,
 --     nessun messaggio creato (thread fermo a 1);
---   ufficio@albis.com sullo stesso thread -> agganciata, mittente=verificato;
+--   ufficio@dominio-fornitore.it, stesso thread -> agganciata, verificato;
 --   fornitore con recapiti azzerati        -> agganciata, mittente=
 --     non_verificabile, thread_messages.sender_unverified = true;
 --   admin_pubblica_mail_inbox senza utente -> NOT_ADMIN.
