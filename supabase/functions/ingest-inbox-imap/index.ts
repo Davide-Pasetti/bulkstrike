@@ -205,16 +205,32 @@ const TAGLI = [
   /^\s*-{2,}\s*(messaggio originale|original message)\s*-{2,}/im,
   /^\s*il\s+(giorno\s+)?.{0,80}\s+ha\s+scritto\s*:/im,
   /^\s*on\s+.{0,80}\s+wrote\s*:/im,
-  /^\s*da\s*:\s*.+\r?\n\s*(inviato|data)\s*:/im,
-  /^\s*from\s*:\s*.+\r?\n\s*sent\s*:/im,
+  // Intestazione di citazione. La versione precedente pretendeva "Da:" seguito
+  // SUBITO da "Inviato:/Data:", e su Zoho non scattava mai perche' l'ordine
+  // reale e' Da: / A: / Data:. Risultato: l'intera mail citata finiva nel
+  // thread, token di rivendica e disiscrizione compresi. Ora si ammettono
+  // fino a 4 righe in mezzo, in qualunque ordine.
+  /^[ \t]*(da|from)[ \t]*:.*(\r?\n.*){0,4}?\r?\n[ \t]*(data|inviato|sent|oggetto|subject)[ \t]*:/im,
   /^\s*_{5,}\s*$/m,
 ];
+// I token viaggiano nelle URL delle nostre stesse mail: se la citazione non
+// viene tagliata, finiscono in conversazione leggibili dalla controparte.
+// Il token di disiscrizione funzionerebbe subito; quello di rivendica avvia
+// una richiesta (l'approvazione resta a request_company_claim). Si oscurano
+// sempre, anche quando il taglio ha gia' funzionato: costa nulla ed e'
+// l'ultima difesa se un client di posta inventa un formato di citazione nuovo.
+function oscuraToken(t: string): string {
+  return t
+    .replace(/([?&]claim=)[A-Za-z0-9._-]{12,}/gi, "$1[rimosso]")
+    .replace(/(\/disiscrizione[^\s]*[?&]t=)[A-Za-z0-9._-]{12,}/gi, "$1[rimosso]");
+}
 function ripulisci(testo: string): string {
   let t = (testo || "").replace(/\r\n/g, "\n");
   for (const re of TAGLI) {
     const m = t.match(re);
     if (m && m.index !== undefined) t = t.slice(0, m.index);
   }
+  t = oscuraToken(t);
   t = t.split("\n").filter((r) => !/^\s*>/.test(r)).join("\n"); // citazioni
   const firma = t.search(/^--\s*$/m);                            // firma RFC 3676
   if (firma >= 0) t = t.slice(0, firma);
